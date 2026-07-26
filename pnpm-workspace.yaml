@@ -1,0 +1,8 @@
+allowBuilds:
+  '@parcel/watcher': true
+  '@scarf/scarf': true
+  '@swc/core': true
+  protobufjs: true
+  sharp: true
+  tesseract.js: true
+  unrs-resolver: true

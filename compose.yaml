@@ -1,0 +1,71 @@
+name: mycharacter
+
+services:
+  app:
+    build:
+      context: .
+      target: development
+    env_file:
+      - .env.local
+    environment:
+      INNGEST_DEV: http://inngest:8288
+      NEXT_TELEMETRY_DISABLED: "1"
+    init: true
+    ports:
+      - "${APP_PORT:-3000}:3000"
+    volumes:
+      - .:/app
+      - node_modules:/app/node_modules
+      - next_cache:/app/.next
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 15s
+
+  inngest:
+    image: inngest/inngest:v1.22.0
+    command: inngest dev -u http://app:3000/api/inngest
+    depends_on:
+      app:
+        condition: service_healthy
+    ports:
+      - "${INNGEST_PORT:-8288}:8288"
+      - "${INNGEST_CONNECT_PORT:-8289}:8289"
+
+  check:
+    profiles: ["test"]
+    build:
+      context: .
+      target: development
+    env_file:
+      - .env.local
+    command: pnpm check
+
+  e2e:
+    profiles: ["test"]
+    build:
+      context: .
+      target: e2e
+    env_file:
+      - .env.local
+    command: pnpm test:e2e
+    shm_size: 1gb
+
+  migrate:
+    profiles: ["tools"]
+    image: postgres:15-bookworm
+    env_file:
+      - path: .env.migrate.local
+        required: false
+    environment:
+      PGCONNECT_TIMEOUT: "15"
+    entrypoint: ["/bin/sh", "/tools/docker-migrate.sh"]
+    volumes:
+      - ./scripts/docker-migrate.sh:/tools/docker-migrate.sh:ro
+      - ./supabase/migrations:/migrations:ro
+
+volumes:
+  node_modules:
+  next_cache:
