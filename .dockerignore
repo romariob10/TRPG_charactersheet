@@ -1,8 +1,10 @@
 .git
 .github
 .worktrees
-.next
-node_modules
+**/.next
+**/node_modules
+.pnpm-store
+**/dist
 coverage
 test-results
 playwright-report

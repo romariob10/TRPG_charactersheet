@@ -1,7 +1,13 @@
+packages:
+  - apps/*
+  - packages/*
 allowBuilds:
-  '@parcel/watcher': true
-  '@scarf/scarf': true
-  '@swc/core': true
+  "@napi-rs/canvas": true
+  "@parcel/watcher": true
+  "@scarf/scarf": true
+  "@swc/core": true
+  argon2: true
+  esbuild: true
   protobufjs: true
   sharp: true
   tesseract.js: true

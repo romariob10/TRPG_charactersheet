@@ -1,137 +1,158 @@
 # MyCharacter
 
-Веб-приложение для хранения, совместного редактирования и AI-заполнения интерактивных листов персонажей НРИ.
+MyCharacter — RU/EN веб-приложение для интерактивных PDF-листов персонажей
+НРИ. Оно хранит PDF и данные полностью локально, поддерживает совместное
+редактирование, каталогизацию полей, AI-предложения и экспорт PDF.
 
-## Возможности MVP
+## Быстрый локальный запуск
 
-- регистрация и вход по email/password через Supabase Auth;
-- создание персонажа из курируемого шаблона или собственного AcroForm PDF;
-- редактирование text, multiline, checkbox, radio, dropdown и list-полей поверх PDF;
-- автосохранение, realtime-синхронизация, presence и уведомления о параллельной записи;
-- автоматический каталог подписей, разделов и пространственных групп через PDF text layer, OCR и vision fallback;
-- ручные исправления каталога, изолированные на уровне персонажа;
-- интерактивный и flattened-экспорт с поддержкой кириллицы;
-- одноразовые ссылки для редакторов, клонирование и 30-дневная корзина;
-- персональный сохраняемый CopilotKit-чат с обязательным preview изменений.
-
-## Стек
-
-- Next.js App Router, React, TypeScript, Tailwind CSS и `next-intl`;
-- Supabase PostgreSQL/Auth/Storage/Realtime с Row Level Security;
-- PDF.js, pdf-lib, fontkit и Tesseract.js;
-- Inngest для каталога и очистки корзины;
-- CopilotKit v2 и AI SDK OpenAI-compatible provider.
-
-## Docker-only запуск
-
-На хосте требуется только Docker с Compose. Node.js, pnpm, Chromium и Inngest устанавливать локально не нужно — установка зависимостей, разработка, сборка и тесты выполняются внутри контейнеров.
+Нужен только Docker Desktop.
 
 ```bash
 cp .env.example .env.local
+docker compose up -d --build
 ```
 
-Заполните `.env.local`. Для миграций создайте отдельный файл, чтобы Postgres URI не передавался app-контейнеру:
+Откройте <http://localhost:8080>. При первом старте база обновляется
+автоматически. AI необязателен: без ключа всё, кроме AI-помощника, продолжает
+работать.
+
+Безопасная остановка:
 
 ```bash
-cp .env.migrate.example .env.migrate.local
+docker compose stop
 ```
 
-В Supabase нажмите **Connect**, скопируйте Direct connection или Session pooler URI, URL-кодируйте пароль и сохраните строку в `SUPABASE_DB_URL` внутри `.env.migrate.local`. Затем примените миграции отдельным контейнером:
+Не запускайте `docker compose down -v`: флаг `-v` удаляет базу и PDF.
+
+## Состав
+
+- `web` — интерфейс Next.js;
+- `api` — отдельный Fastify API;
+- `worker` — каталогизация PDF и фоновые задания;
+- `postgres` — локальная база;
+- `proxy` — единственная внешняя точка входа Caddy;
+- `pdf_data` и `postgres_data` — постоянные Docker volumes.
+
+Внешний облачный backend не требуется.
+
+## Production на одном сервере
+
+Скопируйте пример и замените пароль. Для публичного домена также укажите
+домен и HTTPS-адреса по подсказкам внутри файла.
 
 ```bash
-docker compose --profile tools run --rm migrate
+cp .env.prod.example .env.prod
+docker compose --env-file .env.prod -f compose.prod.yaml build
+docker compose --env-file .env.prod -f compose.prod.yaml up -d
+docker compose --env-file .env.prod -f compose.prod.yaml ps
 ```
 
-Контейнер последовательно применяет файлы из `supabase/migrations`, хранит версии в закрытой служебной схеме и обновляет PostgREST schema cache. Миграция создаёт приватный bucket `character-pdfs`, таблицы, RPC, RLS и realtime publication; локальная установка Supabase CLI или PostgreSQL не требуется.
+Снаружи открыты только Caddy-порты 80 и 443. База, API и worker доступны
+только внутренней Docker-сети. TLS для настоящего домена Caddy получает
+автоматически.
 
-В Supabase откройте **Settings → API Keys → Publishable and secret API keys**. Значение `sb_publishable_…` укажите в `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, а серверное `sb_secret_…` — в `SUPABASE_SECRET_KEY`. Legacy `anon` и `service_role` ключи приложение намеренно отклоняет.
+## Первый администратор
 
-Запустите development stack:
+Пароль передаётся только служебному контейнеру, не печатается и не попадает
+в строку команды.
+
+Локально:
 
 ```bash
-docker compose up --build
+read -s ADMIN_PASSWORD
+export ADMIN_PASSWORD
+docker compose --profile tools run --rm \
+  -e ADMIN_EMAIL=admin@example.com \
+  -e ADMIN_PASSWORD \
+  operations node scripts/create-admin.mjs
+unset ADMIN_PASSWORD
 ```
 
-Приложение откроется на [http://localhost:3000](http://localhost:3000), локальная панель Inngest — на [http://localhost:8288](http://localhost:8288). Compose передаёт приложению `INNGEST_DEV=http://inngest:8288`, поэтому локальные event/signing keys не нужны. Исходники подключены как bind mount, а `node_modules` и `.next` хранятся в Docker volumes; hot reload работает внутри контейнера.
+В production добавьте к этой команде
+`--env-file .env.prod -f compose.prod.yaml`.
 
-Если стандартные порты заняты, их можно переопределить без изменения Compose-файла:
+## Обслуживание
+
+Проверить состояние и логи:
 
 ```bash
-APP_PORT=3010 INNGEST_PORT=8388 INNGEST_CONNECT_PORT=8389 docker compose up --build
+docker compose ps
+docker compose logs --tail=250 web api worker proxy postgres
 ```
 
-Остановить stack:
+Применить миграции вручную (обычно не требуется):
 
 ```bash
-docker compose down
+docker compose run --rm migrate
 ```
 
-Для полной очистки контейнерных зависимостей и кэша:
+Проверить соответствие базы и PDF-хранилища:
 
 ```bash
-docker compose down -v
+docker compose --profile tools run --rm operations \
+  node scripts/verify-storage.mjs
 ```
 
-## AI-провайдер
+### Резервная копия
 
-Серверная конфигурация принимает совместимый с OpenAI Chat Completions endpoint:
-
-```dotenv
-AI_BASE_URL=https://provider.example/v1
-AI_API_KEY=...
-AI_CHAT_MODEL=model-with-streaming-and-tools
-AI_VISION_MODEL=model-with-image-input
-```
-
-`AI_VISION_MODEL` можно не задавать: тогда используется chat-модель. Для ассистента необходимы streaming и tool calls, для vision-каталога — image input. Модель не имеет инструмента прямой записи: она может только вызвать `searchFields`, `getFieldContext` и `proposeFieldChanges`. Подтверждённое предложение применяет отдельная PostgreSQL-транзакция с проверкой версий и прав.
-
-## PDF-каталог
-
-Обработка проходит в Inngest:
-
-1. PDF.js извлекает widgets, текст и нормализованные координаты.
-2. Геометрический matcher сопоставляет ближайшие подписи и заголовки.
-3. На слабых страницах Tesseract распознаёт русский и английский текст.
-4. При согласии пользователя vision-модель получает страницу без значений widgets и с рамками идентификаторов полей.
-5. Результат валидируется Zod-схемой и сохраняется; сбой vision даёт статус `partial`, не уничтожая детерминированный каталог.
-
-Поддерживаются PDF до 25 МБ и 20 страниц. Зашифрованные файлы, XFA-only документы и PDF без AcroForm отклоняются.
-
-## Курируемые шаблоны
-
-Шаблоны не включены в репозиторий из-за лицензионных ограничений. Администратор может загрузить разрешённый PDF:
+Для согласованной копии сначала остановите пользовательский трафик. База и
+данные при этом не удаляются.
 
 ```bash
-docker compose exec app pnpm template:import ./sheet.pdf "Название шаблона" "Игровая система"
+docker compose stop proxy web api worker
+docker compose --profile tools run --rm operations sh scripts/backup.sh
+docker compose start api worker web proxy
 ```
 
-Файл должен находиться внутри репозитория, который подключён в `/app`. Команда использует новый Supabase secret key, помещает PDF в приватный bucket и запускает тот же каталогизатор.
+Архив появится в `backups/<дата-время>/`. Он содержит дамп PostgreSQL, PDF,
+контрольные суммы и описание формата.
 
-## Проверки
+### Восстановление
+
+Восстановление намеренно работает только в новой пустой базе и пустом
+PDF-хранилище. Оно никогда не очищает существующие volumes. Скопируйте нужную
+папку в `backups/`, запустите только пустую базу, затем:
 
 ```bash
-docker compose --profile test build check e2e
+BACKUP_NAME=20260729T120000Z
+docker compose up -d postgres
+docker compose --profile tools run --rm \
+  -e BACKUP_PATH="/backups/$BACKUP_NAME" \
+  operations sh scripts/restore.sh
+docker compose up -d
+```
+
+Скрипт сначала проверяет контрольные суммы, затем восстанавливает данные и
+повторно сверяет каждый PDF с базой.
+
+### Смена секретов
+
+- AI-ключ: измените `.env.local` или `.env.prod`, затем пересоздайте `api` и
+  `worker`.
+- Пароль базы: сначала сделайте backup и остановите трафик; смените пароль
+  интерактивной командой `\password` внутри `psql`, обновите `.env.prod`, затем
+  пересоздайте стек.
+- Не добавляйте `.env.local`, `.env.prod`, пароли, ключи или дампы в Git.
+
+## Проверки разработки
+
+Все проверки запускаются только в Docker:
+
+```bash
 docker compose --profile test run --rm check
+docker compose --profile test run --rm -e NODE_ENV=production check pnpm build
 docker compose --profile test run --rm e2e
 ```
 
-`check` запускает ESLint, TypeScript и Vitest. `e2e` использует отдельный официальный Playwright-образ с Chromium; браузер также не устанавливается на хост. Unit-тесты включают реальное создание и извлечение AcroForm PDF.
-
-Production-образ собирается отдельным target и содержит только Next.js standalone runtime:
+Production-конфигурацию можно проверить без запуска:
 
 ```bash
-docker compose --env-file .env.local -f compose.prod.yaml build
-docker compose --env-file .env.local -f compose.prod.yaml up -d
+docker compose --env-file .env.prod -f compose.prod.yaml config --quiet
 ```
 
-Публичные Supabase-переменные передаются как build arguments, поскольку Next.js встраивает их в клиентский bundle. `SUPABASE_SECRET_KEY`, AI-ключ и Inngest-ключи остаются только runtime-переменными и не попадают в слои образа.
+## Ограничения PDF
 
-## Развёртывание
-
-1. Создайте Supabase project и примените миграцию.
-2. Соберите `runner` target из `Dockerfile` и передайте публичные Supabase build arguments.
-3. Создайте Inngest app, добавьте event/signing keys и синхронизируйте `/api/inngest`.
-4. В Supabase Auth укажите production Site URL и callback `/auth/callback`.
-5. Передайте контейнеру runtime-переменные из `.env.example` и проверьте `/api/health`.
-
-Supabase secret key и AI-ключ используются только в server routes/background functions и никогда не отправляются в браузер. Клиент и SSR используют publishable key.
+Поддерживаются AcroForm PDF до 25 МБ и 20 страниц. Зашифрованные документы,
+XFA-only PDF и файлы без AcroForm отклоняются. Репозиторий не содержит
+сторонних игровых PDF из-за лицензионных ограничений.

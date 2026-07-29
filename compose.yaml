@@ -1,71 +1,398 @@
 name: mycharacter
 
 services:
-  app:
+  proxy:
+    image: caddy:2.8-alpine
+    environment:
+      CADDY_SITE_ADDRESS: :8080
+    depends_on:
+      web:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    ports:
+      - "${PROXY_PORT:-8080}:8080"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8080/api/health/live >/dev/null"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  web:
     build:
       context: .
+      dockerfile: Dockerfile.web
       target: development
     env_file:
       - .env.local
     environment:
-      INNGEST_DEV: http://inngest:8288
       NEXT_TELEMETRY_DISABLED: "1"
+      INTERNAL_API_URL: http://api:4000
+    depends_on:
+      deps:
+        condition: service_completed_successfully
+      api:
+        condition: service_healthy
     init: true
-    ports:
-      - "${APP_PORT:-3000}:3000"
+    command: pnpm --config.verify-deps-before-run=false --filter @mycharacter/web dev --hostname 0.0.0.0
     volumes:
       - .:/app
-      - node_modules:/app/node_modules
-      - next_cache:/app/.next
+      - deps_node_modules:/app/node_modules:ro
+      - deps_apps_api_node_modules:/app/apps/api/node_modules:ro
+      - deps_apps_web_node_modules:/app/apps/web/node_modules:ro
+      - deps_apps_worker_node_modules:/app/apps/worker/node_modules:ro
+      - deps_contracts_node_modules:/app/packages/contracts/node_modules:ro
+      - deps_database_node_modules:/app/packages/database/node_modules:ro
+      - deps_pdf_node_modules:/app/packages/pdf/node_modules:ro
+      - deps_storage_node_modules:/app/packages/storage/node_modules:ro
+      - next_cache:/app/apps/web/.next
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"]
       interval: 5s
       timeout: 3s
       retries: 20
-      start_period: 15s
 
-  inngest:
-    image: inngest/inngest:v1.22.0
-    command: inngest dev -u http://app:3000/api/inngest
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+      target: api-development
+    env_file:
+      - .env.local
+    environment:
+      DATABASE_URL: postgresql://mycharacter:mycharacter@postgres:5432/mycharacter
+      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-http://localhost:8080}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      STORAGE_ROOT: /var/lib/mycharacter/pdfs
     depends_on:
-      app:
+      postgres:
         condition: service_healthy
-    ports:
-      - "${INNGEST_PORT:-8288}:8288"
-      - "${INNGEST_CONNECT_PORT:-8289}:8289"
+      migrate:
+        condition: service_completed_successfully
+      deps:
+        condition: service_completed_successfully
+    init: true
+    command: >-
+      sh -c "pnpm --config.verify-deps-before-run=false --filter @mycharacter/database build
+      && pnpm --config.verify-deps-before-run=false --filter @mycharacter/storage build
+      && pnpm --config.verify-deps-before-run=false --filter @mycharacter/pdf build
+      && pnpm --config.verify-deps-before-run=false --filter @mycharacter/api dev"
+    volumes:
+      - .:/app
+      - deps_node_modules:/app/node_modules:ro
+      - deps_apps_api_node_modules:/app/apps/api/node_modules:ro
+      - deps_apps_web_node_modules:/app/apps/web/node_modules:ro
+      - deps_apps_worker_node_modules:/app/apps/worker/node_modules:ro
+      - deps_contracts_node_modules:/app/packages/contracts/node_modules:ro
+      - deps_database_node_modules:/app/packages/database/node_modules:ro
+      - deps_pdf_node_modules:/app/packages/pdf/node_modules:ro
+      - deps_storage_node_modules:/app/packages/storage/node_modules:ro
+      - pdf_data:/var/lib/mycharacter/pdfs
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/api/health/ready').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+      target: worker-development
+    env_file:
+      - .env.local
+    environment:
+      DATABASE_URL: postgresql://mycharacter:mycharacter@postgres:5432/mycharacter
+      OCR_LANG_PATH: /app
+      STORAGE_ROOT: /var/lib/mycharacter/pdfs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      deps:
+        condition: service_completed_successfully
+    init: true
+    command: >-
+      sh -c "pnpm --config.verify-deps-before-run=false --filter @mycharacter/database build
+      && pnpm --config.verify-deps-before-run=false --filter @mycharacter/storage build
+      && pnpm --config.verify-deps-before-run=false --filter @mycharacter/pdf build
+      && pnpm --config.verify-deps-before-run=false --filter @mycharacter/worker dev"
+    volumes:
+      - .:/app
+      - deps_node_modules:/app/node_modules:ro
+      - deps_apps_api_node_modules:/app/apps/api/node_modules:ro
+      - deps_apps_web_node_modules:/app/apps/web/node_modules:ro
+      - deps_apps_worker_node_modules:/app/apps/worker/node_modules:ro
+      - deps_contracts_node_modules:/app/packages/contracts/node_modules:ro
+      - deps_database_node_modules:/app/packages/database/node_modules:ro
+      - deps_pdf_node_modules:/app/packages/pdf/node_modules:ro
+      - deps_storage_node_modules:/app/packages/storage/node_modules:ro
+      - pdf_data:/var/lib/mycharacter/pdfs
+
+  deps:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+      target: development
+    env_file:
+      - .env.local
+    environment:
+      CI: "true"
+    command: >-
+      sh -c "pnpm install --frozen-lockfile
+      && pnpm --config.verify-deps-before-run=false --filter @mycharacter/contracts build"
+    init: true
+    volumes:
+      - .:/app
+      - deps_node_modules:/app/node_modules
+      - deps_apps_api_node_modules:/app/apps/api/node_modules
+      - deps_apps_web_node_modules:/app/apps/web/node_modules
+      - deps_apps_worker_node_modules:/app/apps/worker/node_modules
+      - deps_contracts_node_modules:/app/packages/contracts/node_modules
+      - deps_database_node_modules:/app/packages/database/node_modules
+      - deps_pdf_node_modules:/app/packages/pdf/node_modules
+      - deps_storage_node_modules:/app/packages/storage/node_modules
+
+  postgres:
+    image: postgres:17-bookworm
+    environment:
+      POSTGRES_DB: mycharacter
+      POSTGRES_USER: mycharacter
+      POSTGRES_PASSWORD: mycharacter
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mycharacter -d mycharacter"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
 
   check:
     profiles: ["test"]
     build:
       context: .
+      dockerfile: Dockerfile.web
       target: development
     env_file:
       - .env.local
+    environment:
+      DATABASE_URL: postgresql://mycharacter:mycharacter@postgres:5432/mycharacter
     command: pnpm check
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+      target: api-development
+    environment:
+      DATABASE_URL: postgresql://mycharacter:mycharacter@postgres:5432/mycharacter
+    command: >-
+      sh -c "pnpm --config.verify-deps-before-run=false --filter @mycharacter/database build
+      && node --input-type=module -e \"import { createDatabase, runMigrations } from './packages/database/dist/index.js'; const db = createDatabase(process.env.DATABASE_URL); try { await runMigrations(db); } finally { await db.destroy(); }\""
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  operations:
+    profiles: ["tools"]
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+      target: operations
+    env_file:
+      - .env.local
+    environment:
+      DATABASE_URL: postgresql://mycharacter:mycharacter@postgres:5432/mycharacter
+      STORAGE_ROOT: /var/lib/mycharacter/pdfs
+      BACKUP_ROOT: /backups
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - pdf_data:/var/lib/mycharacter/pdfs
+      - ./backups:/backups
 
   e2e:
     profiles: ["test"]
     build:
       context: .
+      dockerfile: Dockerfile.web
       target: e2e
     env_file:
       - .env.local
-    command: pnpm test:e2e
-    shm_size: 1gb
-
-  migrate:
-    profiles: ["tools"]
-    image: postgres:15-bookworm
-    env_file:
-      - path: .env.migrate.local
-        required: false
     environment:
-      PGCONNECT_TIMEOUT: "15"
-    entrypoint: ["/bin/sh", "/tools/docker-migrate.sh"]
+      DATABASE_URL: postgresql://mycharacter:mycharacter@postgres:5432/mycharacter
+      E2E_BASE_URL: http://localhost:8181
+    command: >-
+      sh -ec "until node -e \"fetch('http://localhost:8181/api/health/ready').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))\";
+      do sleep 1; done;
+      pnpm --filter @mycharacter/web test:e2e"
+    depends_on:
+      proxy-e2e:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    network_mode: service:proxy-e2e
+    shm_size: 1gb
     volumes:
-      - ./scripts/docker-migrate.sh:/tools/docker-migrate.sh:ro
-      - ./supabase/migrations:/migrations:ro
+      - .:/app
+      - deps_node_modules:/app/node_modules:ro
+      - deps_apps_api_node_modules:/app/apps/api/node_modules:ro
+      - deps_apps_web_node_modules:/app/apps/web/node_modules:ro
+      - deps_apps_worker_node_modules:/app/apps/worker/node_modules:ro
+      - deps_contracts_node_modules:/app/packages/contracts/node_modules:ro
+      - deps_database_node_modules:/app/packages/database/node_modules:ro
+      - deps_pdf_node_modules:/app/packages/pdf/node_modules:ro
+      - deps_storage_node_modules:/app/packages/storage/node_modules:ro
+      - pdf_data:/var/lib/mycharacter/pdfs:ro
+
+  fake-ai:
+    profiles: ["test"]
+    image: node:22-bookworm-slim
+    working_dir: /app
+    command: node tests/e2e/fixtures/fake-ai.mjs
+    volumes:
+      - .:/app:ro
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4010/health').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 2s
+      timeout: 2s
+      retries: 20
+
+  api-e2e:
+    profiles: ["test"]
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+      target: api-development
+    environment:
+      AI_API_KEY: acceptance-test-key
+      AI_BASE_URL: http://fake-ai:4010/v1
+      AI_CHAT_MODEL: acceptance-model
+      AI_VISION_MODEL: acceptance-model
+      COOKIE_SECURE: "false"
+      DATABASE_URL: postgresql://mycharacter:mycharacter@postgres:5432/mycharacter
+      PUBLIC_ORIGIN: http://localhost:8181
+      STORAGE_ROOT: /var/lib/mycharacter/pdfs
+    depends_on:
+      deps:
+        condition: service_completed_successfully
+      fake-ai:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+    init: true
+    command: >-
+      sh -c "pnpm --config.verify-deps-before-run=false --filter @mycharacter/database build
+      && pnpm --config.verify-deps-before-run=false --filter @mycharacter/storage build
+      && pnpm --config.verify-deps-before-run=false --filter @mycharacter/pdf build
+      && pnpm --config.verify-deps-before-run=false --filter @mycharacter/api dev"
+    volumes:
+      - .:/app
+      - deps_node_modules:/app/node_modules:ro
+      - deps_apps_api_node_modules:/app/apps/api/node_modules:ro
+      - deps_apps_web_node_modules:/app/apps/web/node_modules:ro
+      - deps_apps_worker_node_modules:/app/apps/worker/node_modules:ro
+      - deps_contracts_node_modules:/app/packages/contracts/node_modules:ro
+      - deps_database_node_modules:/app/packages/database/node_modules:ro
+      - deps_pdf_node_modules:/app/packages/pdf/node_modules:ro
+      - deps_storage_node_modules:/app/packages/storage/node_modules:ro
+      - pdf_data:/var/lib/mycharacter/pdfs
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/api/health/ready').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+
+  proxy-e2e:
+    profiles: ["test"]
+    image: caddy:2.8-alpine
+    depends_on:
+      api-e2e:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+    volumes:
+      - ./Caddyfile.e2e:/etc/caddy/Caddyfile:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8181/api/health/ready >/dev/null"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+
+  startup-check:
+    profiles: ["test"]
+    image: caddy:2.8-alpine
+    depends_on:
+      proxy:
+        condition: service_healthy
+      deps:
+        condition: service_completed_successfully
+    command: ["sh", "-ec", "wget -q -O - http://proxy:8080/api/health/ready | grep -q '\"status\":\"ok\"'; wget -q -O - http://proxy:8080/ | grep -q 'MyCharacter'"]
+
+  api-production:
+    profiles: ["test"]
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+      target: api-production
+    environment:
+      DATABASE_URL: postgresql://mycharacter:mycharacter@postgres:5432/mycharacter
+      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-http://localhost:8080}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      HOST: 0.0.0.0
+      PORT: "4000"
+      STORAGE_ROOT: /var/lib/mycharacter/pdfs
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - pdf_data:/var/lib/mycharacter/pdfs
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/api/health/ready').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  worker-production:
+    profiles: ["test"]
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+      target: worker-production
+    env_file:
+      - .env.local
+    environment:
+      DATABASE_URL: postgresql://mycharacter:mycharacter@postgres:5432/mycharacter
+      OCR_LANG_PATH: /app/tessdata
+      STORAGE_ROOT: /var/lib/mycharacter/pdfs
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - pdf_data:/var/lib/mycharacter/pdfs
 
 volumes:
   node_modules:
+  api_node_modules:
   next_cache:
+  postgres_data:
+  pdf_data:
+  web_node_modules:
+  worker_node_modules:
+  deps_node_modules:
+  deps_apps_api_node_modules:
+  deps_apps_web_node_modules:
+  deps_apps_worker_node_modules:
+  deps_contracts_node_modules:
+  deps_database_node_modules:
+  deps_pdf_node_modules:
+  deps_storage_node_modules:

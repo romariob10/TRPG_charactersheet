@@ -1,0 +1,13 @@
+{$CADDY_SITE_ADDRESS::8080} {
+	handle /api/realtime {
+		reverse_proxy api:4000
+	}
+
+	handle /api/* {
+		reverse_proxy api:4000
+	}
+
+	handle {
+		reverse_proxy web:3000
+	}
+}

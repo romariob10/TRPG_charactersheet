@@ -1,0 +1,31 @@
+{
+  "name": "@mycharacter/worker",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "lint": "eslint --config eslint.config.mjs src test",
+    "typecheck": "tsc --noEmit --skipLibCheck --module NodeNext --moduleResolution NodeNext --target ES2022 src/main.ts src/jobs/*.ts test/*.ts",
+    "test": "vitest run --passWithNoTests",
+    "build": "tsc --declaration --skipLibCheck --outDir dist --module NodeNext --moduleResolution NodeNext --target ES2022 src/main.ts src/jobs/*.ts"
+  },
+  "dependencies": {
+    "@ai-sdk/openai-compatible": "^2.0.59",
+    "@mycharacter/contracts": "workspace:*",
+    "@mycharacter/database": "workspace:*",
+    "@mycharacter/pdf": "workspace:*",
+    "@mycharacter/storage": "workspace:*",
+    "ai": "^6.0.222",
+    "kysely": "^0.28.17",
+    "pg-boss": "^12.25.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@typescript-eslint/parser": "^8.63.0",
+    "eslint": "^9",
+    "tsx": "^4.20.6",
+    "typescript": "^5",
+    "vitest": "^4.1.10"
+  }
+}
