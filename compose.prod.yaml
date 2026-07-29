@@ -1,0 +1,184 @@
+name: mycharacter-production
+
+x-app-security: &app-security
+  init: true
+  read_only: true
+  cap_drop: ["ALL"]
+  security_opt: ["no-new-privileges:true"]
+  restart: unless-stopped
+
+services:
+  proxy:
+    image: caddy:2.8-alpine
+    environment:
+      CADDY_SITE_ADDRESS: ${CADDY_SITE_ADDRESS:?Set CADDY_SITE_ADDRESS}
+    depends_on:
+      web:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile.prod:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    tmpfs:
+      - /tmp:size=32m,mode=1777
+    read_only: true
+    cap_drop: ["ALL"]
+    cap_add: ["NET_BIND_SERVICE"]
+    security_opt: ["no-new-privileges:true"]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:2019/config/ >/dev/null"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 15s
+
+  web:
+    <<: *app-security
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+      target: production
+    environment:
+      NODE_ENV: production
+      NEXT_TELEMETRY_DISABLED: "1"
+      INTERNAL_API_URL: http://api:4000
+    depends_on:
+      api:
+        condition: service_healthy
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+      - /app/apps/web/.next/cache:size=128m,uid=1001,gid=1001
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 15s
+
+  api:
+    <<: *app-security
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+      target: api-production
+    env_file:
+      - path: .env.prod
+        required: false
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:?Set POSTGRES_USER}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:?Set POSTGRES_DB}
+      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:?Set PUBLIC_ORIGIN}
+      COOKIE_SECURE: ${COOKIE_SECURE:?Set COOKIE_SECURE}
+      HOST: 0.0.0.0
+      PORT: "4000"
+      STORAGE_ROOT: /var/lib/mycharacter/pdfs
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    volumes:
+      - pdf_data:/var/lib/mycharacter/pdfs
+    tmpfs:
+      - /tmp:size=128m,mode=1777
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/api/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 20s
+
+  worker:
+    <<: *app-security
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+      target: worker-production
+    env_file:
+      - path: .env.prod
+        required: false
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:?Set POSTGRES_USER}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:?Set POSTGRES_DB}
+      OCR_LANG_PATH: /app/tessdata
+      STORAGE_ROOT: /var/lib/mycharacter/pdfs
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    volumes:
+      - pdf_data:/var/lib/mycharacter/pdfs
+    tmpfs:
+      - /tmp:size=256m,mode=1777
+
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+      target: operations
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:?Set POSTGRES_USER}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:?Set POSTGRES_DB}
+    command:
+      - node
+      - --input-type=module
+      - -e
+      - "import { createDatabase, runMigrations } from './packages/database/dist/index.js'; const db=createDatabase(process.env.DATABASE_URL); try { await runMigrations(db); } finally { await db.destroy(); }"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    read_only: true
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    tmpfs:
+      - /tmp:size=32m,mode=1777
+    restart: "no"
+
+  operations:
+    profiles: ["tools"]
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+      target: operations
+    env_file:
+      - path: .env.prod
+        required: false
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:?Set POSTGRES_USER}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:?Set POSTGRES_DB}
+      STORAGE_ROOT: /var/lib/mycharacter/pdfs
+      BACKUP_ROOT: /backups
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - pdf_data:/var/lib/mycharacter/pdfs
+      - ./backups:/backups
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+
+  postgres:
+    image: postgres:17-bookworm
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?Set POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+      - /var/run/postgresql:size=16m,uid=999,gid=999
+    read_only: true
+    restart: unless-stopped
+    security_opt: ["no-new-privileges:true"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 15s
+
+volumes:
+  caddy_config:
+  caddy_data:
+  pdf_data:
+  postgres_data:

@@ -1,0 +1,16 @@
+.git
+.github
+.worktrees
+**/.next
+**/node_modules
+.pnpm-store
+**/dist
+coverage
+test-results
+playwright-report
+*.log
+.DS_Store
+.env*
+!.env.example
+!.env.migrate.example
+supabase/.temp

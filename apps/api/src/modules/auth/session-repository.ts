@@ -1,0 +1,112 @@
+import { createHash, randomBytes } from "node:crypto";
+import type { Database } from "@mycharacter/database";
+import type { Kysely, Transaction } from "kysely";
+
+const sessionLifetimeMilliseconds = 30 * 24 * 60 * 60 * 1000;
+const lastUsedUpdateIntervalMilliseconds = 5 * 60 * 1000;
+
+type DatabaseExecutor = Kysely<Database> | Transaction<Database>;
+
+export interface ActorSession {
+  sessionId: string;
+  userId: string;
+  lastUsedAt: Date;
+}
+
+export interface CreatedSession {
+  sessionId: string;
+  token: string;
+}
+
+export function hashSessionToken(token: string): string {
+  return createHash("sha256").update(token).digest("hex");
+}
+
+export function createSessionToken(): string {
+  return randomBytes(32).toString("base64url");
+}
+
+export async function createSession(
+  db: DatabaseExecutor,
+  userId: string,
+): Promise<CreatedSession> {
+  const token = createSessionToken();
+  const createdAt = new Date();
+  const expiresAt = new Date(createdAt.getTime() + sessionLifetimeMilliseconds);
+  const session = await db
+    .insertInto("sessions")
+    .values({
+      user_id: userId,
+      token_hash: hashSessionToken(token),
+      expires_at: expiresAt,
+      last_used_at: createdAt,
+    })
+    .returning("id")
+    .executeTakeFirstOrThrow();
+
+  return { sessionId: session.id, token };
+}
+
+export async function findActiveSession(
+  db: DatabaseExecutor,
+  token: string,
+): Promise<ActorSession | null> {
+  const session = await db
+    .selectFrom("sessions")
+    .innerJoin("users", "users.id", "sessions.user_id")
+    .select([
+      "sessions.id as sessionId",
+      "sessions.user_id as userId",
+      "sessions.last_used_at as lastUsedAt",
+    ])
+    .where("sessions.token_hash", "=", hashSessionToken(token))
+    .where("sessions.revoked_at", "is", null)
+    .where("sessions.expires_at", ">", new Date())
+    .where("users.status", "=", "active")
+    .executeTakeFirst();
+
+  return session ?? null;
+}
+
+export async function touchSessionIfStale(
+  db: DatabaseExecutor,
+  session: ActorSession,
+): Promise<void> {
+  const staleBefore = new Date(Date.now() - lastUsedUpdateIntervalMilliseconds);
+  if (session.lastUsedAt >= staleBefore) {
+    return;
+  }
+
+  await db
+    .updateTable("sessions")
+    .set({ last_used_at: new Date() })
+    .where("id", "=", session.sessionId)
+    .where("last_used_at", "<", staleBefore)
+    .execute();
+}
+
+export async function revokeSession(
+  db: DatabaseExecutor,
+  sessionId: string,
+): Promise<void> {
+  await db
+    .updateTable("sessions")
+    .set({ revoked_at: new Date() })
+    .where("id", "=", sessionId)
+    .where("revoked_at", "is", null)
+    .execute();
+}
+
+export async function revokeOtherSessions(
+  db: DatabaseExecutor,
+  userId: string,
+  sessionId: string,
+): Promise<void> {
+  await db
+    .updateTable("sessions")
+    .set({ revoked_at: new Date() })
+    .where("user_id", "=", userId)
+    .where("id", "!=", sessionId)
+    .where("revoked_at", "is", null)
+    .execute();
+}

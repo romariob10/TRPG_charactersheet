@@ -1,0 +1,17 @@
+:8181 {
+	handle /api/realtime {
+		reverse_proxy api-e2e:4000 {
+			header_up X-Forwarded-For {http.request.header.X-E2E-Client-IP}
+		}
+	}
+
+	handle /api/* {
+		reverse_proxy api-e2e:4000 {
+			header_up X-Forwarded-For {http.request.header.X-E2E-Client-IP}
+		}
+	}
+
+	handle {
+		reverse_proxy web:3000
+	}
+}

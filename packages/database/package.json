@@ -1,0 +1,31 @@
+{
+  "name": "@mycharacter/database",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "types": "./src/index.ts",
+    "import": "./dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "lint": "eslint src test",
+    "typecheck": "tsc --noEmit --skipLibCheck --module NodeNext --moduleResolution NodeNext --target ES2022 src/index.ts migrations/*.ts test/migrations.test.ts",
+    "test": "vitest run --passWithNoTests",
+    "test:dist": "node test/dist-migrations.mjs",
+    "build": "tsc --declaration --skipLibCheck --outDir dist --module NodeNext --moduleResolution NodeNext --target ES2022 src/index.ts && tsc --declaration false --skipLibCheck --rootDir . --outDir dist --module NodeNext --moduleResolution NodeNext --target ES2022 migrations/*.ts"
+  },
+  "dependencies": {
+    "kysely": "^0.28.12",
+    "pg": "^8.16.3"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.15.6",
+    "@typescript-eslint/parser": "^8.63.0",
+    "eslint": "^9",
+    "typescript": "^5",
+    "vitest": "^4.1.10"
+  }
+}
