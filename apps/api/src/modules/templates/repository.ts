@@ -2,6 +2,7 @@ import type {
   FieldDescriptor,
   TemplateField,
   TemplateScope,
+  TemplateSummary,
 } from "@mycharacter/contracts";
 import type { Database } from "@mycharacter/database";
 import type { Kysely } from "kysely";
@@ -13,6 +14,7 @@ export interface TemplateRow {
   ownerId: string | null;
   visibility: "private" | "curated";
   title: string;
+  slug: string;
   gameSystem: string | null;
   pageCount: number;
   sha256: string;
@@ -22,6 +24,34 @@ export interface TemplateRow {
   isPublic: boolean;
   deletedAt: Date | null;
   subscriberId: string | null;
+  authorId: string | null;
+  authorUsername: string | null;
+  authorDisplayName: string | null;
+}
+
+export function templateSummaryFromRow(row: TemplateRow): TemplateSummary {
+  return {
+    id: row.id,
+    title: row.title,
+    gameSystem: row.gameSystem,
+    pageCount: row.pageCount,
+    catalogStatus: row.catalogStatus,
+    approvedAt: row.approvedAt?.toISOString() ?? null,
+    updatedAt: row.updatedAt.toISOString(),
+    isPublic: row.isPublic,
+    slug: row.slug,
+    ...(row.subscriberId ? { subscribed: true } : {}),
+    ...(row.deletedAt ? { deletedAt: row.deletedAt.toISOString() } : {}),
+    ...(row.authorId && row.authorUsername
+      ? {
+          author: {
+            id: row.authorId,
+            username: row.authorUsername,
+            displayName: row.authorDisplayName,
+          },
+        }
+      : {}),
+  };
 }
 
 export async function findTemplate(
@@ -161,6 +191,21 @@ export async function loadTemplateFields(
   }));
 }
 
+export async function listPublicTemplatesByOwner(
+  db: Kysely<Database>,
+  ownerId: string,
+): Promise<TemplateRow[]> {
+  return (await baseQuery(db, ownerId)
+    .where("template.owner_id", "=", ownerId)
+    .where("template.deleted_at", "is", null)
+    .where("template.visibility", "=", "private")
+    .where("template.is_public", "=", true)
+    .where("template.catalog_approved_at", "is not", null)
+    .where("template.catalog_status", "in", ["ready", "partial"])
+    .orderBy("template.updated_at", "desc")
+    .execute()) as TemplateRow[];
+}
+
 function baseQuery(db: Kysely<Database>, actorId: string) {
   return db
     .selectFrom("pdf_templates as template")
@@ -169,11 +214,13 @@ function baseQuery(db: Kysely<Database>, actorId: string) {
         .onRef("subscription.template_id", "=", "template.id")
         .on("subscription.user_id", "=", actorId),
     )
+    .leftJoin("profiles as author", "author.id", "template.owner_id")
     .select([
       "template.id",
       "template.owner_id as ownerId",
       "template.visibility",
       "template.title",
+      "template.slug",
       "template.game_system as gameSystem",
       "template.page_count as pageCount",
       "template.sha256",
@@ -183,5 +230,8 @@ function baseQuery(db: Kysely<Database>, actorId: string) {
       "template.is_public as isPublic",
       "template.deleted_at as deletedAt",
       "subscription.user_id as subscriberId",
+      "author.id as authorId",
+      "author.username as authorUsername",
+      "author.display_name as authorDisplayName",
     ]);
 }

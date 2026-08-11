@@ -95,6 +95,7 @@ describe("initial migration", () => {
         file_id: objectFile.id,
         owner_id: user.id,
         title: "View template",
+        slug: "view-template",
         storage_path: "view.pdf",
         sha256: "a".repeat(64),
         page_count: 1,
@@ -150,6 +151,34 @@ describe("initial migration", () => {
     ]);
   });
 
+  it("requires usernames and stable template slugs", async () => {
+    const columns = await testDb.db
+      .selectFrom("information_schema.columns")
+      .select(["table_name", "column_name", "is_nullable"])
+      .where("table_schema", "=", testDb.schema)
+      .where("table_name", "in", ["profiles", "pdf_templates"])
+      .where("column_name", "in", ["username", "bio", "slug"])
+      .execute();
+    const byColumn = new Map(
+      columns.map((row) => [`${row.table_name}.${row.column_name}`, row.is_nullable]),
+    );
+    expect(byColumn.get("profiles.username")).toBe("NO");
+    expect(byColumn.get("profiles.bio")).toBe("NO");
+    expect(byColumn.get("pdf_templates.slug")).toBe("NO");
+
+    const indexes = await sql<{ indexname: string; indexdef: string }>`
+      select indexname, indexdef from pg_indexes
+      where schemaname = ${testDb.schema}
+        and indexname in ('profiles_username_idx', 'pdf_templates_owner_slug_idx')
+      order by indexname
+    `.execute(testDb.db);
+    expect(indexes.rows).toHaveLength(2);
+    const byName = new Map(indexes.rows.map((row) => [row.indexname, row.indexdef.toLowerCase()]));
+    expect(byName.get("profiles_username_idx")).toContain("lower(username)");
+    expect(byName.get("pdf_templates_owner_slug_idx")).toContain("owner_id, slug");
+    expect(byName.get("pdf_templates_owner_slug_idx")).toContain("owner_id is not null");
+  });
+
   it("keeps deleted templates out of the private duplicate index", async () => {
     const rows = await sql<{ indexdef: string }>`
       select indexdef from pg_indexes
@@ -188,6 +217,7 @@ describe("initial migration", () => {
           file_id: file.id,
           owner_id: user.id,
           title: `Duplicate ${suffix}`,
+          slug: `duplicate-${suffix}`,
           storage_path: `duplicate-index-${suffix}.pdf`,
           sha256,
           page_count: 1,

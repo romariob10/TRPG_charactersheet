@@ -44,6 +44,20 @@ export type {
   UpdateCharacterRequest,
 } from "./characters.js";
 export {
+  myProfileSchema,
+  publicAuthorSchema,
+  publicProfileSchema,
+  updateMyProfileRequestSchema,
+  usernameSchema,
+} from "./profiles.js";
+export type {
+  MyProfile,
+  PublicAuthor,
+  PublicProfile,
+  UpdateMyProfileRequest,
+  Username,
+} from "./profiles.js";
+export {
   templateIdSchema,
   templateScopeSchema,
   templateSummarySchema,

@@ -1,7 +1,8 @@
 import type { AuthUser } from "@mycharacter/contracts";
 import type { Database } from "@mycharacter/database";
-import type { Kysely } from "kysely";
+import type { Kysely, Transaction } from "kysely";
 import { AppError } from "../../errors.js";
+import { usernameForRegistration } from "../profiles/username.js";
 import {
   argon2PasswordVerifier,
   dummyPasswordHash,
@@ -14,6 +15,9 @@ import {
   revokeSession,
   type CreatedSession,
 } from "./session-repository.js";
+
+const USERNAME_CONSTRAINT = "profiles_username_idx";
+const USERNAME_ALLOCATION_ATTEMPTS = 3;
 
 export interface AuthenticatedUser extends AuthUser {
   session: CreatedSession;
@@ -41,58 +45,88 @@ export class AuthService {
   async register(email: string, password: string): Promise<AuthenticatedUser> {
     const passwordHash = await hashPassword(password);
 
-    try {
-      return await this.db.transaction().execute(async (trx) => {
-        const user = await trx
-          .insertInto("users")
-          .values({ email, password_hash: passwordHash, status: "active" })
-          .returning(["id", "email"])
-          .executeTakeFirstOrThrow();
-        await trx
-          .insertInto("profiles")
-          .values({ id: user.id })
-          .execute();
-        const session = await createSession(trx, user.id);
+    for (let attempt = 1; attempt <= USERNAME_ALLOCATION_ATTEMPTS; attempt++) {
+      try {
+        return await this.db.transaction().execute(async (trx) => {
+          const user = await trx
+            .insertInto("users")
+            .values({ email, password_hash: passwordHash, status: "active" })
+            .returning(["id", "email"])
+            .executeTakeFirstOrThrow();
+          const username = await allocateUsername(
+            trx,
+            usernameForRegistration(email, user.id),
+            user.id,
+          );
+          await trx
+            .insertInto("profiles")
+            .values({ id: user.id, username })
+            .execute();
+          const session = await createSession(trx, user.id);
 
-        return { id: user.id, email: user.email, session };
-      });
-    } catch (error) {
-      if (isUniqueViolation(error)) {
-        throw new AppError(
-          "AUTH_EMAIL_ALREADY_REGISTERED",
-          409,
-          "An account with this email already exists.",
-        );
+          return { id: user.id, email: user.email, session };
+        });
+      } catch (error) {
+        if (isUniqueViolation(error)) {
+          if (constraintName(error) === USERNAME_CONSTRAINT) {
+            continue;
+          }
+          throw new AppError(
+            "AUTH_EMAIL_ALREADY_REGISTERED",
+            409,
+            "An account with this email already exists.",
+          );
+        }
+        throw error;
       }
-      throw error;
     }
+    throw new AppError(
+      "USERNAME_ALLOCATION_FAILED",
+      500,
+      "Could not allocate a unique username.",
+    );
   }
 
   async createAdmin(email: string, password: string): Promise<AuthUser> {
     const passwordHash = await hashPassword(password);
-    try {
-      return await this.db.transaction().execute(async (trx) => {
-        const user = await trx
-          .insertInto("users")
-          .values({ email, password_hash: passwordHash, status: "active" })
-          .returning(["id", "email"])
-          .executeTakeFirstOrThrow();
-        await trx
-          .insertInto("profiles")
-          .values({ id: user.id, is_admin: true })
-          .execute();
-        return user;
-      });
-    } catch (error) {
-      if (isUniqueViolation(error)) {
-        throw new AppError(
-          "AUTH_EMAIL_ALREADY_REGISTERED",
-          409,
-          "An account with this email already exists.",
-        );
+    for (let attempt = 1; attempt <= USERNAME_ALLOCATION_ATTEMPTS; attempt++) {
+      try {
+        return await this.db.transaction().execute(async (trx) => {
+          const user = await trx
+            .insertInto("users")
+            .values({ email, password_hash: passwordHash, status: "active" })
+            .returning(["id", "email"])
+            .executeTakeFirstOrThrow();
+          const username = await allocateUsername(
+            trx,
+            usernameForRegistration(email, user.id),
+            user.id,
+          );
+          await trx
+            .insertInto("profiles")
+            .values({ id: user.id, username, is_admin: true })
+            .execute();
+          return user;
+        });
+      } catch (error) {
+        if (isUniqueViolation(error)) {
+          if (constraintName(error) === USERNAME_CONSTRAINT) {
+            continue;
+          }
+          throw new AppError(
+            "AUTH_EMAIL_ALREADY_REGISTERED",
+            409,
+            "An account with this email already exists.",
+          );
+        }
+        throw error;
       }
-      throw error;
     }
+    throw new AppError(
+      "USERNAME_ALLOCATION_FAILED",
+      500,
+      "Could not allocate a unique username.",
+    );
   }
 
   async login(email: string, password: string): Promise<AuthenticatedUser> {
@@ -176,10 +210,46 @@ export class AuthService {
   }
 }
 
+async function allocateUsername(
+  trx: Kysely<Database> | Transaction<Database>,
+  base: string,
+  userId: string,
+): Promise<string> {
+  const taken = new Set(
+    (
+      await trx
+        .selectFrom("profiles")
+        .select("username")
+        .where((eb) =>
+          eb.or([
+            eb("username", "=", base),
+            eb("username", "like", `${base}-%`),
+          ]),
+        )
+        .execute()
+    ).map((row) => row.username),
+  );
+  if (!taken.has(base)) return base;
+  for (let suffix = 2; suffix <= 50; suffix++) {
+    const suffixText = `-${suffix}`;
+    const candidate = `${base.slice(0, 30 - suffixText.length)}${suffixText}`;
+    if (!taken.has(candidate)) return candidate;
+  }
+  const fallback = `user-${userId.replaceAll("-", "").slice(0, 8)}`;
+  if (!taken.has(fallback)) return fallback;
+  return `${fallback.slice(0, 27)}-${Date.now() % 1000}`;
+}
+
 function invalidCredentialsError(): AppError {
   return new AppError("AUTH_INVALID_CREDENTIALS", 401, "Invalid email or password.");
 }
 
 function isUniqueViolation(error: unknown): boolean {
   return typeof error === "object" && error !== null && "code" in error && error.code === "23505";
+}
+
+function constraintName(error: unknown): string | undefined {
+  return typeof error === "object" && error !== null && "constraint" in error
+    ? String((error as { constraint?: unknown }).constraint ?? "")
+    : undefined;
 }

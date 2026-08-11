@@ -12,9 +12,12 @@ import {
 import type { Kysely } from "kysely";
 import { AppError } from "../../errors.js";
 import type { JobClient } from "../../jobs/client.js";
+import { slugCandidate, slugifyTemplateTitle } from "../templates/slug.js";
 
 const MAX_PDF_BYTES = 25 * 1024 * 1024;
 const MAX_PDF_PAGES = 20;
+const MAX_SLUG_ATTEMPTS = 5;
+const SLUG_CONSTRAINT = "pdf_templates_owner_slug_idx";
 
 export interface TemplateUpload {
   allowVision: boolean;
@@ -129,56 +132,72 @@ export class PdfUploadService {
       throw storageAppError(error);
     }
 
-    try {
-      await this.db.transaction().execute(async (trx) => {
-        await trx
-          .insertInto("pdf_templates")
-          .values({
-            id: templateId,
-            file_id: fileId,
-            owner_id: actorId,
-            visibility: "private",
-            title: input.title,
-            game_system: input.gameSystem,
-            storage_path: storageKey,
-            sha256,
-            page_count: pdf.pageCount,
-            allow_vision: input.allowVision,
-            catalog_status: "pending",
-            is_public: input.isPublic,
-          })
-          .execute();
-        const catalogJob = await trx
-          .insertInto("catalog_jobs")
-          .values({
-            template_id: templateId,
-            current_step: "queued",
-            progress: 0,
-          })
-          .returning("id")
-          .executeTakeFirstOrThrow();
-        await this.jobs.enqueueCatalog(trx, {
-          templateId,
-          catalogJobId: catalogJob.id,
+    const slugBase = slugifyTemplateTitle(input.title);
+    for (let slugAttempt = 1; slugAttempt <= MAX_SLUG_ATTEMPTS; slugAttempt++) {
+      try {
+        await this.db.transaction().execute(async (trx) => {
+          await trx
+            .insertInto("pdf_templates")
+            .values({
+              id: templateId,
+              file_id: fileId,
+              owner_id: actorId,
+              visibility: "private",
+              title: input.title,
+              slug: slugCandidate(slugBase, slugAttempt),
+              game_system: input.gameSystem,
+              storage_path: storageKey,
+              sha256,
+              page_count: pdf.pageCount,
+              allow_vision: input.allowVision,
+              catalog_status: "pending",
+              is_public: input.isPublic,
+            })
+            .execute();
+          const catalogJob = await trx
+            .insertInto("catalog_jobs")
+            .values({
+              template_id: templateId,
+              current_step: "queued",
+              progress: 0,
+            })
+            .returning("id")
+            .executeTakeFirstOrThrow();
+          await this.jobs.enqueueCatalog(trx, {
+            templateId,
+            catalogJobId: catalogJob.id,
+          });
+          await trx
+            .updateTable("object_files")
+            .set({ state: "ready" })
+            .where("id", "=", fileId)
+            .execute();
         });
-        await trx
-          .updateTable("object_files")
-          .set({ state: "ready" })
-          .where("id", "=", fileId)
-          .execute();
-      });
-    } catch (error) {
-      await this.storage.delete(storageKey).catch(() => undefined);
-      await this.db.deleteFrom("object_files").where("id", "=", fileId).execute();
-      if (isUniqueViolation(error)) {
-        const winner = await this.findActiveDuplicate(actorId, sha256);
-        if (winner) {
-          return { kind: "existing", templateId: winner.id };
+        return { kind: "created", templateId };
+      } catch (error) {
+        if (
+          isUniqueViolation(error) &&
+          constraintName(error) === SLUG_CONSTRAINT &&
+          slugAttempt < MAX_SLUG_ATTEMPTS
+        ) {
+          continue;
         }
+        await this.storage.delete(storageKey).catch(() => undefined);
+        await this.db.deleteFrom("object_files").where("id", "=", fileId).execute();
+        if (isUniqueViolation(error)) {
+          const winner = await this.findActiveDuplicate(actorId, sha256);
+          if (winner) {
+            return { kind: "existing", templateId: winner.id };
+          }
+        }
+        throw error;
       }
-      throw error;
     }
-    return { kind: "created", templateId };
+    throw new AppError(
+      "TEMPLATE_SLUG_CONFLICT",
+      409,
+      "Could not allocate a unique slug for the template.",
+    );
   }
 
   private async findActiveDuplicate(
@@ -315,4 +334,10 @@ function storageAppError(error: unknown): AppError {
 
 function isUniqueViolation(error: unknown): boolean {
   return typeof error === "object" && error !== null && "code" in error && error.code === "23505";
+}
+
+function constraintName(error: unknown): string | undefined {
+  return typeof error === "object" && error !== null && "constraint" in error
+    ? String((error as { constraint?: unknown }).constraint ?? "")
+    : undefined;
 }

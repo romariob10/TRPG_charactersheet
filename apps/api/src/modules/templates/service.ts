@@ -13,6 +13,7 @@ import {
   findTemplate,
   listTemplates,
   loadTemplateFields,
+  templateSummaryFromRow,
   TRASH_RETENTION_MS,
   type TemplateRow,
 } from "./repository.js";
@@ -238,18 +239,7 @@ export class TemplateService {
   }
 
   private toSummary(row: TemplateRow): TemplateSummary {
-    return {
-      id: row.id,
-      title: row.title,
-      gameSystem: row.gameSystem,
-      pageCount: row.pageCount,
-      catalogStatus: row.catalogStatus,
-      approvedAt: row.approvedAt?.toISOString() ?? null,
-      updatedAt: row.updatedAt.toISOString(),
-      isPublic: row.isPublic,
-      ...(row.subscriberId ? { subscribed: true } : {}),
-      ...(row.deletedAt ? { deletedAt: row.deletedAt.toISOString() } : {}),
-    };
+    return templateSummaryFromRow(row);
   }
 }
 

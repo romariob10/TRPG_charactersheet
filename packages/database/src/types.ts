@@ -26,6 +26,8 @@ export interface UsersTable {
 export interface ProfilesTable {
   id: string;
   display_name: string | null;
+  username: string;
+  bio: string;
   locale: "ru" | "en";
   is_admin: boolean;
   created_at: Timestamp;
@@ -69,6 +71,7 @@ export interface PdfTemplatesTable {
   owner_id: string | null;
   visibility: TemplateVisibility;
   title: string;
+  slug: string;
   game_system: string | null;
   storage_path: string;
   sha256: string;

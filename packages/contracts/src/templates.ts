@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { FieldDescriptor } from "./characters.js";
+import { publicAuthorSchema } from "./profiles.js";
 
 export const templateIdSchema = z.string().uuid();
 export const templateScopeSchema = z.enum(["mine", "community", "creation", "trash"]);
@@ -32,6 +33,11 @@ export const templateSummarySchema = z.object({
   isPublic: z.boolean(),
   subscribed: z.boolean().optional(),
   deletedAt: z.string().nullable().optional(),
+  slug: z.string().optional(),
+  author: publicAuthorSchema.optional(),
+  likeCount: z.number().int().nonnegative().optional(),
+  commentCount: z.number().int().nonnegative().optional(),
+  likedByMe: z.boolean().optional(),
 });
 
 export type TemplateSummary = z.infer<typeof templateSummarySchema>;

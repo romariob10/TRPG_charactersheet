@@ -72,6 +72,7 @@ describe("character PDF export", () => {
         owner_id: owner.userId,
         visibility: "private",
         title: "Export",
+        slug: "export",
         storage_path: storageKey,
         sha256: "a".repeat(64),
         page_count: 1,
