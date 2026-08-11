@@ -6,6 +6,8 @@ import type {
 import type { Database } from "@mycharacter/database";
 import type { Kysely } from "kysely";
 
+export const TRASH_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+
 export interface TemplateRow {
   id: string;
   ownerId: string | null;
@@ -13,6 +15,7 @@ export interface TemplateRow {
   title: string;
   gameSystem: string | null;
   pageCount: number;
+  sha256: string;
   catalogStatus: "pending" | "processing" | "ready" | "partial" | "failed";
   approvedAt: Date | null;
   updatedAt: Date;
@@ -37,6 +40,15 @@ export async function listTemplates(
   actorId: string,
   scope: TemplateScope,
 ): Promise<TemplateRow[]> {
+  if (scope === "trash") {
+    const cutoff = new Date(Date.now() - TRASH_RETENTION_MS);
+    return (await baseQuery(db, actorId)
+      .where("template.owner_id", "=", actorId)
+      .where("template.deleted_at", "is not", null)
+      .where("template.deleted_at", ">=", cutoff)
+      .orderBy("template.deleted_at", "desc")
+      .execute()) as TemplateRow[];
+  }
   let query = baseQuery(db, actorId).where("template.deleted_at", "is", null);
   if (scope === "mine") {
     query = query.where((eb) =>
@@ -164,6 +176,7 @@ function baseQuery(db: Kysely<Database>, actorId: string) {
       "template.title",
       "template.game_system as gameSystem",
       "template.page_count as pageCount",
+      "template.sha256",
       "template.catalog_status as catalogStatus",
       "template.catalog_approved_at as approvedAt",
       "template.updated_at as updatedAt",

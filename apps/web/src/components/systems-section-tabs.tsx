@@ -1,12 +1,12 @@
 import Link from "next/link";
-import { Library, PanelsTopLeft } from "lucide-react";
+import { Library, PanelsTopLeft, Trash2 } from "lucide-react";
 import { getTranslations } from "next-intl/server";
 import { cn } from "@/lib/utils";
 
 export async function SystemsSectionTabs({
   active,
 }: {
-  active: "mine" | "community";
+  active: "mine" | "community" | "trash";
 }) {
   const t = await getTranslations("Systems");
   const items = [
@@ -21,6 +21,12 @@ export async function SystemsSectionTabs({
       href: "/dashboard/systems/community",
       label: t("exploreCommunity"),
       icon: Library,
+    },
+    {
+      id: "trash" as const,
+      href: "/dashboard/systems/trash",
+      label: t("trashTab"),
+      icon: Trash2,
     },
   ];
   return (

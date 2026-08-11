@@ -74,6 +74,7 @@ export interface TemplateSummary {
   updatedAt: string;
   isPublic: boolean;
   subscribed?: boolean;
+  deletedAt?: string | null;
 }
 
 export interface TemplateEditorData extends TemplateSummary {

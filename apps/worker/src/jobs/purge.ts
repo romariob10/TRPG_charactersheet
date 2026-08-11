@@ -34,25 +34,33 @@ export function createPurgeDependencies(
           .where("status", "=", "trashed")
           .where("deleted_at", "<", cutoff)
           .execute();
-        const files = await trx
+        const candidates = await trx
           .selectFrom("pdf_templates as template")
           .innerJoin("object_files as file", "file.id", "template.file_id")
           .select(["file.id", "file.storage_key as storageKey"])
           .where("template.deleted_at", "<", cutoff)
           .where("file.state", "in", ["ready", "deleting"])
           .execute();
-        if (files.length) {
-          await trx
-            .updateTable("object_files")
-            .set({ state: "deleting" })
-            .where(
-              "id",
-              "in",
-              files.map((file) => file.id),
-            )
-            .execute();
-        }
-        return files;
+        if (!candidates.length) return [];
+        // A concurrent re-upload may restore the template between the select
+        // above and this update; only purge files whose template is still in
+        // the trash, and only report rows that were actually marked.
+        return trx
+          .updateTable("object_files")
+          .set({ state: "deleting" })
+          .where(
+            "id",
+            "in",
+            candidates.map((file) => file.id),
+          )
+          .where("id", "in", (eb) =>
+            eb
+              .selectFrom("pdf_templates")
+              .select("file_id")
+              .where("deleted_at", "<", cutoff),
+          )
+          .returning(["id", "storage_key as storageKey"])
+          .execute();
       }),
     deleteObject: (storageKey) => storage.delete(storageKey),
     removePurgedMetadata: (fileId, cutoff) =>

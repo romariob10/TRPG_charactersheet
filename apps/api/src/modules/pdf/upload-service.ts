@@ -33,6 +33,12 @@ export interface DuplicateCommunityTemplate {
   subscribed: boolean;
 }
 
+export type TemplateUploadResult =
+  | { kind: "created"; templateId: string }
+  | { kind: "existing"; templateId: string }
+  | { kind: "restored"; templateId: string }
+  | { kind: "community"; duplicateCommunity: DuplicateCommunityTemplate };
+
 export class PdfUploadService {
   private readonly db: Kysely<Database>;
   private readonly storage: ObjectStorage;
@@ -51,21 +57,11 @@ export class PdfUploadService {
   async uploadTemplate(
     actorId: string,
     input: TemplateUpload,
-  ): Promise<
-    | { kind: "created"; templateId: string }
-    | { kind: "existing"; templateId: string }
-    | { kind: "community"; duplicateCommunity: DuplicateCommunityTemplate }
-  > {
+  ): Promise<TemplateUploadResult> {
     validateMetadata(input);
     const pdf = await validatePdf(input.bytes);
     const sha256 = createHash("sha256").update(input.bytes).digest("hex");
-    const existing = await this.db
-      .selectFrom("pdf_templates")
-      .select("id")
-      .where("owner_id", "=", actorId)
-      .where("sha256", "=", sha256)
-      .where("deleted_at", "is", null)
-      .executeTakeFirst();
+    const existing = await this.findActiveDuplicate(actorId, sha256);
     if (existing) {
       return { kind: "existing", templateId: existing.id };
     }
@@ -105,6 +101,11 @@ export class PdfUploadService {
           },
         };
       }
+    }
+
+    const restoredId = await this.restoreTrashedDuplicate(actorId, sha256, input);
+    if (restoredId) {
+      return { kind: "restored", templateId: restoredId };
     }
 
     const templateId = randomUUID();
@@ -169,9 +170,76 @@ export class PdfUploadService {
     } catch (error) {
       await this.storage.delete(storageKey).catch(() => undefined);
       await this.db.deleteFrom("object_files").where("id", "=", fileId).execute();
+      if (isUniqueViolation(error)) {
+        const winner = await this.findActiveDuplicate(actorId, sha256);
+        if (winner) {
+          return { kind: "existing", templateId: winner.id };
+        }
+      }
       throw error;
     }
     return { kind: "created", templateId };
+  }
+
+  private async findActiveDuplicate(
+    actorId: string,
+    sha256: string,
+  ): Promise<{ id: string } | undefined> {
+    return this.db
+      .selectFrom("pdf_templates")
+      .select("id")
+      .where("owner_id", "=", actorId)
+      .where("sha256", "=", sha256)
+      .where("deleted_at", "is", null)
+      .executeTakeFirst();
+  }
+
+  // Restores a soft-deleted owner template with identical content instead of
+  // inserting a conflicting row. Catalog fields and character links survive;
+  // metadata comes from the fresh upload form, including visibility.
+  private async restoreTrashedDuplicate(
+    actorId: string,
+    sha256: string,
+    input: TemplateUpload,
+  ): Promise<string | null> {
+    return this.db.transaction().execute(async (trx) => {
+      const candidate = await trx
+        .selectFrom("pdf_templates as template")
+        .innerJoin("object_files as file", "file.id", "template.file_id")
+        .select([
+          "template.id",
+          "template.storage_path as storagePath",
+          "file.state as fileState",
+        ])
+        .where("template.owner_id", "=", actorId)
+        .where("template.sha256", "=", sha256)
+        .where("template.deleted_at", "is not", null)
+        .orderBy("template.deleted_at", "desc")
+        .forUpdate()
+        .executeTakeFirst();
+      if (!candidate || candidate.fileState !== "ready") {
+        return null;
+      }
+      try {
+        await this.storage.stat(candidate.storagePath);
+      } catch {
+        return null;
+      }
+      await trx
+        .updateTable("pdf_templates")
+        .set({
+          deleted_at: null,
+          title: input.title,
+          game_system: input.gameSystem,
+          allow_vision: input.allowVision,
+          is_public: input.isPublic,
+          updated_at: new Date(),
+        })
+        .where("id", "=", candidate.id)
+        .where("deleted_at", "is not", null)
+        .execute();
+      return candidate.id;
+    });
   }
 }
 
@@ -243,4 +311,8 @@ function storageAppError(error: unknown): AppError {
     }
   }
   return new AppError("STORAGE_WRITE_FAILED", 503, "PDF could not be stored.");
+}
+
+function isUniqueViolation(error: unknown): boolean {
+  return typeof error === "object" && error !== null && "code" in error && error.code === "23505";
 }

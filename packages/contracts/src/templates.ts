@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { FieldDescriptor } from "./characters.js";
 
 export const templateIdSchema = z.string().uuid();
-export const templateScopeSchema = z.enum(["mine", "community", "creation"]);
+export const templateScopeSchema = z.enum(["mine", "community", "creation", "trash"]);
 
 export const updateTemplateRequestSchema = z
   .object({
@@ -31,6 +31,7 @@ export const templateSummarySchema = z.object({
   updatedAt: z.string(),
   isPublic: z.boolean(),
   subscribed: z.boolean().optional(),
+  deletedAt: z.string().nullable().optional(),
 });
 
 export type TemplateSummary = z.infer<typeof templateSummarySchema>;

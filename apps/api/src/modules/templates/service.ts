@@ -13,6 +13,7 @@ import {
   findTemplate,
   listTemplates,
   loadTemplateFields,
+  TRASH_RETENTION_MS,
   type TemplateRow,
 } from "./repository.js";
 
@@ -187,14 +188,31 @@ export class TemplateService {
       !template ||
       template.ownerId !== actorId ||
       template.deletedAt === null ||
-      template.deletedAt.getTime() <= Date.now() - 30 * 24 * 60 * 60 * 1000
+      template.deletedAt.getTime() <= Date.now() - TRASH_RETENTION_MS
     ) {
       throw notFound();
+    }
+    const activeDuplicate = await this.db
+      .selectFrom("pdf_templates")
+      .select("id")
+      .where("owner_id", "=", actorId)
+      .where("sha256", "=", template.sha256)
+      .where("deleted_at", "is", null)
+      .where("id", "!=", templateId)
+      .executeTakeFirst();
+    if (activeDuplicate) {
+      throw new AppError(
+        "TEMPLATE_DUPLICATE_ACTIVE",
+        409,
+        "An active template with the same content already exists.",
+        { activeTemplateId: activeDuplicate.id },
+      );
     }
     await this.db
       .updateTable("pdf_templates")
       .set({ deleted_at: null })
       .where("id", "=", templateId)
+      .where("deleted_at", "is not", null)
       .execute();
     return this.get(actorId, templateId);
   }
@@ -230,6 +248,7 @@ export class TemplateService {
       updatedAt: row.updatedAt.toISOString(),
       isPublic: row.isPublic,
       ...(row.subscriberId ? { subscribed: true } : {}),
+      ...(row.deletedAt ? { deletedAt: row.deletedAt.toISOString() } : {}),
     };
   }
 }

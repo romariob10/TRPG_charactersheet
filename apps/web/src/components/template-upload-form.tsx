@@ -74,6 +74,7 @@ export function TemplateUploadForm() {
       });
       const result = (await response.json()) as {
         templateId?: string;
+        restored?: boolean;
         duplicateCommunity?: {
           id: string;
           title: string;
@@ -81,7 +82,7 @@ export function TemplateUploadForm() {
           pageCount: number;
           subscribed: boolean;
         };
-        error?: string | { message?: string };
+        error?: string | { code?: string; message?: string; requestId?: string };
       };
       if (response.status === 409 && result.duplicateCommunity) {
         setDuplicate(result.duplicateCommunity);
@@ -89,17 +90,34 @@ export function TemplateUploadForm() {
         return;
       }
       if (!response.ok || !result.templateId) {
-        throw new Error(
-          typeof result.error === "string"
-            ? result.error
-            : result.error?.message ?? t("uploadFailed"),
-        );
+        throw new Error(uploadErrorMessage(result.error));
       }
       router.push(`/dashboard/systems/${result.templateId}`);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : t("uploadFailed"));
+      setError(
+        reason instanceof Error
+          ? reason.message
+          : uploadErrorMessage(undefined),
+      );
       setPending(false);
     }
+  }
+
+  function uploadErrorMessage(
+    error:
+      | string
+      | { code?: string; message?: string; requestId?: string }
+      | undefined,
+  ): string {
+    if (typeof error === "string") return error || t("uploadFailed");
+    const code = error?.code;
+    if (code && t.has(`uploadErrors.${code}`)) {
+      return t(`uploadErrors.${code}`);
+    }
+    if (error?.requestId) {
+      return t("uploadFailedWithRequestId", { requestId: error.requestId });
+    }
+    return error?.message || t("uploadFailed");
   }
 
   async function subscribeToDuplicate() {

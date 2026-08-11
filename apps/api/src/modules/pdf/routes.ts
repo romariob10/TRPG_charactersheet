@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { MultipartFile } from "@fastify/multipart";
 import type { FastifyInstance, FastifyReply } from "fastify";
 import { AppError } from "../../errors.js";
@@ -13,7 +14,24 @@ export async function registerPdfRoutes(app: FastifyInstance): Promise<void> {
   app.post("/api/templates", async (request, reply) => {
     const actor = requireActor(request);
     const input = await parseTemplateUpload(request.parts());
-    const result = await uploadService.uploadTemplate(actor.userId, input);
+    let result;
+    try {
+      result = await uploadService.uploadTemplate(actor.userId, input);
+    } catch (error) {
+      if (!(error instanceof AppError)) {
+        request.log.error(
+          {
+            err: error,
+            actorId: actor.userId,
+            stage: "template-upload",
+            pdfBytes: input.bytes.byteLength,
+            sha256: createHash("sha256").update(input.bytes).digest("hex"),
+          },
+          "Unexpected template upload failure",
+        );
+      }
+      throw error;
+    }
     if (result.kind === "community") {
       return reply.status(409).send({
         error: {
@@ -26,7 +44,11 @@ export async function registerPdfRoutes(app: FastifyInstance): Promise<void> {
     }
     return reply
       .status(result.kind === "created" ? 201 : 200)
-      .send({ templateId: result.templateId, existing: result.kind === "existing" });
+      .send({
+        templateId: result.templateId,
+        existing: result.kind === "existing",
+        restored: result.kind === "restored",
+      });
   });
 
   app.get("/api/templates/:id/pdf", async (request, reply) => {

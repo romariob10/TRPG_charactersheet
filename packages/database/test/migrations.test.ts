@@ -150,6 +150,60 @@ describe("initial migration", () => {
     ]);
   });
 
+  it("keeps deleted templates out of the private duplicate index", async () => {
+    const rows = await sql<{ indexdef: string }>`
+      select indexdef from pg_indexes
+      where schemaname = ${testDb.schema}
+        and indexname = 'pdf_templates_private_hash_idx'
+    `.execute(testDb.db);
+    expect(rows.rows).toHaveLength(1);
+    const definition = rows.rows[0].indexdef.toLowerCase();
+    expect(definition).toContain("unique");
+    expect(definition).toContain("owner_id, sha256");
+    expect(definition).toContain("deleted_at is null");
+    expect(definition).toContain("visibility = 'private'");
+  });
+
+  it("allows a deleted duplicate but blocks two active duplicates", async () => {
+    const user = await testDb.db
+      .insertInto("users")
+      .values({ email: "duplicate-index@example.com", password_hash: "hash" })
+      .returning("id")
+      .executeTakeFirstOrThrow();
+    const sha256 = "b".repeat(64);
+    const file = await testDb.db
+      .insertInto("object_files")
+      .values({
+        storage_key: "duplicate-index.pdf",
+        sha256,
+        size_bytes: "1",
+        media_type: "application/pdf",
+      })
+      .returning("id")
+      .executeTakeFirstOrThrow();
+    const insertTemplate = (deletedAt: Date | null, suffix: string) =>
+      testDb.db
+        .insertInto("pdf_templates")
+        .values({
+          file_id: file.id,
+          owner_id: user.id,
+          title: `Duplicate ${suffix}`,
+          storage_path: `duplicate-index-${suffix}.pdf`,
+          sha256,
+          page_count: 1,
+          deleted_at: deletedAt,
+        })
+        .returning("id")
+        .execute();
+
+    await insertTemplate(new Date(), "deleted");
+    const active = await insertTemplate(null, "active");
+    expect(active).toHaveLength(1);
+    await expect(insertTemplate(null, "second-active")).rejects.toMatchObject({
+      code: "23505",
+    });
+  });
+
   it("uses public extensions across sequential isolated schemas", async () => {
     const first = await createTestDatabase();
     await destroyTestDatabase(first);
