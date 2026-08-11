@@ -10,7 +10,8 @@
     "signOut": "Sign out",
     "characters": "Characters",
     "systems": "TTRPG systems",
-    "language": "Русский"
+    "language": "Русский",
+    "profileSettings": "Profile"
   },
   "Landing": {
     "eyebrow": "Character sheets your AI can understand",
@@ -204,7 +205,11 @@
       "STORAGE_WRITE_FAILED": "The PDF could not be stored.",
       "VALIDATION_FAILED": "Check the template name and game system.",
       "TEMPLATE_DUPLICATE_ACTIVE": "You already have an active template with this PDF."
-    }
+    },
+    "likeAria": "Like template \"{name}\"",
+    "unlikeAria": "Unlike template \"{name}\"",
+    "likeSignIn": "Sign in to like templates",
+    "commentsAria": "Comments on template \"{name}\""
   },
   "Create": {
     "title": "New character",
@@ -304,5 +309,58 @@
     "description": "After accepting, you can edit the sheet, download the PDF, and use your own AI chat.",
     "invalid": "This link is invalid or has already been used.",
     "accept": "Accept invitation"
+  },
+  "CommunityPage": {
+    "back": "Back to the library",
+    "publicTemplate": "Public template",
+    "authorEyebrow": "Author",
+    "likeAria": "Like \"{name}\"",
+    "unlikeAria": "Unlike \"{name}\"",
+    "likeSignIn": "Sign in to like templates",
+    "commentsCount": "{count, plural, one {# comment} other {# comments}}",
+    "commentsTitle": "Comments",
+    "commentsEmpty": "No comments yet — be the first.",
+    "commentFormLabel": "Comment text",
+    "commentPlaceholder": "Share your experience with this template…",
+    "commentSubmit": "Post",
+    "commentSubmitting": "Posting…",
+    "commentSignIn": "Sign in",
+    "commentSignInText": "to leave a comment.",
+    "commentSubmitFailed": "Could not post the comment",
+    "commentsLoadFailed": "Could not load comments",
+    "commentDeleteFailed": "Could not delete the comment",
+    "commentDeleteAria": "Delete comment",
+    "commentsLoadMore": "Show more",
+    "commentsLoadingMore": "Loading…"
+  },
+  "UsersPage": {
+    "eyebrow": "Author profile",
+    "joinedAt": "Joined {date}",
+    "templatesCount": "{count, plural, one {# public template} other {# public templates}}",
+    "totalLikes": "{count, plural, one {# like} other {# likes}}",
+    "templatesTitle": "Public templates",
+    "emptyTemplates": "No public templates yet",
+    "emptyTemplatesText": "Once the author publishes and approves a template, it will appear here.",
+    "unknownSystem": "System not specified",
+    "pages": "{count, plural, one {# page} other {# pages}}"
+  },
+  "ProfileSettings": {
+    "title": "Profile settings",
+    "subtitle": "Your username, display name and bio are visible to everyone on your public page.",
+    "emailNote": "Sign-in email: {email}",
+    "displayName": "Display name",
+    "displayNamePlaceholder": "What should we call you",
+    "username": "Username",
+    "usernameRules": "3–30 characters: lowercase Latin letters, digits, \"_\" and \"-\". Must start with a letter or digit.",
+    "urlHint": "Your public profile: {url}",
+    "usernameChangeWarning": "After changing your username the old profile link stops working, and the freed username can be taken by someone else.",
+    "bio": "Bio",
+    "bioPlaceholder": "Tell others about yourself and your systems",
+    "save": "Save",
+    "saving": "Saving…",
+    "saved": "Profile updated.",
+    "saveFailed": "Could not save the profile",
+    "usernameTaken": "This username is already taken.",
+    "validationFailed": "Check the profile field values."
   }
 }

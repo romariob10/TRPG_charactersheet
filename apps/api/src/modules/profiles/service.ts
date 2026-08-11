@@ -78,6 +78,7 @@ export class ProfileService {
         "profile.username",
         "profile.display_name as displayName",
         "profile.bio",
+        "profile.is_admin as isAdmin",
       ])
       .where("profile.id", "=", actorId)
       .executeTakeFirst();
@@ -90,6 +91,7 @@ export class ProfileService {
       username: profile.username,
       displayName: profile.displayName,
       bio: profile.bio,
+      isAdmin: profile.isAdmin,
     };
   }
 

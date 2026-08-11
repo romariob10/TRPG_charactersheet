@@ -16,6 +16,12 @@ export default async function CommunitySystemsPage() {
     pageCount: template.pageCount,
     updatedAt: template.updatedAt,
     subscribed: Boolean(template.subscribed),
+    slug: template.slug,
+    authorUsername: template.author?.username,
+    authorDisplayName: template.author?.displayName,
+    likeCount: template.likeCount ?? 0,
+    commentCount: template.commentCount ?? 0,
+    likedByMe: Boolean(template.likedByMe),
   }));
 
   return (

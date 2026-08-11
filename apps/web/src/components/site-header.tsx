@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { LogOut } from "lucide-react";
+import { CircleUserRound, LogOut } from "lucide-react";
 import { getTranslations } from "next-intl/server";
 import { Logo } from "@/components/logo";
 import { LanguageSwitch } from "@/components/language-switch";
@@ -21,6 +21,18 @@ export async function SiteHeader({
         {authenticated && <AppTabs />}
         <div className="ml-auto flex items-center gap-1">
           <LanguageSwitch />
+          {authenticated && (
+            <Link
+              href="/dashboard/profile"
+              aria-label={t("profileSettings")}
+              className={cn(
+                buttonClassName({ variant: "ghost", size: "sm" }),
+              )}
+            >
+              <CircleUserRound className="size-4" />
+              <span className="hidden sm:inline">{t("profileSettings")}</span>
+            </Link>
+          )}
           {authenticated && (
             <form action={signOut}>
               <button

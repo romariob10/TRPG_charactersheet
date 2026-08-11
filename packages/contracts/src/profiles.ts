@@ -23,6 +23,7 @@ export const myProfileSchema = z.object({
   username: usernameSchema,
   displayName: z.string().max(80).nullable(),
   bio: z.string().max(500),
+  isAdmin: z.boolean(),
 });
 
 export const updateMyProfileRequestSchema = z
