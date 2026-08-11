@@ -22,6 +22,7 @@ import { registerCharacterRoutes } from "./modules/characters/routes.js";
 import { registerInvitationRoutes } from "./modules/invitations/routes.js";
 import { registerTemplateRoutes } from "./modules/templates/routes.js";
 import { registerProfileRoutes } from "./modules/profiles/routes.js";
+import { registerSocialRoutes } from "./modules/social/routes.js";
 import { registerPdfRoutes } from "./modules/pdf/routes.js";
 import { registerFieldRoutes } from "./modules/fields/routes.js";
 import { registerExportRoutes } from "./modules/export/routes.js";
@@ -112,6 +113,7 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
   await registerCharacterRoutes(app);
   await registerTemplateRoutes(app);
   await registerProfileRoutes(app);
+  await registerSocialRoutes(app);
   await registerInvitationRoutes(app);
   await registerPdfRoutes(app);
   await registerFieldRoutes(app, realtime);

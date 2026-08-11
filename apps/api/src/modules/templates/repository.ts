@@ -5,7 +5,7 @@ import type {
   TemplateSummary,
 } from "@mycharacter/contracts";
 import type { Database } from "@mycharacter/database";
-import type { Kysely } from "kysely";
+import { sql, type Kysely } from "kysely";
 
 export const TRASH_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 
@@ -27,6 +27,9 @@ export interface TemplateRow {
   authorId: string | null;
   authorUsername: string | null;
   authorDisplayName: string | null;
+  likeCount: number | null;
+  commentCount: number | null;
+  likedByMeCount: number | null;
 }
 
 export function templateSummaryFromRow(row: TemplateRow): TemplateSummary {
@@ -50,6 +53,15 @@ export function templateSummaryFromRow(row: TemplateRow): TemplateSummary {
             displayName: row.authorDisplayName,
           },
         }
+      : {}),
+    ...(row.likeCount !== null && row.likeCount !== undefined
+      ? { likeCount: row.likeCount }
+      : {}),
+    ...(row.commentCount !== null && row.commentCount !== undefined
+      ? { commentCount: row.commentCount }
+      : {}),
+    ...(row.likedByMeCount !== null && row.likedByMeCount !== undefined
+      ? { likedByMe: row.likedByMeCount > 0 }
       : {}),
   };
 }
@@ -98,7 +110,28 @@ export async function listTemplates(
       .where("template.is_public", "=", true)
       .where("template.catalog_approved_at", "is not", null)
       .where("template.catalog_status", "in", ["ready", "partial"])
-      .where("template.owner_id", "!=", actorId);
+      .where("template.owner_id", "!=", actorId)
+      .select([
+        (eb) =>
+          eb
+            .selectFrom("template_likes")
+            .select(sql<number>`count(*)::int`.as("count"))
+            .whereRef("template_likes.template_id", "=", "template.id")
+            .as("likeCount"),
+        (eb) =>
+          eb
+            .selectFrom("template_comments")
+            .select(sql<number>`count(*)::int`.as("count"))
+            .whereRef("template_comments.template_id", "=", "template.id")
+            .as("commentCount"),
+        (eb) =>
+          eb
+            .selectFrom("template_likes")
+            .select(sql<number>`count(*)::int`.as("count"))
+            .whereRef("template_likes.template_id", "=", "template.id")
+            .where("template_likes.user_id", "=", actorId)
+            .as("likedByMeCount"),
+      ]);
   } else {
     query = query
       .where("template.catalog_approved_at", "is not", null)

@@ -5,7 +5,7 @@ import type {
   UpdateMyProfileRequest,
 } from "@mycharacter/contracts";
 import type { Database } from "@mycharacter/database";
-import type { Kysely } from "kysely";
+import { sql, type Kysely } from "kysely";
 import { AppError } from "../../errors.js";
 import {
   listPublicTemplatesByOwner,
@@ -44,6 +44,17 @@ export class ProfileService {
     const templates = (
       await listPublicTemplatesByOwner(this.db, profile.id)
     ).map((row) => templateSummaryFromRow(row));
+    const likes = await this.db
+      .selectFrom("template_likes")
+      .innerJoin("pdf_templates", "pdf_templates.id", "template_likes.template_id")
+      .select(sql<number>`count(*)::int`.as("count"))
+      .where("pdf_templates.owner_id", "=", profile.id)
+      .where("pdf_templates.deleted_at", "is", null)
+      .where("pdf_templates.visibility", "=", "private")
+      .where("pdf_templates.is_public", "=", true)
+      .where("pdf_templates.catalog_approved_at", "is not", null)
+      .where("pdf_templates.catalog_status", "in", ["ready", "partial"])
+      .executeTakeFirst();
     return {
       profile: {
         username: profile.username,
@@ -51,7 +62,7 @@ export class ProfileService {
         bio: profile.bio,
         joinedAt: profile.joinedAt.toISOString(),
         publicTemplateCount: templates.length,
-        totalLikes: 0,
+        totalLikes: likes?.count ?? 0,
       },
       templates,
     };

@@ -44,6 +44,17 @@ export type {
   UpdateCharacterRequest,
 } from "./characters.js";
 export {
+  commentIdSchema,
+  createTemplateCommentRequestSchema,
+  templateCommentListSchema,
+  templateCommentSchema,
+} from "./community.js";
+export type {
+  CreateTemplateCommentRequest,
+  TemplateComment,
+  TemplateCommentList,
+} from "./community.js";
+export {
   myProfileSchema,
   publicAuthorSchema,
   publicProfileSchema,
