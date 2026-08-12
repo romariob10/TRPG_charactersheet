@@ -16,8 +16,10 @@ import { slugCandidate, slugifyTemplateTitle } from "../templates/slug.js";
 
 const MAX_PDF_BYTES = 25 * 1024 * 1024;
 const MAX_PDF_PAGES = 20;
-const MAX_SLUG_ATTEMPTS = 5;
+const MAX_SLUG_RACE_ATTEMPTS = 5;
+const MAX_SLUG_SUFFIX = 100_000;
 const SLUG_CONSTRAINT = "pdf_templates_owner_slug_idx";
+const TRASH_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 
 export interface TemplateUpload {
   allowVision: boolean;
@@ -69,6 +71,11 @@ export class PdfUploadService {
       return { kind: "existing", templateId: existing.id };
     }
 
+    const restoredId = await this.restoreTrashedDuplicate(actorId, sha256, input);
+    if (restoredId) {
+      return { kind: "restored", templateId: restoredId };
+    }
+
     if (!input.forceDuplicate) {
       const community = await this.db
         .selectFrom("pdf_templates as template")
@@ -106,11 +113,6 @@ export class PdfUploadService {
       }
     }
 
-    const restoredId = await this.restoreTrashedDuplicate(actorId, sha256, input);
-    if (restoredId) {
-      return { kind: "restored", templateId: restoredId };
-    }
-
     const templateId = randomUUID();
     const fileId = randomUUID();
     const storageKey = `templates/${templateId.slice(0, 2)}/${actorId}/${templateId}.pdf`;
@@ -133,7 +135,12 @@ export class PdfUploadService {
     }
 
     const slugBase = slugifyTemplateTitle(input.title);
-    for (let slugAttempt = 1; slugAttempt <= MAX_SLUG_ATTEMPTS; slugAttempt++) {
+    for (
+      let raceAttempt = 1;
+      raceAttempt <= MAX_SLUG_RACE_ATTEMPTS;
+      raceAttempt++
+    ) {
+      const slug = await this.nextAvailableSlug(actorId, slugBase);
       try {
         await this.db.transaction().execute(async (trx) => {
           await trx
@@ -144,7 +151,7 @@ export class PdfUploadService {
               owner_id: actorId,
               visibility: "private",
               title: input.title,
-              slug: slugCandidate(slugBase, slugAttempt),
+              slug,
               game_system: input.gameSystem,
               storage_path: storageKey,
               sha256,
@@ -178,7 +185,7 @@ export class PdfUploadService {
         if (
           isUniqueViolation(error) &&
           constraintName(error) === SLUG_CONSTRAINT &&
-          slugAttempt < MAX_SLUG_ATTEMPTS
+          raceAttempt < MAX_SLUG_RACE_ATTEMPTS
         ) {
           continue;
         }
@@ -213,6 +220,33 @@ export class PdfUploadService {
       .executeTakeFirst();
   }
 
+  private async nextAvailableSlug(actorId: string, base: string): Promise<string> {
+    const existing = new Set(
+      (
+        await this.db
+          .selectFrom("pdf_templates")
+          .select("slug")
+          .where("owner_id", "=", actorId)
+          .where((eb) =>
+            eb.or([
+              eb("slug", "=", base),
+              eb("slug", "like", `${base}-%`),
+            ]),
+          )
+          .execute()
+      ).map((row) => row.slug),
+    );
+    for (let suffix = 1; suffix <= MAX_SLUG_SUFFIX; suffix++) {
+      const candidate = slugCandidate(base, suffix);
+      if (!existing.has(candidate)) return candidate;
+    }
+    throw new AppError(
+      "TEMPLATE_SLUG_CONFLICT",
+      409,
+      "Could not allocate a unique slug for the template.",
+    );
+  }
+
   // Restores a soft-deleted owner template with identical content instead of
   // inserting a conflicting row. Catalog fields and character links survive;
   // metadata comes from the fresh upload form, including visibility.
@@ -221,8 +255,9 @@ export class PdfUploadService {
     sha256: string,
     input: TemplateUpload,
   ): Promise<string | null> {
+    const cutoff = new Date(Date.now() - TRASH_RETENTION_MS);
     return this.db.transaction().execute(async (trx) => {
-      const candidate = await trx
+      const candidates = await trx
         .selectFrom("pdf_templates as template")
         .innerJoin("object_files as file", "file.id", "template.file_id")
         .select([
@@ -233,17 +268,22 @@ export class PdfUploadService {
         .where("template.owner_id", "=", actorId)
         .where("template.sha256", "=", sha256)
         .where("template.deleted_at", "is not", null)
+        .where("template.deleted_at", ">", cutoff)
         .orderBy("template.deleted_at", "desc")
         .forUpdate()
-        .executeTakeFirst();
-      if (!candidate || candidate.fileState !== "ready") {
-        return null;
+        .execute();
+      let candidate: (typeof candidates)[number] | undefined;
+      for (const current of candidates) {
+        if (current.fileState !== "ready") continue;
+        try {
+          await this.storage.stat(current.storagePath);
+          candidate = current;
+          break;
+        } catch {
+          // Try an older retained copy before creating a new template row.
+        }
       }
-      try {
-        await this.storage.stat(candidate.storagePath);
-      } catch {
-        return null;
-      }
+      if (!candidate) return null;
       await trx
         .updateTable("pdf_templates")
         .set({

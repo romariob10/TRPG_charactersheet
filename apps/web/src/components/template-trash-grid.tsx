@@ -58,6 +58,9 @@ export function TemplateTrashGrid({
           });
           return;
         }
+        if (result?.error?.code === "TEMPLATE_FILE_UNAVAILABLE") {
+          throw new Error(t("trashFileUnavailable"));
+        }
         throw new Error(result?.error?.message ?? t("trashRestoreFailed"));
       }
       router.refresh();

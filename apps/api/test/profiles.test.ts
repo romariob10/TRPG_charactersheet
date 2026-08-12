@@ -242,6 +242,33 @@ describe("profiles, usernames and slugs", () => {
     expect(afterRename.json()).toMatchObject({ title: "Renamed sheet", slug: "d-d-5e" });
   });
 
+  it("continues allocating slug suffixes beyond five matching titles", async () => {
+    const identity = await register("many.slugs@example.com");
+    const slugs: string[] = [];
+    for (let index = 1; index <= 6; index++) {
+      const uploaded = await upload(
+        await editablePdf(`field_${index}`),
+        identity.cookie,
+        "Repeated title",
+      );
+      expect(uploaded.statusCode).toBe(201);
+      const template = await app.inject({
+        method: "GET",
+        url: `/api/templates/${uploaded.json().templateId}`,
+        cookies: { mycharacter_session: identity.cookie },
+      });
+      slugs.push(template.json().slug as string);
+    }
+    expect(slugs).toEqual([
+      "repeated-title",
+      "repeated-title-2",
+      "repeated-title-3",
+      "repeated-title-4",
+      "repeated-title-5",
+      "repeated-title-6",
+    ]);
+  });
+
   let addressCounter = 1;
   async function register(email: string) {
     const response = await app.inject({

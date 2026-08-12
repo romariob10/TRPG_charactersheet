@@ -7,6 +7,7 @@ import type {
   UpdateTemplateRequest,
 } from "@mycharacter/contracts";
 import type { Database } from "@mycharacter/database";
+import type { ObjectStorage } from "@mycharacter/storage";
 import type { Kysely } from "kysely";
 import { AppError } from "../../errors.js";
 import {
@@ -20,9 +21,11 @@ import {
 
 export class TemplateService {
   private readonly db: Kysely<Database>;
+  private readonly storage: ObjectStorage;
 
-  public constructor(database: Kysely<Database>) {
+  public constructor(database: Kysely<Database>, storage: ObjectStorage) {
     this.db = database;
+    this.storage = storage;
   }
 
   async list(actorId: string, scope: TemplateScope): Promise<TemplateSummary[]> {
@@ -184,37 +187,73 @@ export class TemplateService {
   }
 
   async restore(actorId: string, templateId: string): Promise<TemplateSummary> {
-    const template = await findTemplate(this.db, actorId, templateId);
-    if (
-      !template ||
-      template.ownerId !== actorId ||
-      template.deletedAt === null ||
-      template.deletedAt.getTime() <= Date.now() - TRASH_RETENTION_MS
-    ) {
-      throw notFound();
+    try {
+      await this.db.transaction().execute(async (trx) => {
+        const template = await trx
+          .selectFrom("pdf_templates as template")
+          .innerJoin("object_files as file", "file.id", "template.file_id")
+          .select([
+            "template.sha256",
+            "template.deleted_at as deletedAt",
+            "template.storage_path as storagePath",
+            "file.state as fileState",
+          ])
+          .where("template.id", "=", templateId)
+          .where("template.owner_id", "=", actorId)
+          .where("template.deleted_at", "is not", null)
+          .forUpdate()
+          .executeTakeFirst();
+        if (
+          !template?.deletedAt ||
+          template.deletedAt.getTime() <= Date.now() - TRASH_RETENTION_MS
+        ) {
+          throw notFound();
+        }
+        if (template.fileState !== "ready") {
+          throw fileUnavailable();
+        }
+        try {
+          await this.storage.stat(template.storagePath);
+        } catch {
+          throw fileUnavailable();
+        }
+        const activeDuplicate = await trx
+          .selectFrom("pdf_templates")
+          .select("id")
+          .where("owner_id", "=", actorId)
+          .where("sha256", "=", template.sha256)
+          .where("deleted_at", "is", null)
+          .where("id", "!=", templateId)
+          .executeTakeFirst();
+        if (activeDuplicate) throw duplicateActive(activeDuplicate.id);
+        await trx
+          .updateTable("pdf_templates")
+          .set({ deleted_at: null })
+          .where("id", "=", templateId)
+          .where("deleted_at", "is not", null)
+          .execute();
+      });
+    } catch (error) {
+      if (isUniqueViolation(error)) {
+        const trashed = await this.db
+          .selectFrom("pdf_templates")
+          .select("sha256")
+          .where("id", "=", templateId)
+          .where("owner_id", "=", actorId)
+          .executeTakeFirst();
+        if (!trashed) throw error;
+        const activeDuplicate = await this.db
+          .selectFrom("pdf_templates")
+          .select("id")
+          .where("owner_id", "=", actorId)
+          .where("sha256", "=", trashed.sha256)
+          .where("deleted_at", "is", null)
+          .where("id", "!=", templateId)
+          .executeTakeFirst();
+        if (activeDuplicate) throw duplicateActive(activeDuplicate.id);
+      }
+      throw error;
     }
-    const activeDuplicate = await this.db
-      .selectFrom("pdf_templates")
-      .select("id")
-      .where("owner_id", "=", actorId)
-      .where("sha256", "=", template.sha256)
-      .where("deleted_at", "is", null)
-      .where("id", "!=", templateId)
-      .executeTakeFirst();
-    if (activeDuplicate) {
-      throw new AppError(
-        "TEMPLATE_DUPLICATE_ACTIVE",
-        409,
-        "An active template with the same content already exists.",
-        { activeTemplateId: activeDuplicate.id },
-      );
-    }
-    await this.db
-      .updateTable("pdf_templates")
-      .set({ deleted_at: null })
-      .where("id", "=", templateId)
-      .where("deleted_at", "is not", null)
-      .execute();
     return this.get(actorId, templateId);
   }
 
@@ -249,4 +288,30 @@ function notFound(): AppError {
 
 function fieldNotFound(): AppError {
   return new AppError("FIELD_NOT_FOUND", 404, "Field not found.");
+}
+
+function fileUnavailable(): AppError {
+  return new AppError(
+    "TEMPLATE_FILE_UNAVAILABLE",
+    409,
+    "The original PDF is no longer available and this template cannot be restored.",
+  );
+}
+
+function duplicateActive(activeTemplateId: string): AppError {
+  return new AppError(
+    "TEMPLATE_DUPLICATE_ACTIVE",
+    409,
+    "An active template with the same content already exists.",
+    { activeTemplateId },
+  );
+}
+
+function isUniqueViolation(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    error.code === "23505"
+  );
 }

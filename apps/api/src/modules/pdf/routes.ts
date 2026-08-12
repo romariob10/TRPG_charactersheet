@@ -9,7 +9,7 @@ import { PdfUploadService, type TemplateUpload } from "./upload-service.js";
 
 export async function registerPdfRoutes(app: FastifyInstance): Promise<void> {
   const uploadService = new PdfUploadService(app.db, app.storage, app.jobs);
-  const templateService = new TemplateService(app.db);
+  const templateService = new TemplateService(app.db, app.storage);
   const characterService = new CharacterService(app.db);
   app.post("/api/templates", async (request, reply) => {
     const actor = requireActor(request);

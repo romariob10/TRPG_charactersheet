@@ -40,6 +40,9 @@ export function createPurgeDependencies(
           .select(["file.id", "file.storage_key as storageKey"])
           .where("template.deleted_at", "<", cutoff)
           .where("file.state", "in", ["ready", "deleting"])
+          // Serialize final purge with upload/manual restore, both of which
+          // lock the template row before making it active again.
+          .forUpdate()
           .execute();
         if (!candidates.length) return [];
         // A concurrent re-upload may restore the template between the select

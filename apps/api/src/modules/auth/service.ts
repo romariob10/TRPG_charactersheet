@@ -17,7 +17,7 @@ import {
 } from "./session-repository.js";
 
 const USERNAME_CONSTRAINT = "profiles_username_idx";
-const USERNAME_ALLOCATION_ATTEMPTS = 3;
+const USERNAME_ALLOCATION_ATTEMPTS = 10;
 
 export interface AuthenticatedUser extends AuthUser {
   session: CreatedSession;
@@ -215,28 +215,24 @@ async function allocateUsername(
   base: string,
   userId: string,
 ): Promise<string> {
+  const candidates = [base];
+  for (let suffix = 2; suffix <= 50; suffix++) {
+    const suffixText = `-${suffix}`;
+    candidates.push(`${base.slice(0, 30 - suffixText.length)}${suffixText}`);
+  }
+  const fallback = `user-${userId.replaceAll("-", "").slice(0, 8)}`;
+  candidates.push(fallback);
   const taken = new Set(
     (
       await trx
         .selectFrom("profiles")
         .select("username")
-        .where((eb) =>
-          eb.or([
-            eb("username", "=", base),
-            eb("username", "like", `${base}-%`),
-          ]),
-        )
+        .where("username", "in", candidates)
         .execute()
     ).map((row) => row.username),
   );
-  if (!taken.has(base)) return base;
-  for (let suffix = 2; suffix <= 50; suffix++) {
-    const suffixText = `-${suffix}`;
-    const candidate = `${base.slice(0, 30 - suffixText.length)}${suffixText}`;
-    if (!taken.has(candidate)) return candidate;
-  }
-  const fallback = `user-${userId.replaceAll("-", "").slice(0, 8)}`;
-  if (!taken.has(fallback)) return fallback;
+  const available = candidates.find((candidate) => !taken.has(candidate));
+  if (available) return available;
   return `${fallback.slice(0, 27)}-${Date.now() % 1000}`;
 }
 

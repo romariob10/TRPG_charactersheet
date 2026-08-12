@@ -104,6 +104,7 @@ export default async function CommunityTemplatePage({
               templateId={template.id}
               initialItems={comments.items}
               initialNextCursor={comments.nextCursor}
+              initialTotalCount={template.commentCount ?? comments.items.length}
               authenticated={Boolean(session)}
               currentUsername={myProfile?.username ?? null}
               isAdmin={myProfile?.isAdmin ?? false}
@@ -147,7 +148,7 @@ export default async function CommunityTemplatePage({
                 </span>
               </div>
               <div className="mt-4 border-t pt-4">
-                {session ? (
+                {session && template.author?.id !== myProfile?.id ? (
                   <CommunityAddButton
                     templateId={template.id}
                     initialSubscribed={Boolean(template.subscribed)}
@@ -156,14 +157,14 @@ export default async function CommunityTemplatePage({
                     pendingLabel={tSystems("subscriptionPending")}
                     failedLabel={tSystems("subscribeFailed")}
                   />
-                ) : (
+                ) : !session ? (
                   <Link
                     href="/auth/sign-in"
                     className={buttonClassName({ variant: "primary", size: "md" }) + " w-full"}
                   >
                     {tSystems("addToMine")}
                   </Link>
-                )}
+                ) : null}
               </div>
             </div>
           </aside>

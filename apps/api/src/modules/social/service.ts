@@ -1,4 +1,8 @@
-import type { TemplateComment, TemplateSummary } from "@mycharacter/contracts";
+import {
+  commentIdSchema,
+  type TemplateComment,
+  type TemplateSummary,
+} from "@mycharacter/contracts";
 import type { Database } from "@mycharacter/database";
 import type { Kysely } from "kysely";
 import { sql } from "kysely";
@@ -144,6 +148,7 @@ export class SocialService {
     templateId: string,
     commentId: string,
   ): Promise<void> {
+    await this.requirePublicTemplate(templateId);
     const comment = await this.db
       .selectFrom("template_comments as comment")
       .leftJoin("profiles as actor_profile", (join) =>
@@ -308,7 +313,8 @@ function decodeCursor(cursor: string): { createdAtText: string; id: string } {
       !/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(\.\d{1,6})?([+-]\d{2}(:?\d{2})?)?$/.test(
         createdAtText,
       ) ||
-      !/^[0-9a-f-]{36}$/.test(id)
+      Number.isNaN(Date.parse(createdAtText)) ||
+      !commentIdSchema.safeParse(id).success
     ) {
       throw new Error("Invalid cursor.");
     }

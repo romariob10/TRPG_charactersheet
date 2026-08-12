@@ -187,6 +187,7 @@
     "trashRestore": "Восстановить",
     "trashRestoring": "Восстанавливаем…",
     "trashRestoreFailed": "Не удалось восстановить шаблон",
+    "trashFileUnavailable": "Исходный PDF уже удалён, поэтому этот шаблон больше нельзя восстановить.",
     "trashRestoreConflict": "У вас уже есть активный шаблон с содержимым этого PDF, поэтому копия из корзины не восстанавливается.",
     "trashOpenActive": "Открыть активный шаблон",
     "trashDeletedAgo": "удалён {date}",

@@ -187,6 +187,7 @@
     "trashRestore": "Restore",
     "trashRestoring": "Restoring…",
     "trashRestoreFailed": "Could not restore the template",
+    "trashFileUnavailable": "The original PDF has already been removed, so this template can no longer be restored.",
     "trashRestoreConflict": "You already have an active template with the content of this PDF, so the trashed copy cannot be restored.",
     "trashOpenActive": "Open the active template",
     "trashDeletedAgo": "deleted {date}",

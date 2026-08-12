@@ -12,6 +12,7 @@ export function TemplateComments({
   templateId,
   initialItems,
   initialNextCursor,
+  initialTotalCount,
   authenticated,
   currentUsername,
   isAdmin,
@@ -20,6 +21,7 @@ export function TemplateComments({
   templateId: string;
   initialItems: TemplateComment[];
   initialNextCursor: string | null;
+  initialTotalCount: number;
   authenticated: boolean;
   currentUsername: string | null;
   isAdmin: boolean;
@@ -28,6 +30,7 @@ export function TemplateComments({
   const t = useTranslations("CommunityPage");
   const [items, setItems] = useState(initialItems);
   const [nextCursor, setNextCursor] = useState(initialNextCursor);
+  const [totalCount, setTotalCount] = useState(initialTotalCount);
   const [loadingMore, setLoadingMore] = useState(false);
   const [body, setBody] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -53,6 +56,7 @@ export function TemplateComments({
         { method: "POST", body: JSON.stringify({ body: trimmed }) },
       );
       setItems((current) => [created, ...current]);
+      setTotalCount((current) => current + 1);
       setBody("");
     } catch (reason) {
       setError(
@@ -93,6 +97,7 @@ export function TemplateComments({
         method: "DELETE",
       });
       setItems((current) => current.filter((item) => item.id !== commentId));
+      setTotalCount((current) => Math.max(0, current - 1));
     } catch (reason) {
       setError(
         reason instanceof Error ? reason.message : t("commentDeleteFailed"),
@@ -106,7 +111,7 @@ export function TemplateComments({
     <section aria-label={t("commentsTitle")} className="space-y-5">
       <h2 className="text-xl font-bold">
         {t("commentsTitle")}{" "}
-        <span className="font-semibold text-[var(--muted)]">({items.length})</span>
+        <span className="font-semibold text-[var(--muted)]">({totalCount})</span>
       </h2>
 
       {authenticated ? (

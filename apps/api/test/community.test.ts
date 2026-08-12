@@ -271,6 +271,33 @@ describe("template likes and comments", () => {
     expect(authorDelete.statusCode).toBe(204);
   });
 
+  it("does not expose or mutate comments after a template becomes private", async () => {
+    const commentId = await seedComment(
+      publicTemplateId,
+      viewer.userId,
+      "No longer public",
+    );
+    await testDb.db
+      .updateTable("pdf_templates")
+      .set({ is_public: false })
+      .where("id", "=", publicTemplateId)
+      .execute();
+
+    const response = await app.inject({
+      method: "DELETE",
+      url: `/api/templates/${publicTemplateId}/comments/${commentId}`,
+      cookies: { mycharacter_session: viewer.cookie },
+    });
+    expect(response.statusCode).toBe(404);
+    expect(
+      await testDb.db
+        .selectFrom("template_comments")
+        .select("id")
+        .where("id", "=", commentId)
+        .executeTakeFirst(),
+    ).toBeDefined();
+  });
+
   it("paginates comments with a stable cursor", async () => {
     for (let index = 0; index < 25; index++) {
       await seedComment(publicTemplateId, viewer.userId, `Comment ${index}`);
@@ -298,6 +325,26 @@ describe("template likes and comments", () => {
       url: `/api/templates/${publicTemplateId}/comments?cursor=not-a-cursor`,
     });
     expect(invalidCursor.statusCode).toBe(400);
+
+    const invalidUuidCursor = Buffer.from(
+      "2026-08-12 00:00:00+00|------------------------------------",
+      "utf8",
+    ).toString("base64url");
+    const invalidUuid = await app.inject({
+      method: "GET",
+      url: `/api/templates/${publicTemplateId}/comments?cursor=${invalidUuidCursor}`,
+    });
+    expect(invalidUuid.statusCode).toBe(400);
+
+    const invalidDateCursor = Buffer.from(
+      `2026-99-99 00:00:00+00|${crypto.randomUUID()}`,
+      "utf8",
+    ).toString("base64url");
+    const invalidDate = await app.inject({
+      method: "GET",
+      url: `/api/templates/${publicTemplateId}/comments?cursor=${invalidDateCursor}`,
+    });
+    expect(invalidDate.statusCode).toBe(400);
   });
 
   it("community list returns author, slug and counts in one response", async () => {

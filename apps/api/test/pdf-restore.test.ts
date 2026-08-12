@@ -254,6 +254,53 @@ describe("deleted template restore on duplicate upload", () => {
     expect(second.json().templateId).not.toBe(oldTemplateId);
   });
 
+  it("refuses manual restore when the physical PDF is missing", async () => {
+    const bytes = await editablePdf();
+    const created = await upload(bytes, owner.cookie);
+    const templateId = created.json().templateId as string;
+    await trashTemplate(templateId);
+    const file = await testDb.db
+      .selectFrom("object_files")
+      .select("storage_key")
+      .where("storage_key", "like", `%${templateId}%`)
+      .executeTakeFirstOrThrow();
+    await new FilesystemStorage(storageRoot).delete(file.storage_key);
+
+    const restored = await app.inject({
+      method: "POST",
+      url: `/api/templates/${templateId}/restore`,
+      cookies: { mycharacter_session: owner.cookie },
+    });
+    expect(restored.statusCode).toBe(409);
+    expect(restored.json().error.code).toBe("TEMPLATE_FILE_UNAVAILABLE");
+
+    const row = await testDb.db
+      .selectFrom("pdf_templates")
+      .select("deleted_at")
+      .where("id", "=", templateId)
+      .executeTakeFirstOrThrow();
+    expect(row.deleted_at).not.toBeNull();
+  });
+
+  it("restores the owner's trashed template before suggesting a community duplicate", async () => {
+    const bytes = await editablePdf();
+    const created = await upload(bytes, owner.cookie);
+    const templateId = created.json().templateId as string;
+    await trashTemplate(templateId);
+
+    const community = await upload(bytes, stranger.cookie, {
+      forceDuplicate: true,
+      publishCommunity: true,
+      title: "Community copy",
+    });
+    expect(community.statusCode).toBe(201);
+    await approveTemplate(community.json().templateId as string);
+
+    const restored = await upload(bytes, owner.cookie, { title: "Owner copy" });
+    expect(restored.statusCode).toBe(200);
+    expect(restored.json()).toMatchObject({ templateId, restored: true });
+  });
+
   it("lists trashed templates for the owner only and restores them", async () => {
     const bytes = await editablePdf();
     const created = await upload(bytes, owner.cookie);
@@ -319,6 +366,23 @@ describe("deleted template restore on duplicate upload", () => {
     expect(restore.statusCode).toBe(404);
   });
 
+  it("creates a fresh template when re-uploading an expired trash item", async () => {
+    const bytes = await editablePdf();
+    const created = await upload(bytes, owner.cookie);
+    const oldTemplateId = created.json().templateId as string;
+    await trashTemplate(oldTemplateId);
+    await testDb.db
+      .updateTable("pdf_templates")
+      .set({ deleted_at: new Date(Date.now() - 31 * 86_400_000) })
+      .where("id", "=", oldTemplateId)
+      .execute();
+
+    const reuploaded = await upload(bytes, owner.cookie);
+    expect(reuploaded.statusCode).toBe(201);
+    expect(reuploaded.json().templateId).not.toBe(oldTemplateId);
+    expect(reuploaded.json().restored).toBe(false);
+  });
+
   it("refuses to restore a trashed row when an active duplicate exists", async () => {
     const bytes = await editablePdf();
     const created = await upload(bytes, owner.cookie);
@@ -357,12 +421,14 @@ describe("deleted template restore on duplicate upload", () => {
       gameSystem?: string;
       fileName?: string;
       publishCommunity?: boolean;
+      forceDuplicate?: boolean;
     } = {},
   ) {
     const form = new FormData();
     form.set("title", options.title ?? "My system");
     form.set("gameSystem", options.gameSystem ?? "Test RPG");
     if (options.publishCommunity) form.set("publishCommunity", "true");
+    if (options.forceDuplicate) form.set("forceDuplicate", "true");
     form.set(
       "file",
       new File([Buffer.from(bytes)], options.fileName ?? "sheet.pdf", {

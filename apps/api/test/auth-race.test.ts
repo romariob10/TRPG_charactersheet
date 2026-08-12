@@ -102,4 +102,33 @@ describe("authentication session serialization", () => {
       expect(verifyCalls).toBe(1);
     }
   });
+
+  it("allocates unique usernames across concurrent equivalent local parts", async () => {
+    const service = new AuthService(db);
+    const emails = [
+      "parallel.name@example.com",
+      "parallel+name@example.com",
+      "parallel-name@example.com",
+      "parallel!name@example.com",
+      "parallel#name@example.com",
+      "parallel$name@example.com",
+    ];
+
+    const users = await Promise.all(
+      emails.map((email) => service.register(email, oldPassword)),
+    );
+    const profiles = await db
+      .selectFrom("profiles")
+      .select("username")
+      .where(
+        "id",
+        "in",
+        users.map((user) => user.id),
+      )
+      .execute();
+
+    expect(new Set(profiles.map((profile) => profile.username)).size).toBe(
+      emails.length,
+    );
+  });
 });
