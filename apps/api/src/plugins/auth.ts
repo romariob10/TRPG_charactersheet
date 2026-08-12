@@ -14,8 +14,8 @@ export interface Actor {
 }
 
 export interface AuthPluginOptions {
+  allowedOrigins: readonly string[];
   database?: Kysely<Database>;
-  publicOrigin: string;
   allowMissingOriginForTests?: boolean;
 }
 
@@ -31,6 +31,7 @@ export async function registerAuth(
   options: AuthPluginOptions,
 ): Promise<void> {
   const db = options.database ?? app.db;
+  const allowedOrigins = new Set(options.allowedOrigins);
   app.decorateRequest("actor", null);
 
   app.addHook("onRequest", async (request) => {
@@ -45,7 +46,7 @@ export async function registerAuth(
     }
 
     request.actor = { userId: session.userId, sessionId: session.sessionId };
-    assertCookieMutationOrigin(request, options);
+    assertCookieMutationOrigin(request, options, allowedOrigins);
     await touchSessionIfStale(db, session);
   });
 }
@@ -57,7 +58,11 @@ export function requireActor(request: FastifyRequest): Actor {
   return request.actor;
 }
 
-function assertCookieMutationOrigin(request: FastifyRequest, options: AuthPluginOptions): void {
+function assertCookieMutationOrigin(
+  request: FastifyRequest,
+  options: AuthPluginOptions,
+  allowedOrigins: ReadonlySet<string>,
+): void {
   if (!request.actor || isSafeMethod(request.method)) {
     return;
   }
@@ -66,7 +71,7 @@ function assertCookieMutationOrigin(request: FastifyRequest, options: AuthPlugin
   if (origin === undefined && options.allowMissingOriginForTests) {
     return;
   }
-  if (origin !== options.publicOrigin) {
+  if (origin === undefined || !allowedOrigins.has(origin)) {
     throw new AppError("ORIGIN_FORBIDDEN", 403, "Request origin is not allowed.");
   }
 }

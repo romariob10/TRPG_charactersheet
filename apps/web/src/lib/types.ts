@@ -64,6 +64,12 @@ export interface CharacterSummary {
   deletedAt: string | null;
 }
 
+export interface PublicAuthor {
+  id: string;
+  username: string;
+  displayName: string | null;
+}
+
 export interface TemplateSummary {
   id: string;
   title: string;
@@ -74,6 +80,39 @@ export interface TemplateSummary {
   updatedAt: string;
   isPublic: boolean;
   subscribed?: boolean;
+  deletedAt?: string | null;
+  slug?: string;
+  author?: PublicAuthor;
+  likeCount?: number;
+  commentCount?: number;
+  likedByMe?: boolean;
+}
+
+export interface TemplateComment {
+  id: string;
+  templateId: string;
+  author: PublicAuthor;
+  body: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PublicProfile {
+  username: string;
+  displayName: string | null;
+  bio: string;
+  joinedAt: string;
+  publicTemplateCount: number;
+  totalLikes: number;
+}
+
+export interface MyProfile {
+  id: string;
+  email: string;
+  username: string;
+  displayName: string | null;
+  bio: string;
+  isAdmin: boolean;
 }
 
 export interface TemplateEditorData extends TemplateSummary {

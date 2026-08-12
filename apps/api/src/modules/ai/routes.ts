@@ -18,7 +18,7 @@ import type { RealtimeBus } from "../../realtime/realtime-bus.js";
 import { CharacterService } from "../characters/service.js";
 import {
   createConfiguredProvider,
-  nonThinkingProviderOptions,
+  economicalQwenProviderOptions,
 } from "./provider.js";
 import { AiProposalService } from "./proposal-service.js";
 import { PostgresAiRepository } from "./repository.js";
@@ -64,7 +64,7 @@ export async function registerAiRoutes(
     const agent = new BuiltInAgent({
       model: chatModel,
       maxSteps: 5,
-      providerOptions: nonThinkingProviderOptions,
+      providerOptions: economicalQwenProviderOptions,
       prompt: `You are the character-sheet assistant for ${character.name}. Help in the user's language. You can only inspect the catalog and create proposals; you can never directly write a field. Always call searchFields before getFieldContext. Use labels, sections, coordinates, groups, and current versions to resolve intent. When several fields are plausible or confidence is below 0.65, ask a concise clarifying question instead of guessing. Before proposing, read the exact current field context. Put every requested change into one proposeFieldChanges call. Do not narrate intermediate tool use or emit progress messages between tool calls. Return one concise final response after the tools finish because the proposal card contains the details.`,
       tools: createCharacterTools({
         database: app.db,
@@ -107,7 +107,7 @@ export async function registerAiRoutes(
           }),
         },
         toolChoice: { type: "tool", toolName: "capabilityProbe" },
-        providerOptions: nonThinkingProviderOptions,
+        providerOptions: economicalQwenProviderOptions,
         maxOutputTokens: 32,
         timeout: 12_000,
       });

@@ -250,6 +250,7 @@ describe("template visibility and subscriptions", () => {
         owner_id: owner.userId,
         visibility: "private",
         title: isPublic ? "Community system" : "Private system",
+        slug: isPublic ? "community-system" : "private-system",
         storage_path: `tests/${crypto.randomUUID()}.pdf`,
         sha256: crypto.randomUUID().replaceAll("-", "").padEnd(64, "0"),
         page_count: 1,

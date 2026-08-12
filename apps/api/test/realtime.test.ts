@@ -69,6 +69,7 @@ describe("local realtime", () => {
           owner_id: owner.userId,
           file_id: object.id,
           title: "Realtime",
+          slug: "realtime",
           visibility: "private",
           storage_path: `realtime/${crypto.randomUUID()}.pdf`,
           sha256: "b".repeat(64),

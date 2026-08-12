@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import { PgBoss } from "pg-boss";
 import {
+  buildVisionCatalogPrompt,
   processCatalogJob,
   type CatalogProcessorDependencies,
 } from "../src/jobs/catalog.js";
@@ -52,6 +53,98 @@ function dependencies(): CatalogProcessorDependencies {
 }
 
 describe("catalog worker", () => {
+  it("uses the visible document language for every persisted field label", async () => {
+    const deps = dependencies();
+    const baseField = {
+      id: randomUUID(),
+      pdfName: "strength",
+      kind: "text" as const,
+      defaultValue: null,
+      options: [],
+      page: 1,
+      label: "strength",
+      aliases: [],
+      section: "Attributes",
+      groupId: null,
+      groupOrder: null,
+      confidence: 0,
+      source: "pdf" as const,
+      widgets: [
+        {
+          page: 1,
+          rect: [0.1, 0.1, 0.2, 0.2] as [number, number, number, number],
+          pdfRect: [10, 10, 20, 20] as [number, number, number, number],
+          rotation: 0,
+          exportValue: null,
+          widgetIndex: 0,
+        },
+      ],
+    };
+    vi.mocked(deps.extract).mockResolvedValue({
+      fields: [
+        baseField,
+        {
+          ...baseField,
+          id: randomUUID(),
+          pdfName: "unknownMetadataName",
+          label: "unknownMetadataName",
+        },
+      ],
+      tokens: [
+        {
+          text: "Имя персонажа Сила Ловкость Телосложение",
+          page: 1,
+          rect: [0.75, 0.75, 0.95, 0.8],
+          fontSize: 12,
+          source: "pdf",
+        },
+      ],
+    });
+    vi.mocked(deps.analyzeWithVision).mockImplementation(
+      async (_bytes, fields) => fields,
+    );
+
+    await processCatalogJob(
+      { templateId: randomUUID(), catalogJobId: randomUUID() },
+      deps,
+    );
+
+    expect(deps.analyzeWithVision).toHaveBeenCalledWith(
+      expect.any(Uint8Array),
+      expect.any(Array),
+      expect.any(Array),
+      "ru",
+    );
+    const persisted = vi.mocked(deps.persist).mock.calls[0][1];
+    expect(persisted.map((field) => field.label)).toEqual([
+      "Сила",
+      "Текстовое поле 1",
+    ]);
+    expect(persisted.every((field) => field.section === "Общее")).toBe(true);
+  });
+
+  it("instructs vision to translate hidden metadata into the sheet language", () => {
+    const prompt = buildVisionCatalogPrompt({
+      page: 1,
+      context: [
+        {
+          fieldId: randomUUID(),
+          technicalName: "strength",
+          currentLabel: "strength",
+          currentSection: null,
+          kind: "text",
+          rect: [0.1, 0.1, 0.2, 0.2],
+        },
+      ],
+      visibleText: [{ text: "Сила", rect: [0.01, 0.1, 0.09, 0.2] }],
+      documentLanguage: "ru",
+    });
+
+    expect(prompt).toContain("MUST be natural Russian written in Cyrillic");
+    expect(prompt).toContain("technicalName is an internal identifier only");
+    expect(prompt).toContain("exactly one entry for every supplied fieldId");
+  });
+
   it("keeps deterministic catalog data when vision fails", async () => {
     const deps = dependencies();
     const result = await processCatalogJob(
@@ -69,7 +162,7 @@ describe("catalog worker", () => {
       expect.any(String),
       expect.any(String),
       "partial",
-      "Vision analysis was incomplete",
+      "Vision analysis was incomplete: provider unavailable",
     );
   });
 

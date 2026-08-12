@@ -8,6 +8,20 @@ const baseEnvironment = {
 };
 
 describe("API runtime configuration", () => {
+  it("accepts explicit additional browser origins", () => {
+    expect(
+      loadConfig({
+        ...baseEnvironment,
+        ALLOWED_ORIGINS:
+          "http://web.mycharacter.orb.local, https://web.mycharacter.orb.local",
+      }).allowedOrigins,
+    ).toEqual([
+      "http://localhost:3000",
+      "http://web.mycharacter.orb.local",
+      "https://web.mycharacter.orb.local",
+    ]);
+  });
+
   it("rejects Secure session cookies on an HTTP public origin", () => {
     expect(() => loadConfig({ ...baseEnvironment, COOKIE_SECURE: "true" })).toThrow(
       "COOKIE_SECURE=true requires an HTTPS PUBLIC_ORIGIN.",

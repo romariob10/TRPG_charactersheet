@@ -62,6 +62,7 @@ describe("AI proposal transactions", () => {
         owner_id: ownerId,
         visibility: "private",
         title: "AI test",
+        slug: "ai-test",
         storage_path: `legacy/${crypto.randomUUID()}.pdf`,
         sha256: crypto.randomUUID().replaceAll("-", "").padEnd(64, "0"),
         page_count: 1,

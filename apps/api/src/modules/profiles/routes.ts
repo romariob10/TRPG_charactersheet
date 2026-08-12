@@ -1,0 +1,33 @@
+import { updateMyProfileRequestSchema } from "@mycharacter/contracts";
+import type { FastifyInstance } from "fastify";
+import { AppError } from "../../errors.js";
+import { requireActor } from "../../plugins/auth.js";
+import { ProfileService } from "./service.js";
+
+const USERNAME_PATH_PATTERN = /^[a-z0-9][a-z0-9_-]{2,29}$/;
+
+export async function registerProfileRoutes(app: FastifyInstance): Promise<void> {
+  const service = new ProfileService(app.db);
+
+  app.get("/api/profiles/me", async (request) => {
+    const actor = requireActor(request);
+    return service.getMyProfile(actor.userId);
+  });
+
+  app.patch("/api/profiles/me", async (request) => {
+    const actor = requireActor(request);
+    const input = updateMyProfileRequestSchema.safeParse(request.body);
+    if (!input.success) {
+      throw new AppError("VALIDATION_FAILED", 400, "Request validation failed.");
+    }
+    return service.updateMyProfile(actor.userId, input.data);
+  });
+
+  app.get("/api/profiles/:username", async (request) => {
+    const username = (request.params as { username?: unknown }).username;
+    if (typeof username !== "string" || !USERNAME_PATH_PATTERN.test(username)) {
+      throw new AppError("PROFILE_NOT_FOUND", 404, "Profile not found.");
+    }
+    return service.getPublicProfile(username);
+  });
+}

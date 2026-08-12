@@ -67,6 +67,7 @@ describe("character authorization and lifecycle", () => {
         owner_id: owner.userId,
         visibility: "private",
         title: "Test system",
+        slug: "test-system",
         storage_path: `tests/${crypto.randomUUID()}.pdf`,
         sha256: "b".repeat(64),
         page_count: 2,

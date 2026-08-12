@@ -95,6 +95,7 @@ describe("initial migration", () => {
         file_id: objectFile.id,
         owner_id: user.id,
         title: "View template",
+        slug: "view-template",
         storage_path: "view.pdf",
         sha256: "a".repeat(64),
         page_count: 1,
@@ -148,6 +149,89 @@ describe("initial migration", () => {
         is_enabled: false,
       },
     ]);
+  });
+
+  it("requires usernames and stable template slugs", async () => {
+    const columns = await testDb.db
+      .selectFrom("information_schema.columns")
+      .select(["table_name", "column_name", "is_nullable"])
+      .where("table_schema", "=", testDb.schema)
+      .where("table_name", "in", ["profiles", "pdf_templates"])
+      .where("column_name", "in", ["username", "bio", "slug"])
+      .execute();
+    const byColumn = new Map(
+      columns.map((row) => [`${row.table_name}.${row.column_name}`, row.is_nullable]),
+    );
+    expect(byColumn.get("profiles.username")).toBe("NO");
+    expect(byColumn.get("profiles.bio")).toBe("NO");
+    expect(byColumn.get("pdf_templates.slug")).toBe("NO");
+
+    const indexes = await sql<{ indexname: string; indexdef: string }>`
+      select indexname, indexdef from pg_indexes
+      where schemaname = ${testDb.schema}
+        and indexname in ('profiles_username_idx', 'pdf_templates_owner_slug_idx')
+      order by indexname
+    `.execute(testDb.db);
+    expect(indexes.rows).toHaveLength(2);
+    const byName = new Map(indexes.rows.map((row) => [row.indexname, row.indexdef.toLowerCase()]));
+    expect(byName.get("profiles_username_idx")).toContain("lower(username)");
+    expect(byName.get("pdf_templates_owner_slug_idx")).toContain("owner_id, slug");
+    expect(byName.get("pdf_templates_owner_slug_idx")).toContain("owner_id is not null");
+  });
+
+  it("keeps deleted templates out of the private duplicate index", async () => {
+    const rows = await sql<{ indexdef: string }>`
+      select indexdef from pg_indexes
+      where schemaname = ${testDb.schema}
+        and indexname = 'pdf_templates_private_hash_idx'
+    `.execute(testDb.db);
+    expect(rows.rows).toHaveLength(1);
+    const definition = rows.rows[0].indexdef.toLowerCase();
+    expect(definition).toContain("unique");
+    expect(definition).toContain("owner_id, sha256");
+    expect(definition).toContain("deleted_at is null");
+    expect(definition).toContain("visibility = 'private'");
+  });
+
+  it("allows a deleted duplicate but blocks two active duplicates", async () => {
+    const user = await testDb.db
+      .insertInto("users")
+      .values({ email: "duplicate-index@example.com", password_hash: "hash" })
+      .returning("id")
+      .executeTakeFirstOrThrow();
+    const sha256 = "b".repeat(64);
+    const file = await testDb.db
+      .insertInto("object_files")
+      .values({
+        storage_key: "duplicate-index.pdf",
+        sha256,
+        size_bytes: "1",
+        media_type: "application/pdf",
+      })
+      .returning("id")
+      .executeTakeFirstOrThrow();
+    const insertTemplate = (deletedAt: Date | null, suffix: string) =>
+      testDb.db
+        .insertInto("pdf_templates")
+        .values({
+          file_id: file.id,
+          owner_id: user.id,
+          title: `Duplicate ${suffix}`,
+          slug: `duplicate-${suffix}`,
+          storage_path: `duplicate-index-${suffix}.pdf`,
+          sha256,
+          page_count: 1,
+          deleted_at: deletedAt,
+        })
+        .returning("id")
+        .execute();
+
+    await insertTemplate(new Date(), "deleted");
+    const active = await insertTemplate(null, "active");
+    expect(active).toHaveLength(1);
+    await expect(insertTemplate(null, "second-active")).rejects.toMatchObject({
+      code: "23505",
+    });
   });
 
   it("uses public extensions across sequential isolated schemas", async () => {
