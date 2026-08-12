@@ -95,6 +95,7 @@
     "upload": "Загрузить и разметить",
     "uploading": "Загружаем…",
     "selectFile": "Выберите PDF-файл.",
+    "invalidPdf": "Можно загрузить только PDF-файл.",
     "uploadFailed": "Не удалось загрузить шаблон",
     "megabytes": "{size} МБ",
     "approved": "Готов",

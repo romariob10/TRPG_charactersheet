@@ -1,6 +1,20 @@
 name: mycharacter
 
 services:
+  omniroute:
+    image: diegosouzapw/omniroute:latest
+    restart: unless-stopped
+    stop_grace_period: 40s
+    ports:
+      - "127.0.0.1:${OMNIROUTE_PORT:-20128}:20128"
+    volumes:
+      - omniroute_data:/app/data
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:20128/v1/models').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
   proxy:
     image: caddy:2.8-alpine
     environment:
@@ -64,9 +78,12 @@ services:
     environment:
       DATABASE_URL: postgresql://mycharacter:mycharacter@postgres:5432/mycharacter
       PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-http://localhost:8080}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:8080,http://127.0.0.1:8080,http://web.mycharacter.orb.local,https://web.mycharacter.orb.local,http://app.mycharacter.orb.local,https://app.mycharacter.orb.local}
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
       STORAGE_ROOT: /var/lib/mycharacter/pdfs
     depends_on:
+      omniroute:
+        condition: service_healthy
       postgres:
         condition: service_healthy
       migrate:
@@ -108,6 +125,8 @@ services:
       OCR_LANG_PATH: /app
       STORAGE_ROOT: /var/lib/mycharacter/pdfs
     depends_on:
+      omniroute:
+        condition: service_healthy
       postgres:
         condition: service_healthy
       migrate:
@@ -396,3 +415,4 @@ volumes:
   deps_database_node_modules:
   deps_pdf_node_modules:
   deps_storage_node_modules:
+  omniroute_data:

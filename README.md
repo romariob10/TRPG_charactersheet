@@ -17,6 +17,26 @@ docker compose up -d --build
 автоматически. AI необязателен: без ключа всё, кроме AI-помощника, продолжает
 работать.
 
+### QwenCloud Token Plan
+
+Настройки в `.env.example` уже указывают на подписочный OpenAI-совместимый
+Token Plan API QwenCloud и модель `qwen3.8-max-preview`. Не заменяйте адрес
+Token Plan на обычный pay-as-you-go endpoint: подписочный ключ получит
+`Access denied`. В `.env.local` вставьте отдельный ключ Token Plan с префиксом
+`sk-sp-` со страницы
+<https://home.qwencloud.com/billing/subscription/token-plan-individual> в строку:
+
+```dotenv
+AI_PRIMARY_API_KEY=ваш_ключ_qwencloud
+```
+
+`AI_PRIMARY_API_KEY` имеет приоритет над `AI_API_KEY`. Не добавляйте
+`.env.local` в Git. После смены ключа пересоздайте AI-сервисы:
+
+```bash
+docker compose up -d --force-recreate api worker
+```
+
 Безопасная остановка:
 
 ```bash

@@ -47,7 +47,7 @@ export default async function DashboardPage() {
             ))}
           </div>
         ) : (
-          <div className="mt-4 max-w-2xl rounded-[var(--radius-card)] border border-dashed bg-[var(--keylime)] px-6 py-10 text-center">
+          <div className="mt-4 w-full rounded-[var(--radius-card)] border border-dashed bg-[var(--keylime)] px-6 py-10 text-center">
             <div className="mx-auto grid size-12 place-items-center rounded-[var(--radius-control)] bg-[var(--brand-soft)] text-[var(--brand)]">
               <Sparkles className="size-6" />
             </div>

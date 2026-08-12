@@ -95,6 +95,7 @@
     "upload": "Upload and map",
     "uploading": "Uploading…",
     "selectFile": "Choose a PDF file.",
+    "invalidPdf": "Only PDF files can be uploaded.",
     "uploadFailed": "Could not upload the template",
     "megabytes": "{size} MB",
     "approved": "Ready",

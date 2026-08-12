@@ -39,6 +39,7 @@ import {
 import { CatalogProgressBridge } from "./realtime/catalog-progress-bridge.js";
 
 export interface BuildAppOptions {
+  allowedOrigins?: string[];
   database?: Kysely<Database>;
   databaseUrl: string;
   publicOrigin?: string;
@@ -62,6 +63,10 @@ function errorBody(error: AppError, requestId: string) {
 }
 
 export async function buildApp(options: BuildAppOptions): Promise<FastifyInstance> {
+  const publicOrigin = options.publicOrigin ?? "http://localhost:8080";
+  const allowedOrigins = [
+    ...new Set([publicOrigin, ...(options.allowedOrigins ?? [])]),
+  ];
   const app = Fastify<RawServerDefault>({
     requestIdHeader: "x-request-id",
     genReqId: () => randomUUID(),
@@ -88,8 +93,8 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
   app.decorate("jobs", jobs);
   app.addHook("onClose", async () => jobs.stop());
   await registerAuth(app, {
+    allowedOrigins,
     database: options.database,
-    publicOrigin: options.publicOrigin ?? "http://localhost:8080",
     allowMissingOriginForTests: options.allowMissingOriginForTests,
   });
   const realtime = new LocalRealtimeBus();
@@ -111,7 +116,7 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
   await registerAiRoutes(app, realtime);
   await registerExportRoutes(app);
   await registerRealtimeRoutes(app, realtime, {
-    publicOrigin: options.publicOrigin ?? "http://localhost:8080",
+    allowedOrigins,
     allowMissingOrigin: options.allowMissingOriginForTests ?? false,
   });
 
