@@ -10,7 +10,7 @@ import { requireActor } from "../../plugins/auth.js";
 import { TemplateService } from "./service.js";
 
 export async function registerTemplateRoutes(app: FastifyInstance): Promise<void> {
-  const service = new TemplateService(app.db);
+  const service = new TemplateService(app.db, app.storage);
 
   app.get("/api/templates", async (request) => {
     const actor = requireActor(request);

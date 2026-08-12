@@ -26,6 +26,8 @@ export interface UsersTable {
 export interface ProfilesTable {
   id: string;
   display_name: string | null;
+  username: string;
+  bio: string;
   locale: "ru" | "en";
   is_admin: boolean;
   created_at: Timestamp;
@@ -69,6 +71,7 @@ export interface PdfTemplatesTable {
   owner_id: string | null;
   visibility: TemplateVisibility;
   title: string;
+  slug: string;
   game_system: string | null;
   storage_path: string;
   sha256: string;
@@ -119,6 +122,21 @@ export interface TemplateSubscriptionsTable {
   user_id: string;
   template_id: string;
   created_at: Timestamp;
+}
+
+export interface TemplateLikesTable {
+  user_id: string;
+  template_id: string;
+  created_at: Timestamp;
+}
+
+export interface TemplateCommentsTable {
+  id: Uuid;
+  template_id: string;
+  author_id: string;
+  body: string;
+  created_at: Timestamp;
+  updated_at: Timestamp;
 }
 
 export interface CharactersTable {
@@ -238,6 +256,8 @@ export interface Database {
   pdf_fields: PdfFieldsTable;
   pdf_field_widgets: PdfFieldWidgetsTable;
   template_subscriptions: TemplateSubscriptionsTable;
+  template_likes: TemplateLikesTable;
+  template_comments: TemplateCommentsTable;
   characters: CharactersTable;
   character_members: CharacterMembersTable;
   character_values: CharacterValuesTable;

@@ -239,6 +239,7 @@ describe("field transactions", () => {
           owner_id: owner.userId,
           visibility: "private",
           title: prefix,
+          slug: `legacy-${crypto.randomUUID().slice(0, 8)}`,
           storage_path: `legacy/${crypto.randomUUID()}.pdf`,
           sha256: crypto.randomUUID().replaceAll("-", "").padEnd(64, "0"),
           page_count: 1,

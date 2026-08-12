@@ -103,7 +103,10 @@ async function seedFixture(storageRoot: string) {
           password_hash: "fixture-hash",
         })
         .execute();
-      await trx.insertInto("profiles").values({ id: userId }).execute();
+      await trx
+        .insertInto("profiles")
+        .values({ id: userId, username: `user-${userId.replaceAll("-", "").slice(0, 8)}` })
+        .execute();
       await trx
         .insertInto("object_files")
         .values({
@@ -122,6 +125,7 @@ async function seedFixture(storageRoot: string) {
           file_id: fileId,
           owner_id: userId,
           title: "Backup template",
+          slug: "backup-template",
           game_system: "Test",
           storage_path: storageKey,
           sha256,
