@@ -24,7 +24,7 @@ describe("NotificationService", () => {
 
   it("lists notifications and counts unread", async () => {
     const mockDb: any = {
-      selectFrom: (table: string) => {
+      selectFrom: () => {
         const chain: any = {
           leftJoin: () => chain,
           select: () => chain,

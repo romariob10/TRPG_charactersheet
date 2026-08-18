@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from "react";
 import {
   MessageSquare,
   Send,
-  User,
 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import type {
@@ -34,7 +33,7 @@ export function DirectMessagesView({
     initialConversationId ?? (initialConversations[0]?.id ?? null),
   );
   const [messages, setMessages] = useState<DirectMessage[]>([]);
-  const [loadingMessages, setLoadingMessages] = useState(false);
+  const [loadingMessages, setLoadingMessages] = useState(selectedId !== null);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -65,9 +64,31 @@ export function DirectMessagesView({
   }
 
   useEffect(() => {
-    if (selectedId) {
-      void loadMessages(selectedId);
-    }
+    if (!selectedId) return;
+    let cancelled = false;
+
+    void apiFetch<{ messages: DirectMessage[] }>(
+      `/api/messages/conversations/${selectedId}`,
+    )
+      .then((response) => {
+        if (cancelled) return;
+        setMessages(response.messages);
+        setConversations((previous) =>
+          previous.map((conversation) =>
+            conversation.id === selectedId
+              ? { ...conversation, unreadCount: 0 }
+              : conversation,
+          ),
+        );
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (!cancelled) setLoadingMessages(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [selectedId]);
 
   // Polling for updates
@@ -138,7 +159,11 @@ export function DirectMessagesView({
               return (
                 <div
                   key={conv.id}
-                  onClick={() => setSelectedId(conv.id)}
+                  onClick={() => {
+                    setLoadingMessages(true);
+                    setMessages([]);
+                    setSelectedId(conv.id);
+                  }}
                   className={
                     "flex items-center gap-3 p-3.5 cursor-pointer transition-colors " +
                     (isSelected

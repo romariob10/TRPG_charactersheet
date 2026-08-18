@@ -46,8 +46,11 @@ export function AdminReportsTable({
       );
       setReports(res.reports);
       setPendingCount(res.totalPending);
-    } catch (err: any) {
-      setFeedback({ type: "error", message: err.message || "Failed to load reports" });
+    } catch (error: unknown) {
+      setFeedback({
+        type: "error",
+        message: error instanceof Error ? error.message : "Failed to load reports",
+      });
     } finally {
       setLoading(false);
     }
@@ -87,10 +90,10 @@ export function AdminReportsTable({
         type: "success",
         message: status === "resolved" ? t("reportResolved") : t("reportDismissed"),
       });
-    } catch (err: any) {
+    } catch (error: unknown) {
       setFeedback({
         type: "error",
-        message: err.message || "Failed to resolve report",
+        message: error instanceof Error ? error.message : "Failed to resolve report",
       });
     } finally {
       setActionLoadingId(null);

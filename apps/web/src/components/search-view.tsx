@@ -11,6 +11,7 @@ import {
   User,
   Users,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { useTranslations } from "next-intl";
 import type { SearchItem, SearchType } from "@mycharacter/contracts";
 import { apiFetch } from "@/lib/api/client";
@@ -31,11 +32,9 @@ export function SearchView({ locale }: { locale: string }) {
   const [hasSearched, setHasSearched] = useState(Boolean(initialQuery));
 
   useEffect(() => {
-    if (!query.trim()) {
-      setResults([]);
-      setHasSearched(false);
-      return;
-    }
+    if (!query.trim()) return;
+
+    let cancelled = false;
 
     const timer = setTimeout(async () => {
       setLoading(true);
@@ -43,19 +42,24 @@ export function SearchView({ locale }: { locale: string }) {
         const data = await apiFetch<{ results: SearchItem[]; total: number }>(
           `/api/search?q=${encodeURIComponent(query.trim())}&type=${activeType}`
         );
-        setResults(data.results);
-        setHasSearched(true);
+        if (!cancelled) {
+          setResults(data.results);
+          setHasSearched(true);
+        }
       } catch {
-        setResults([]);
+        if (!cancelled) setResults([]);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     }, 250);
 
-    return () => clearTimeout(timer);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
   }, [query, activeType]);
 
-  const tabs: { id: SearchType; label: string; icon: any }[] = [
+  const tabs: { id: SearchType; label: string; icon: LucideIcon }[] = [
     { id: "all", label: t("tabAll"), icon: SearchIcon },
     { id: "post", label: t("tabPosts"), icon: FileText },
     { id: "character", label: t("tabCharacters"), icon: Users },
@@ -81,6 +85,11 @@ export function SearchView({ locale }: { locale: string }) {
           value={query}
           onChange={(e) => {
             setQuery(e.target.value);
+            if (!e.target.value.trim()) {
+              setResults([]);
+              setHasSearched(false);
+              setLoading(false);
+            }
             const params = new URLSearchParams(searchParams.toString());
             if (e.target.value) params.set("q", e.target.value);
             else params.delete("q");

@@ -4,9 +4,9 @@ import { AnalyticsService } from "../src/modules/admin/analytics-service.js";
 describe("AnalyticsService", () => {
   it("computes aggregate counts and time-series points", async () => {
     const mockDb: any = {
-      selectFrom: (table: string) => {
+      selectFrom: () => {
         const chain: any = {
-          select: (sel: any) => {
+          select: () => {
             return chain;
           },
           where: () => chain,

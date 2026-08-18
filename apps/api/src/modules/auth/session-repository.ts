@@ -77,7 +77,9 @@ export async function findActiveSession(
   return {
     sessionId: session.sessionId,
     userId: session.userId,
-    role: (session.siteRole as SiteRole) ?? (session.isAdmin ? "admin" : "user"),
+    role: session.isAdmin
+      ? "admin"
+      : ((session.siteRole as SiteRole | null) ?? "user"),
     isAdmin: Boolean(session.isAdmin || session.siteRole === "admin"),
     lastUsedAt: session.lastUsedAt,
   };

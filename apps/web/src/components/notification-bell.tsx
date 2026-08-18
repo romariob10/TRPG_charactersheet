@@ -25,11 +25,19 @@ export function NotificationBell({ locale }: { locale: string }) {
   }
 
   useEffect(() => {
-    void loadNotifications();
+    let cancelled = false;
+    void apiFetch<ListNotificationsResponse>("/api/notifications?limit=8")
+      .then((response) => {
+        if (!cancelled) setData(response);
+      })
+      .catch(() => undefined);
     const interval = setInterval(() => {
       void loadNotifications();
     }, 15000);
-    return () => clearInterval(interval);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
   }, []);
 
   useEffect(() => {

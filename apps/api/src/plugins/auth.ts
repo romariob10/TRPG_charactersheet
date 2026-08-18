@@ -103,7 +103,16 @@ export async function requireAdmin(
   request: FastifyRequest,
   _database?: Kysely<Database>,
 ): Promise<Actor> {
-  return requireRole(request, "admin");
+  void _database;
+  const actor = requireActor(request);
+  if (actor.role !== "admin") {
+    throw new AppError(
+      "ADMIN_REQUIRED",
+      403,
+      "Administrator access is required.",
+    );
+  }
+  return actor;
 }
 
 export async function requireModerator(

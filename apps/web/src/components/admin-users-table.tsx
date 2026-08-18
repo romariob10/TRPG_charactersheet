@@ -61,17 +61,17 @@ export function AdminUsersTable({
         prev.map((u) => (u.id === userId ? { ...u, siteRole: newRole } : u)),
       );
       setFeedback({ type: "success", message: t("roleUpdated") });
-    } catch (err: any) {
+    } catch (error: unknown) {
       setFeedback({
         type: "error",
-        message: err.message || t("roleUpdateFailed"),
+        message: error instanceof Error ? error.message : t("roleUpdateFailed"),
       });
     } finally {
       setActionLoadingId(null);
     }
   }
 
-  async function handleRevokeSessions(userId: string, username: string) {
+  async function handleRevokeSessions(userId: string) {
     if (!window.confirm(t("confirmRevoke"))) return;
     setActionLoadingId(userId);
     setFeedback(null);
@@ -80,10 +80,10 @@ export function AdminUsersTable({
         method: "POST",
       });
       setFeedback({ type: "success", message: t("sessionsRevoked") });
-    } catch (err: any) {
+    } catch (error: unknown) {
       setFeedback({
         type: "error",
-        message: err.message || "Failed to revoke sessions",
+        message: error instanceof Error ? error.message : "Failed to revoke sessions",
       });
     } finally {
       setActionLoadingId(null);
@@ -150,7 +150,6 @@ export function AdminUsersTable({
           <tbody className="divide-y divide-[var(--border)] bg-[var(--surface)]">
             {filteredUsers.length > 0 ? (
               filteredUsers.map((u) => {
-                const isSelf = u.id === currentUserId;
                 const canManageRoles = currentUserRole === "admin";
 
                 return (
@@ -236,8 +235,11 @@ export function AdminUsersTable({
                                 body: JSON.stringify({ action, reason }),
                               });
                               setFeedback({ type: "success", message: `Moderation action "${action}" applied.` });
-                            } catch (err: any) {
-                              setFeedback({ type: "error", message: err.message || "Failed to moderate user" });
+                            } catch (error: unknown) {
+                              setFeedback({
+                                type: "error",
+                                message: error instanceof Error ? error.message : "Failed to moderate user",
+                              });
                             } finally {
                               setActionLoadingId(null);
                             }
@@ -253,7 +255,7 @@ export function AdminUsersTable({
                           <button
                             type="button"
                             disabled={actionLoadingId === u.id}
-                            onClick={() => handleRevokeSessions(u.id, u.username)}
+                            onClick={() => handleRevokeSessions(u.id)}
                             title={t("revokeSessions")}
                             className="inline-flex items-center gap-1 rounded-lg border border-[var(--border)] px-2.5 py-1 text-xs font-semibold text-[var(--muted)] hover:bg-rose-50 hover:text-rose-700 hover:border-rose-300"
                           >

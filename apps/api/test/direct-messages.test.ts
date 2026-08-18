@@ -3,7 +3,6 @@ import { DirectMessageService } from "../src/modules/messages/service.js";
 
 describe("DirectMessageService", () => {
   it("normalizes and retrieves or creates conversation", async () => {
-    let inserted = false;
     const mockDb: any = {
       selectFrom: () => ({
         select: () => ({

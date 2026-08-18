@@ -16,7 +16,7 @@ describe("MyCharacter MCP Server Tools", () => {
     mockClient.updateCharacterField = vi.fn().mockResolvedValue({ success: true, version: 2 });
     mockClient.createPost = vi.fn().mockResolvedValue({ id: "p1", slug: "my-first-post" });
 
-    const { server } = createMyCharacterMcpServer({ client: mockClient });
+    createMyCharacterMcpServer({ client: mockClient });
 
     // Test calling get_my_profile via server internal handler
     // We can directly verify through client mock calls

@@ -104,7 +104,12 @@ export class AuthService {
           );
           await trx
             .insertInto("profiles")
-            .values({ id: user.id, username, is_admin: true })
+            .values({
+              id: user.id,
+              username,
+              is_admin: true,
+              site_role: "admin",
+            })
             .execute();
           return user;
         });

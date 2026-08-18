@@ -19,7 +19,9 @@ export async function up(db: Kysely<Database>): Promise<void> {
     .addColumn("target_id", "text")
     .addColumn("title", "text", (col) => col.notNull())
     .addColumn("body", "text")
-    .addColumn("metadata", "jsonb", (col) => col.notNull().defaultTo(sql`{}::jsonb`))
+    .addColumn("metadata", "jsonb", (col) =>
+      col.notNull().defaultTo(sql`'{}'::jsonb`),
+    )
     .addColumn("read_at", "timestamptz")
     .addColumn("created_at", "timestamptz", (col) => col.notNull().defaultTo(now()))
     .execute();

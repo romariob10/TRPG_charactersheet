@@ -63,6 +63,15 @@ describe("initial migration", () => {
         "post_images",
         "post_reactions",
         "post_comments",
+        "post_bookmarks",
+        "post_views",
+        "admin_audit_events",
+        "content_reports",
+        "user_restrictions",
+        "user_notifications",
+        "direct_conversations",
+        "direct_messages",
+        "template_reviews",
       ]),
     );
     expect(names).not.toContain("field_catalog_overrides");

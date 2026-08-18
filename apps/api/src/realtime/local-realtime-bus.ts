@@ -3,6 +3,7 @@ import type { RealtimeBus, RealtimeEvent, RealtimeListener } from "./realtime-bu
 export class LocalRealtimeBus implements RealtimeBus {
   private readonly characterListeners = new Map<string, Set<RealtimeListener>>();
   private readonly templateListeners = new Map<string, Set<RealtimeListener>>();
+  /* eslint-disable-next-line no-unused-vars -- Function type parameter documents the topic payload. */
   private readonly topicListeners = new Map<string, Set<(data: unknown) => void>>();
 
   publish(event: RealtimeEvent): void {
@@ -37,7 +38,9 @@ export class LocalRealtimeBus implements RealtimeBus {
     }
   }
 
+  /* eslint-disable-next-line no-unused-vars -- Function type parameter documents the topic payload. */
   subscribeTopic(topic: string, listener: (data: unknown) => void): () => void {
+    /* eslint-disable-next-line no-unused-vars -- Function type parameter documents the topic payload. */
     const listeners = this.topicListeners.get(topic) ?? new Set<(data: unknown) => void>();
     listeners.add(listener);
     this.topicListeners.set(topic, listeners);
