@@ -114,11 +114,13 @@ export type {
   ApplyProposalResponse,
 } from "./ai.js";
 export {
+  adminOverviewResponseSchema,
   aiProviderSchema,
   aiSettingsResponseSchema,
   updateAiSettingsRequestSchema,
 } from "./admin.js";
 export type {
+  AdminOverviewResponse,
   AiProvider,
   AiSettingsResponse,
   UpdateAiSettingsRequest,

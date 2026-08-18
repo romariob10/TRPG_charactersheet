@@ -13,9 +13,10 @@ import {
 } from "@mycharacter/storage";
 import type { FastifyInstance } from "fastify";
 import { AppError } from "../../errors.js";
-import { requireAdmin } from "../../plugins/auth.js";
+import { requireAdmin, requireModerator } from "../../plugins/auth.js";
 import { AuditService } from "../audit/service.js";
 import { ProfileService } from "../profiles/service.js";
+import { sql } from "kysely";
 
 export async function registerAdminRoutes(
   app: FastifyInstance,
@@ -23,6 +24,90 @@ export async function registerAdminRoutes(
   environment: NodeJS.ProcessEnv = process.env,
 ): Promise<void> {
   const profileService = new ProfileService(app.db);
+
+  app.get("/api/admin/overview", async (request, reply) => {
+    const actor = await requireModerator(request);
+    reply.header("Cache-Control", "private, no-store");
+
+    const [
+      userStats,
+      postCount,
+      characterCount,
+      templateCount,
+      postCommentCount,
+      templateCommentCount,
+      aiSettings,
+      recentAuditEvents,
+    ] = await Promise.all([
+      app.db
+        .selectFrom("users")
+        .innerJoin("profiles", "profiles.id", "users.id")
+        .select([
+          sql<number>`count(*)::int`.as("total"),
+          sql<number>`count(*) filter (where profiles.site_role = 'admin')::int`.as("admins"),
+          sql<number>`count(*) filter (where profiles.site_role = 'moderator')::int`.as("moderators"),
+          sql<number>`count(*) filter (where users.created_at >= now() - interval '24 hours')::int`.as("new24h"),
+          sql<number>`count(*) filter (where users.created_at >= now() - interval '7 days')::int`.as("new7d"),
+        ])
+        .executeTakeFirst(),
+      app.db
+        .selectFrom("posts")
+        .select(sql<number>`count(*)::int`.as("count"))
+        .executeTakeFirst(),
+      app.db
+        .selectFrom("characters")
+        .select(sql<number>`count(*)::int`.as("count"))
+        .where("status", "=", "active")
+        .executeTakeFirst(),
+      app.db
+        .selectFrom("pdf_templates")
+        .select(sql<number>`count(*)::int`.as("count"))
+        .where("deleted_at", "is", null)
+        .executeTakeFirst(),
+      app.db
+        .selectFrom("post_comments")
+        .select(sql<number>`count(*)::int`.as("count"))
+        .executeTakeFirst(),
+      app.db
+        .selectFrom("template_comments")
+        .select(sql<number>`count(*)::int`.as("count"))
+        .executeTakeFirst(),
+      resolveAiSettings(settingsStore, environment),
+      new AuditService(app.db).list(
+        { limit: 5 },
+        actor.role === "moderator" ? ["post", "comment", "character", "template", "report"] : undefined,
+      ),
+    ]);
+
+    return {
+      users: {
+        total: userStats?.total ?? 0,
+        admins: userStats?.admins ?? 0,
+        moderators: userStats?.moderators ?? 0,
+        newLast24h: userStats?.new24h ?? 0,
+        newLast7d: userStats?.new7d ?? 0,
+      },
+      content: {
+        posts: postCount?.count ?? 0,
+        characters: characterCount?.count ?? 0,
+        templates: templateCount?.count ?? 0,
+        comments: (postCommentCount?.count ?? 0) + (templateCommentCount?.count ?? 0),
+      },
+      system: {
+        aiConfigured: Boolean(aiSettings?.apiKey),
+        aiProvider: aiSettings?.provider ?? "none",
+        nodeEnv: environment.NODE_ENV ?? "development",
+      },
+      recentAudit: recentAuditEvents.events.map((e) => ({
+        id: e.id,
+        action: e.action,
+        actorRole: e.actorRole,
+        actorUsername: e.actorUsername,
+        targetType: e.targetType,
+        createdAt: e.createdAt,
+      })),
+    };
+  });
 
   app.put("/api/admin/users/:id/role", async (request) => {
     const actor = await requireAdmin(request, app.db);

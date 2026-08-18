@@ -51,3 +51,12 @@
 - Checks passed: `audit.test.ts` unit tests (2 tests), `apps/api` typecheck, `apps/web` vitest (28 tests).
 - Manual scenarios passed: Sensitive field redaction, payload truncation, role change and AI settings audit records.
 - Next phase: Phase 3 — Professional Administration Console Framework.
+
+## Phase 3 — Professional Administration Console Framework
+- Status: verified
+- Branch: `codex/feat-admin-console`
+- Commit: `feat(admin): build role-aware administration console`
+- Implemented: `GET /api/admin/overview` aggregated statistics endpoint (user counts, 24h/7d registration trends, content counts, AI provider status, recent audit activity), Admin shell layout with role-aware tab navigation (Overview, Users, Audit, AI Settings, System), interactive audit log page with action and target filters, system diagnostics health page, AI settings subroute, complete localization in RU & EN.
+- Checks passed: `apps/api` typecheck, `apps/web` vitest (28 passed).
+- Manual scenarios passed: Admin and Moderator navigation, statistics overview display, interactive audit filtering, system health diagnostic view.
+- Next phase: Phase 4 — User and Social Profile Administration.

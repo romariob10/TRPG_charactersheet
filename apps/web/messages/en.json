@@ -548,5 +548,65 @@
     "testing": "Testing…",
     "testSuccess": "Connection works and the model can call tools.",
     "testFailed": "The provider failed the connection test."
+  },
+  "AdminConsole": {
+    "eyebrow": "Administration",
+    "title": "Management Console",
+    "subtitle": "User management, content moderation, system audit, and platform settings.",
+    "nav": {
+      "overview": "Overview",
+      "users": "Users",
+      "audit": "Audit Log",
+      "aiSettings": "AI Settings",
+      "system": "System"
+    },
+    "overview": {
+      "usersTitle": "Users",
+      "totalUsers": "Total Users",
+      "newUsers24h": "Last 24 hours",
+      "newUsers7d": "Last 7 days",
+      "adminsAndMods": "Admins & Moderators",
+      "contentTitle": "Platform Content",
+      "posts": "Posts",
+      "characters": "Characters",
+      "templates": "RPG Systems",
+      "comments": "Comments",
+      "systemTitle": "System Status",
+      "aiStatus": "AI Provider",
+      "aiConfigured": "Configured & Active",
+      "aiNotConfigured": "Not Configured",
+      "environment": "Environment",
+      "recentAuditTitle": "Recent Administrative Actions",
+      "viewFullAudit": "View Full Audit Log",
+      "noAuditEvents": "No audit events recorded yet"
+    },
+    "audit": {
+      "title": "Audit Log",
+      "subtitle": "Immutable log of administrative actions and moderation decisions.",
+      "action": "Action",
+      "actor": "Actor",
+      "target": "Target",
+      "date": "Date & Time",
+      "reason": "Reason",
+      "metadata": "Parameters",
+      "filterByAction": "All actions",
+      "filterByTarget": "All targets",
+      "empty": "No audit entries found",
+      "nextPage": "Next page",
+      "previousPage": "Previous page"
+    },
+    "system": {
+      "title": "Platform Health",
+      "subtitle": "Diagnostics of connections, database, storage and background workers.",
+      "database": "PostgreSQL Database",
+      "databaseDesc": "Schema is up to date and all migrations are applied.",
+      "storage": "Object Storage",
+      "storageDesc": "Local and S3 storage are accessible for read and write operations.",
+      "ai": "AI Provider",
+      "aiDesc": "Configured provider for character assistant and PDF cataloging.",
+      "aiDescNone": "No API key configured. Configure provider in the AI Settings tab.",
+      "statusOk": "Healthy",
+      "statusWarning": "Action Required"
+    }
   }
 }
