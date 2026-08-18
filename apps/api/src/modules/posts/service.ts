@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import {
   createPostRequestSchema,
   type PostBlock,
@@ -14,7 +14,14 @@ import { sql } from "kysely";
 import { AppError } from "../../errors.js";
 
 const NO_ACTOR_UUID = "00000000-0000-0000-0000-000000000000";
-const REACTIONS = ["like", "fire", "dice"] as const;
+const REACTIONS = [
+  "like",
+  "joy",
+  "moai",
+  "fire",
+  "mindblown",
+  "dice",
+] as const;
 
 interface PostRow {
   id: string;
@@ -28,6 +35,7 @@ interface PostRow {
   authorUsername: string;
   authorDisplayName: string | null;
   commentCount: number;
+  viewsCount: number;
 }
 
 export class PostService {
@@ -79,6 +87,76 @@ export class PostService {
       }
     });
     return this.getById(postId, actorId);
+  }
+
+  async update(
+    actorId: string,
+    postId: string,
+    blocks: PostBlock[],
+  ): Promise<SocialPost> {
+    const post = await this.db
+      .selectFrom("posts")
+      .select(["id", "author_id as authorId"])
+      .where("id", "=", postId)
+      .executeTakeFirst();
+
+    if (!post) throw postNotFound();
+    if (post.authorId !== actorId) {
+      throw new AppError("FORBIDDEN", 403, "You cannot edit this post.");
+    }
+
+    const normalized = normalizeBlocks(blocks);
+    const plainText = blocksToPlainText(normalized);
+    if (!plainText) {
+      throw new AppError("POST_EMPTY", 400, "Post content cannot be empty.");
+    }
+    const title = postTitle(normalized);
+    const imageIds = uniqueIds(
+      normalized.flatMap((block) =>
+        block.type === "image" ? [block.data.fileId] : [],
+      ),
+    );
+    await this.assertEmbedsArePublic(normalized);
+    await this.assertImagesBelongTo(actorId, imageIds);
+
+    await this.db.transaction().execute(async (trx) => {
+      await trx
+        .updateTable("posts")
+        .set({
+          title,
+          content: JSON.stringify(normalized),
+          plain_text: plainText,
+          updated_at: new Date(),
+        })
+        .where("id", "=", postId)
+        .execute();
+
+      if (imageIds.length) {
+        await trx
+          .updateTable("post_images")
+          .set({ post_id: postId })
+          .where("uploader_id", "=", actorId)
+          .where("file_id", "in", imageIds)
+          .execute();
+      }
+    });
+
+    return this.getById(postId, actorId);
+  }
+
+  async delete(actorId: string, postId: string): Promise<void> {
+    const post = await this.db
+      .selectFrom("posts")
+      .select(["id", "author_id as authorId"])
+      .where("id", "=", postId)
+      .executeTakeFirst();
+
+    if (!post) throw postNotFound();
+    if (post.authorId !== actorId) {
+      throw new AppError("FORBIDDEN", 403, "You cannot delete this post.");
+    }
+
+    await this.db.deleteFrom("posts").where("id", "=", postId).execute();
   }
 
   async listEmbedOptions(actorId: string) {
@@ -149,13 +227,22 @@ export class PostService {
     reaction: PostReaction,
   ): Promise<PostReactionSummary[]> {
     await this.requirePost(postId);
-    await this.db
-      .insertInto("post_reactions")
-      .values({ user_id: actorId, post_id: postId, reaction })
-      .onConflict((conflict) =>
-        conflict.columns(["user_id", "post_id", "reaction"]).doNothing(),
-      )
-      .execute();
+    await this.db.transaction().execute(async (trx) => {
+      await trx
+        .deleteFrom("post_reactions")
+        .where("user_id", "=", actorId)
+        .where("post_id", "=", postId)
+        .where("reaction", "!=", reaction)
+        .execute();
+
+      await trx
+        .insertInto("post_reactions")
+        .values({ user_id: actorId, post_id: postId, reaction })
+        .onConflict((conflict) =>
+          conflict.columns(["user_id", "post_id", "reaction"]).doNothing(),
+        )
+        .execute();
+    });
     return this.reactionsFor([postId], actorId).then((items) =>
       items.get(postId)!,
     );
@@ -269,6 +356,7 @@ export class PostService {
         "author.id as authorId",
         "author.username as authorUsername",
         "author.display_name as authorDisplayName",
+        "post.views_count as viewsCount",
         (eb) =>
           eb
             .selectFrom("post_comments")
@@ -277,6 +365,107 @@ export class PostService {
             .as("commentCount"),
       ])
       .where("author_user.status", "=", "active");
+  }
+
+  async bookmark(actorId: string, postId: string): Promise<boolean> {
+    await this.requirePost(postId);
+    await this.db
+      .insertInto("post_bookmarks")
+      .values({ user_id: actorId, post_id: postId })
+      .onConflict((conflict) => conflict.doNothing())
+      .execute();
+    return true;
+  }
+
+  async unbookmark(actorId: string, postId: string): Promise<boolean> {
+    await this.requirePost(postId);
+    await this.db
+      .deleteFrom("post_bookmarks")
+      .where("user_id", "=", actorId)
+      .where("post_id", "=", postId)
+      .execute();
+    return false;
+  }
+
+  async listSaved(actorId: string, limit = 50): Promise<SocialPost[]> {
+    const rows = await this.basePostQuery()
+      .innerJoin("post_bookmarks as bookmark", "bookmark.post_id", "post.id")
+      .where("bookmark.user_id", "=", actorId)
+      .orderBy("bookmark.created_at", "desc")
+      .limit(Math.min(Math.max(limit, 1), 50))
+      .execute();
+    return this.hydrate(rows, actorId);
+  }
+
+  async recordView(
+    postId: string,
+    viewerId: string | null,
+    viewerIp: string | null,
+  ): Promise<number> {
+    await this.requirePost(postId);
+
+    let isNew = true;
+    const viewerHash = viewerIp ? createHash("sha256").update(`${viewerIp}:${new Date().toISOString().slice(0, 10)}:mycharacter-view`).digest("hex").slice(0, 32) : null;
+
+    if (viewerId) {
+      const existing = await this.db
+        .selectFrom("post_views")
+        .select("id")
+        .where("post_id", "=", postId)
+        .where("viewer_id", "=", viewerId)
+        .executeTakeFirst();
+      if (existing) {
+        isNew = false;
+      } else {
+        await this.db
+          .insertInto("post_views")
+          .values({
+            post_id: postId,
+            viewer_id: viewerId,
+            viewer_hash: viewerHash,
+          })
+          .execute();
+      }
+    } else if (viewerHash) {
+      const existing = await this.db
+        .selectFrom("post_views")
+        .select("id")
+        .where("post_id", "=", postId)
+        .where("viewer_hash", "=", viewerHash)
+        .where("viewer_id", "is", null)
+        .executeTakeFirst();
+      if (existing) {
+        isNew = false;
+      } else {
+        await this.db
+          .insertInto("post_views")
+          .values({
+            post_id: postId,
+            viewer_id: null,
+            viewer_hash: viewerHash,
+          })
+          .execute();
+      }
+    }
+
+    if (isNew) {
+      const updated = await this.db
+        .updateTable("posts")
+        .set((eb) => ({
+          views_count: eb("views_count", "+", 1),
+        }))
+        .where("id", "=", postId)
+        .returning("views_count as viewsCount")
+        .executeTakeFirst();
+      return updated?.viewsCount ?? 1;
+    }
+
+    const post = await this.db
+      .selectFrom("posts")
+      .select("views_count as viewsCount")
+      .where("id", "=", postId)
+      .executeTakeFirst();
+    return post?.viewsCount ?? 0;
   }
 
   private async hydrate(
@@ -288,7 +477,7 @@ export class PostService {
       row,
       blocks: createPostRequestSchema.shape.blocks.parse(row.content),
     }));
-    const [reactions, embeds] = await Promise.all([
+    const [reactions, embeds, bookmarks] = await Promise.all([
       this.reactionsFor(
         rows.map((row) => row.id),
         actorId,
@@ -297,7 +486,20 @@ export class PostService {
         parsed.flatMap((item) => item.blocks),
         actorId,
       ),
+      actorId
+        ? this.db
+            .selectFrom("post_bookmarks")
+            .select("post_id as postId")
+            .where("user_id", "=", actorId)
+            .where(
+              "post_id",
+              "in",
+              rows.map((r) => r.id),
+            )
+            .execute()
+        : Promise.resolve([]),
     ]);
+    const bookmarkedSet = new Set(bookmarks.map((b) => b.postId));
     return parsed.map(({ row, blocks }) => ({
       id: row.id,
       slug: row.slug,
@@ -315,6 +517,8 @@ export class PostService {
       },
       reactions: reactions.get(row.id)!,
       commentCount: row.commentCount,
+      viewsCount: row.viewsCount ?? 0,
+      isSaved: bookmarkedSet.has(row.id),
       embeds: embedListForBlocks(blocks, embeds),
     }));
   }

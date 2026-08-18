@@ -28,7 +28,7 @@ export type FieldKind =
   | "unknown";
 export type CatalogSource = "pdf" | "heuristic" | "ocr" | "vision" | "manual";
 export type ProposalStatus = "pending" | "applied" | "rejected" | "expired";
-export type PostReaction = "like" | "fire" | "dice";
+export type PostReaction = "like" | "joy" | "moai" | "fire" | "mindblown" | "dice";
 
 export interface UsersTable {
   id: Uuid;
@@ -289,6 +289,7 @@ export interface PostsTable {
   title: string | null;
   content: Json;
   plain_text: string;
+  views_count: number;
   published_at: Timestamp;
   created_at: Timestamp;
   updated_at: Timestamp;
@@ -319,6 +320,20 @@ export interface PostCommentsTable {
   updated_at: Timestamp;
 }
 
+export interface PostBookmarksTable {
+  user_id: string;
+  post_id: string;
+  created_at: Timestamp;
+}
+
+export interface PostViewsTable {
+  id: Generated<Uuid>;
+  post_id: string;
+  viewer_id: string | null;
+  viewer_hash: string | null;
+  viewed_at: Timestamp;
+}
+
 export interface Database {
   users: UsersTable;
   profiles: ProfilesTable;
@@ -347,4 +362,6 @@ export interface Database {
   post_images: PostImagesTable;
   post_reactions: PostReactionsTable;
   post_comments: PostCommentsTable;
+  post_bookmarks: PostBookmarksTable;
+  post_views: PostViewsTable;
 }

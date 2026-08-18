@@ -61,6 +61,7 @@ services:
       - deps_database_node_modules:/app/packages/database/node_modules:ro
       - deps_pdf_node_modules:/app/packages/pdf/node_modules:ro
       - deps_storage_node_modules:/app/packages/storage/node_modules:ro
+      - deps_mcp_node_modules:/app/packages/mcp/node_modules:ro
       - next_cache:/app/apps/web/.next
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"]
@@ -106,6 +107,7 @@ services:
       - deps_database_node_modules:/app/packages/database/node_modules:ro
       - deps_pdf_node_modules:/app/packages/pdf/node_modules:ro
       - deps_storage_node_modules:/app/packages/storage/node_modules:ro
+      - deps_mcp_node_modules:/app/packages/mcp/node_modules:ro
       - pdf_data:/var/lib/mycharacter/pdfs
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/api/health/ready').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"]
@@ -149,6 +151,7 @@ services:
       - deps_database_node_modules:/app/packages/database/node_modules:ro
       - deps_pdf_node_modules:/app/packages/pdf/node_modules:ro
       - deps_storage_node_modules:/app/packages/storage/node_modules:ro
+      - deps_mcp_node_modules:/app/packages/mcp/node_modules:ro
       - pdf_data:/var/lib/mycharacter/pdfs
 
   deps:
@@ -174,6 +177,7 @@ services:
       - deps_database_node_modules:/app/packages/database/node_modules
       - deps_pdf_node_modules:/app/packages/pdf/node_modules
       - deps_storage_node_modules:/app/packages/storage/node_modules
+      - deps_mcp_node_modules:/app/packages/mcp/node_modules
 
   postgres:
     image: postgres:17-bookworm
@@ -269,6 +273,7 @@ services:
       - deps_database_node_modules:/app/packages/database/node_modules:ro
       - deps_pdf_node_modules:/app/packages/pdf/node_modules:ro
       - deps_storage_node_modules:/app/packages/storage/node_modules:ro
+      - deps_mcp_node_modules:/app/packages/mcp/node_modules:ro
       - pdf_data:/var/lib/mycharacter/pdfs:ro
 
   fake-ai:
@@ -324,6 +329,7 @@ services:
       - deps_database_node_modules:/app/packages/database/node_modules:ro
       - deps_pdf_node_modules:/app/packages/pdf/node_modules:ro
       - deps_storage_node_modules:/app/packages/storage/node_modules:ro
+      - deps_mcp_node_modules:/app/packages/mcp/node_modules:ro
       - pdf_data:/var/lib/mycharacter/pdfs
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/api/health/ready').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"]
@@ -415,4 +421,5 @@ volumes:
   deps_database_node_modules:
   deps_pdf_node_modules:
   deps_storage_node_modules:
+  deps_mcp_node_modules:
   omniroute_data:

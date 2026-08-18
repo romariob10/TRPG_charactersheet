@@ -51,7 +51,14 @@ export const createPostRequestSchema = z.object({
   blocks: z.array(postBlockSchema).min(1).max(80),
 });
 
-export const postReactionSchema = z.enum(["like", "fire", "dice"]);
+export const postReactionSchema = z.enum([
+  "like",
+  "joy",
+  "moai",
+  "fire",
+  "mindblown",
+  "dice",
+]);
 
 export const postReactionSummarySchema = z.object({
   reaction: postReactionSchema,
@@ -85,6 +92,8 @@ export const socialPostSchema = z.object({
   author: publicAuthorSchema,
   reactions: z.array(postReactionSummarySchema),
   commentCount: z.number().int().nonnegative(),
+  viewsCount: z.number().int().nonnegative().default(0),
+  isSaved: z.boolean().default(false),
   embeds: z.array(postEmbedSchema),
 });
 

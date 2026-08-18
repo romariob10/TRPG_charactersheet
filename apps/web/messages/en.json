@@ -18,7 +18,10 @@
     "characters": "Characters",
     "systems": "TTRPG systems",
     "language": "Русский",
-    "profileSettings": "Profile"
+    "languageRu": "RU",
+    "languageEn": "EN",
+    "profileSettings": "Profile",
+    "viewPublicProfile": "Public profile"
   },
   "Feed": {
     "eyebrow": "Community",
@@ -50,6 +53,13 @@
   "Posts": {
     "startPost": "What is new in your game?",
     "newPost": "New post",
+    "openInNewPage": "Open in full editor",
+    "fullEditorTitle": "Create post",
+    "fullEditorSubtitle": "Full-screen post editor for the community feed",
+    "backToFeed": "Back to feed",
+    "clearDraft": "Clear draft",
+    "draftSaved": "Draft saved",
+    "discardDraftConfirm": "Clear the current post draft?",
     "editorHint": "Use “+” to add text, an image, a character, or a system.",
     "placeholder": "Tell a story, share a discovery, or show your character…",
     "close": "Close editor",
@@ -69,18 +79,37 @@
     "search": "Search posts",
     "filter": {
       "all": "All posts",
-      "articles": "Articles"
+      "articles": "Articles",
+      "saved": "Saved"
     },
     "article": "Article",
     "more": "more",
     "readFull": "Read full post",
     "emptyFeed": "The feed is quiet",
     "emptyFeedText": "Create the first post and embed a character or system.",
+    "emptySaved": "No saved posts yet",
+    "emptySavedText": "Click the bookmark icon below any post to save it here.",
+    "save": "Save",
+    "saved": "Saved",
     "reaction": {
       "like": "Like",
+      "joy": "Joy",
+      "moai": "Moai",
       "fire": "Fire",
+      "mindblown": "Mind blown",
       "dice": "Critical hit"
     },
+    "actions": "Post actions",
+    "edit": "Edit",
+    "delete": "Delete",
+    "deleteConfirm": "Delete this post? This action cannot be undone.",
+    "deleteFailed": "Could not delete the post.",
+    "report": "Report",
+    "reported": "Report submitted",
+    "reportHint": "Thank you for letting us know. We will review this post.",
+    "copied": "Link copied",
+    "share": "Share",
+    "addReaction": "Add reaction",
     "comments": {
       "loading": "Loading comments…",
       "empty": "No comments yet. Start the conversation.",
@@ -456,6 +485,8 @@
   "ProfileSettings": {
     "title": "Profile settings",
     "subtitle": "Your username, display name and bio are visible to everyone on your public page.",
+    "viewProfile": "View public profile",
+    "accountInfo": "Account details",
     "emailNote": "Sign-in email: {email}",
     "displayName": "Display name",
     "displayNamePlaceholder": "What should we call you",

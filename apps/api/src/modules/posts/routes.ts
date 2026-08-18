@@ -36,6 +36,11 @@ export async function registerPostRoutes(app: FastifyInstance): Promise<void> {
     return { posts: await service.list(actor.userId) };
   });
 
+  app.get("/api/posts/saved", async (request) => {
+    const actor = requireActor(request);
+    return { posts: await service.listSaved(actor.userId) };
+  });
+
   app.get("/api/posts/embed-options", async (request) => {
     const actor = requireActor(request);
     return service.listEmbedOptions(actor.userId);
@@ -48,6 +53,21 @@ export async function registerPostRoutes(app: FastifyInstance): Promise<void> {
     return reply
       .status(201)
       .send(await service.create(actor.userId, input.data.blocks));
+  });
+
+  app.patch("/api/posts/:id", async (request) => {
+    const actor = requireActor(request);
+    const postId = parseUuid(request.params, "id");
+    const input = createPostRequestSchema.safeParse(request.body);
+    if (!input.success) throw validationError();
+    return service.update(actor.userId, postId, input.data.blocks);
+  });
+
+  app.delete("/api/posts/:id", async (request, reply) => {
+    const actor = requireActor(request);
+    const postId = parseUuid(request.params, "id");
+    await service.delete(actor.userId, postId);
+    return reply.status(204).send();
   });
 
   app.post("/api/posts/images", async (request, reply) => {
@@ -184,6 +204,30 @@ export async function registerPostRoutes(app: FastifyInstance): Promise<void> {
     return {
       reactions: await service.removeReaction(actor.userId, id, reaction),
     };
+  });
+
+  app.put("/api/posts/:id/save", async (request) => {
+    const actor = requireActor(request);
+    const postId = parseUuid(request.params, "id");
+    const isSaved = await service.bookmark(actor.userId, postId);
+    return { isSaved };
+  });
+
+  app.delete("/api/posts/:id/save", async (request) => {
+    const actor = requireActor(request);
+    const postId = parseUuid(request.params, "id");
+    const isSaved = await service.unbookmark(actor.userId, postId);
+    return { isSaved };
+  });
+
+  app.post("/api/posts/:id/view", async (request) => {
+    const postId = parseUuid(request.params, "id");
+    const viewsCount = await service.recordView(
+      postId,
+      request.actor?.userId ?? null,
+      request.ip,
+    );
+    return { viewsCount };
   });
 
   app.get("/api/posts/:id/comments", async (request) => ({

@@ -24,6 +24,7 @@ COPY packages/contracts/package.json ./packages/contracts/package.json
 COPY packages/database/package.json ./packages/database/package.json
 COPY packages/pdf/package.json ./packages/pdf/package.json
 COPY packages/storage/package.json ./packages/storage/package.json
+COPY packages/mcp/package.json ./packages/mcp/package.json
 RUN --mount=type=cache,id=mycharacter-pnpm,target=/pnpm/store \
     pnpm install --frozen-lockfile
 
