@@ -12,6 +12,7 @@ import type { Database } from "@mycharacter/database";
 import type { Kysely } from "kysely";
 import { sql } from "kysely";
 import { AppError } from "../../errors.js";
+import { AuditService } from "../audit/service.js";
 
 const NO_ACTOR_UUID = "00000000-0000-0000-0000-000000000000";
 const REACTIONS = [
@@ -149,6 +150,7 @@ export class PostService {
       .selectFrom("posts")
       .select(["id", "author_id as authorId"])
       .where("id", "=", postId)
+      .where("deleted_at", "is", null)
       .executeTakeFirst();
 
     if (!post) throw postNotFound();
@@ -156,7 +158,11 @@ export class PostService {
       throw new AppError("FORBIDDEN", 403, "You cannot delete this post.");
     }
 
-    await this.db.deleteFrom("posts").where("id", "=", postId).execute();
+    await this.db
+      .updateTable("posts")
+      .set({ deleted_at: new Date() })
+      .where("id", "=", postId)
+      .execute();
   }
 
   async listEmbedOptions(actorId: string) {
@@ -281,6 +287,7 @@ export class PostService {
         "author.display_name as authorDisplayName",
       ])
       .where("comment.post_id", "=", postId)
+      .where("comment.deleted_at", "is", null)
       .orderBy("comment.created_at", "asc")
       .limit(100)
       .execute();
@@ -324,6 +331,7 @@ export class PostService {
         "actor.is_admin as actorIsAdmin",
       ])
       .where("comment.id", "=", commentId)
+      .where("comment.deleted_at", "is", null)
       .executeTakeFirst();
     if (!row)
       throw new AppError("COMMENT_NOT_FOUND", 404, "Comment not found.");
@@ -335,7 +343,8 @@ export class PostService {
       );
     }
     await this.db
-      .deleteFrom("post_comments")
+      .updateTable("post_comments")
+      .set({ deleted_at: new Date() })
       .where("id", "=", commentId)
       .execute();
   }
@@ -362,9 +371,73 @@ export class PostService {
             .selectFrom("post_comments")
             .select(sql<number>`count(*)::int`.as("count"))
             .whereRef("post_comments.post_id", "=", "post.id")
+            .where("post_comments.deleted_at", "is", null)
             .as("commentCount"),
       ])
-      .where("author_user.status", "=", "active");
+      .where("author_user.status", "=", "active")
+      .where("post.deleted_at", "is", null)
+      .where("post.is_hidden", "=", false);
+  }
+
+  async adminSetPostVisibility(
+    moderatorId: string,
+    moderatorRole: string,
+    postId: string,
+    isHidden: boolean,
+    reason?: string,
+  ): Promise<void> {
+    const post = await this.db
+      .selectFrom("posts")
+      .select(["id", "author_id as authorId"])
+      .where("id", "=", postId)
+      .executeTakeFirst();
+    if (!post) throw postNotFound();
+
+    await this.db
+      .updateTable("posts")
+      .set({ is_hidden: isHidden })
+      .where("id", "=", postId)
+      .execute();
+
+    await new AuditService(this.db).log({
+      actorId: moderatorId,
+      actorRole: moderatorRole,
+      action: isHidden ? "hide_post" : "unhide_post",
+      targetType: "post",
+      targetId: postId,
+      reason: reason ?? null,
+      metadata: { isHidden, authorId: post.authorId },
+    });
+  }
+
+  async adminRestorePost(
+    moderatorId: string,
+    moderatorRole: string,
+    postId: string,
+    reason?: string,
+  ): Promise<void> {
+    const post = await this.db
+      .selectFrom("posts")
+      .select(["id", "author_id as authorId"])
+      .where("id", "=", postId)
+      .executeTakeFirst();
+    if (!post) throw postNotFound();
+
+    await this.db
+      .updateTable("posts")
+      .set({ deleted_at: null, is_hidden: false })
+      .where("id", "=", postId)
+      .execute();
+
+    await new AuditService(this.db).log({
+      actorId: moderatorId,
+      actorRole: moderatorRole,
+      action: "restore_post",
+      targetType: "post",
+      targetId: postId,
+      reason: reason ?? null,
+      metadata: { authorId: post.authorId },
+    });
   }
 
   async bookmark(actorId: string, postId: string): Promise<boolean> {

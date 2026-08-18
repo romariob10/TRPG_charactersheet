@@ -291,9 +291,11 @@ export interface PostsTable {
   content: Json;
   plain_text: string;
   views_count: number;
+  is_hidden: Generated<boolean>;
   published_at: Timestamp;
   created_at: Timestamp;
   updated_at: Timestamp;
+  deleted_at: Timestamp | null;
 }
 
 export interface PostImagesTable {
@@ -319,6 +321,7 @@ export interface PostCommentsTable {
   body: string;
   created_at: Timestamp;
   updated_at: Timestamp;
+  deleted_at: Timestamp | null;
 }
 
 export interface PostBookmarksTable {

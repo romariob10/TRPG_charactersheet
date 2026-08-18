@@ -18,6 +18,7 @@ import type { FastifyInstance } from "fastify";
 import { AppError } from "../../errors.js";
 import { requireAdmin, requireModerator } from "../../plugins/auth.js";
 import { AuditService } from "../audit/service.js";
+import { PostService } from "../posts/service.js";
 import { ProfileService } from "../profiles/service.js";
 import { sql } from "kysely";
 
@@ -271,6 +272,43 @@ export async function registerAdminRoutes(
       metadata: { targetUserId },
     });
 
+    return { success: true };
+  });
+
+  const postService = new PostService(app.db);
+
+  app.put("/api/admin/posts/:id/visibility", async (request) => {
+    const actor = await requireModerator(request);
+    const postId = (request.params as { id: string }).id;
+    const body =
+      (request.body as { isHidden?: boolean; reason?: string }) ?? {};
+    if (typeof body.isHidden !== "boolean") {
+      throw new AppError(
+        "VALIDATION_FAILED",
+        400,
+        "isHidden boolean is required.",
+      );
+    }
+    await postService.adminSetPostVisibility(
+      actor.userId,
+      actor.role,
+      postId,
+      body.isHidden,
+      body.reason,
+    );
+    return { success: true, isHidden: body.isHidden };
+  });
+
+  app.post("/api/admin/posts/:id/restore", async (request) => {
+    const actor = await requireModerator(request);
+    const postId = (request.params as { id: string }).id;
+    const body = (request.body as { reason?: string }) ?? {};
+    await postService.adminRestorePost(
+      actor.userId,
+      actor.role,
+      postId,
+      body.reason,
+    );
     return { success: true };
   });
 

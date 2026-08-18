@@ -79,3 +79,13 @@
 - Checks passed: `moderation.test.ts` unit test, `apps/api` typecheck, `apps/web` vitest (28 passed).
 - Manual scenarios passed: Report creation from feed, duplicate prevention, queue categorization and resolution with audit log recording.
 - Next phase: Phase 6 — Content State Management and Lifecycle.
+
+## Phase 6 — Content State Management and Lifecycle
+- Status: verified
+- Branch: `codex/feat-content-lifecycle`
+- Commit: `feat(content): add soft deletion, visibility controls and moderation restore`
+- Implemented: `is_hidden` and `deleted_at` columns on `posts`, `deleted_at` on `post_comments` with index, updated feed and comment queries to strictly exclude deleted/hidden content, updated post & comment author deletions to use non-destructive soft-delete (`deleted_at = now()`), added `PUT /api/admin/posts/:id/visibility` and `POST /api/admin/posts/:id/restore` endpoints with administrative audit logging.
+- Migrations: `202608180008_content_lifecycle.ts`.
+- Checks passed: `content-lifecycle.test.ts` unit test, `apps/api` typecheck, `apps/web` vitest (28 passed).
+- Manual scenarios passed: Author soft-delete, feed exclusion of hidden/deleted posts, moderator visibility toggling and post restoration with audit trail.
+- Next phase: Phase 7 — User Moderation Actions (Warn, Restrict, Suspend, Ban).
