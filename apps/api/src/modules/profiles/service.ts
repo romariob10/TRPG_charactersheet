@@ -2,12 +2,14 @@ import type {
   MyProfile,
   PublicCharacterSummary,
   PublicProfile,
+  SiteRole,
   TemplateSummary,
   UpdateMyProfileRequest,
 } from "@mycharacter/contracts";
 import type { Database } from "@mycharacter/database";
 import { sql, type Kysely } from "kysely";
 import { AppError } from "../../errors.js";
+import type { Actor } from "../../plugins/auth.js";
 import {
   listPublicTemplatesByOwner,
   templateSummaryFromRow,
@@ -186,6 +188,7 @@ export class ProfileService {
         "profile.display_name as displayName",
         "profile.bio",
         "profile.is_admin as isAdmin",
+        "profile.site_role as siteRole",
       ])
       .where("profile.id", "=", actorId)
       .executeTakeFirst();
@@ -198,8 +201,59 @@ export class ProfileService {
       username: profile.username,
       displayName: profile.displayName,
       bio: profile.bio,
-      isAdmin: profile.isAdmin,
+      isAdmin: Boolean(profile.isAdmin || profile.siteRole === "admin"),
+      siteRole: (profile.siteRole as SiteRole) ?? (profile.isAdmin ? "admin" : "user"),
     };
+  }
+
+  async updateUserRole(
+    actor: Actor,
+    targetUserId: string,
+    newRole: SiteRole,
+  ): Promise<{ id: string; siteRole: SiteRole }> {
+    if (actor.role !== "admin") {
+      throw new AppError("ADMIN_REQUIRED", 403, "Administrator access is required.");
+    }
+
+    const targetProfile = await this.db
+      .selectFrom("profiles")
+      .select(["id", "site_role as siteRole", "is_admin as isAdmin"])
+      .where("id", "=", targetUserId)
+      .executeTakeFirst();
+
+    if (!targetProfile) {
+      throw new AppError("USER_NOT_FOUND", 404, "User not found.");
+    }
+
+    const currentRole =
+      (targetProfile.siteRole as SiteRole) ??
+      (targetProfile.isAdmin ? "admin" : "user");
+    if (currentRole === "admin" && newRole !== "admin") {
+      const adminCount = await this.db
+        .selectFrom("profiles")
+        .select(sql<number>`count(*)::int`.as("count"))
+        .where("site_role", "=", "admin")
+        .executeTakeFirst();
+      if ((adminCount?.count ?? 0) <= 1) {
+        throw new AppError(
+          "LAST_ADMIN_PROTECTED",
+          400,
+          "Cannot demote the last administrator.",
+        );
+      }
+    }
+
+    await this.db
+      .updateTable("profiles")
+      .set({
+        site_role: newRole,
+        is_admin: newRole === "admin",
+        updated_at: new Date(),
+      })
+      .where("id", "=", targetUserId)
+      .execute();
+
+    return { id: targetUserId, siteRole: newRole };
   }
 
   async updateMyProfile(

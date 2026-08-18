@@ -46,6 +46,7 @@ export interface ProfilesTable {
   bio: string;
   locale: "ru" | "en";
   is_admin: boolean;
+  site_role: "admin" | "moderator" | "user";
   created_at: Timestamp;
   updated_at: Timestamp;
 }

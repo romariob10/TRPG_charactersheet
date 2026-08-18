@@ -21,7 +21,12 @@
     "languageRu": "RU",
     "languageEn": "EN",
     "profileSettings": "Профиль",
-    "viewPublicProfile": "Публичный профиль"
+    "viewPublicProfile": "Публичный профиль",
+    "roles": {
+      "admin": "Администратор",
+      "moderator": "Модератор",
+      "user": "Пользователь"
+    }
   },
   "Feed": {
     "eyebrow": "Сообщество",

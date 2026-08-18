@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { siteRoleSchema } from "./roles.js";
 
 export const usernameSchema = z.string().regex(/^[a-z0-9][a-z0-9_-]{2,29}$/);
 
@@ -29,6 +30,7 @@ export const myProfileSchema = z.object({
   displayName: z.string().max(80).nullable(),
   bio: z.string().max(500),
   isAdmin: z.boolean(),
+  siteRole: siteRoleSchema.default("user"),
 });
 
 export const updateMyProfileRequestSchema = z

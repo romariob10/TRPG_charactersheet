@@ -143,3 +143,15 @@ export type {
   PostReactionSummary,
   SocialPost,
 } from "./posts.js";
+export {
+  ROLE_PERMISSIONS,
+  hasPermission,
+  permissionSchema,
+  siteRoleSchema,
+  updateUserRoleRequestSchema,
+} from "./roles.js";
+export type {
+  Permission,
+  SiteRole,
+  UpdateUserRoleRequest,
+} from "./roles.js";

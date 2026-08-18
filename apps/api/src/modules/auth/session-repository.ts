@@ -2,6 +2,8 @@ import { createHash, randomBytes } from "node:crypto";
 import type { Database } from "@mycharacter/database";
 import type { Kysely, Transaction } from "kysely";
 
+import type { SiteRole } from "@mycharacter/contracts";
+
 const sessionLifetimeMilliseconds = 30 * 24 * 60 * 60 * 1000;
 const lastUsedUpdateIntervalMilliseconds = 5 * 60 * 1000;
 
@@ -10,6 +12,8 @@ type DatabaseExecutor = Kysely<Database> | Transaction<Database>;
 export interface ActorSession {
   sessionId: string;
   userId: string;
+  role: SiteRole;
+  isAdmin: boolean;
   lastUsedAt: Date;
 }
 
@@ -54,9 +58,12 @@ export async function findActiveSession(
   const session = await db
     .selectFrom("sessions")
     .innerJoin("users", "users.id", "sessions.user_id")
+    .leftJoin("profiles", "profiles.id", "sessions.user_id")
     .select([
       "sessions.id as sessionId",
       "sessions.user_id as userId",
+      "profiles.site_role as siteRole",
+      "profiles.is_admin as isAdmin",
       "sessions.last_used_at as lastUsedAt",
     ])
     .where("sessions.token_hash", "=", hashSessionToken(token))
@@ -65,7 +72,15 @@ export async function findActiveSession(
     .where("users.status", "=", "active")
     .executeTakeFirst();
 
-  return session ?? null;
+  if (!session) return null;
+
+  return {
+    sessionId: session.sessionId,
+    userId: session.userId,
+    role: (session.siteRole as SiteRole) ?? (session.isAdmin ? "admin" : "user"),
+    isAdmin: Boolean(session.isAdmin || session.siteRole === "admin"),
+    lastUsedAt: session.lastUsedAt,
+  };
 }
 
 export async function touchSessionIfStale(

@@ -1,5 +1,6 @@
 import {
   updateAiSettingsRequestSchema,
+  updateUserRoleRequestSchema,
   type AiSettingsResponse,
 } from "@mycharacter/contracts";
 import {
@@ -13,12 +14,29 @@ import {
 import type { FastifyInstance } from "fastify";
 import { AppError } from "../../errors.js";
 import { requireAdmin } from "../../plugins/auth.js";
+import { ProfileService } from "../profiles/service.js";
 
 export async function registerAdminRoutes(
   app: FastifyInstance,
   settingsStore: AiSettingsWriter,
   environment: NodeJS.ProcessEnv = process.env,
 ): Promise<void> {
+  const profileService = new ProfileService(app.db);
+
+  app.put("/api/admin/users/:id/role", async (request) => {
+    const actor = await requireAdmin(request, app.db);
+    const userId = (request.params as { id: string }).id;
+    const parsed = updateUserRoleRequestSchema.safeParse(request.body);
+    if (!parsed.success) {
+      throw new AppError(
+        "VALIDATION_FAILED",
+        400,
+        "Request validation failed.",
+      );
+    }
+    return profileService.updateUserRole(actor, userId, parsed.data.role);
+  });
+
   app.get("/api/admin/ai-settings", async (request, reply) => {
     await requireAdmin(request, app.db);
     reply.header("Cache-Control", "private, no-store");

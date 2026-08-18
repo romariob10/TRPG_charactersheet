@@ -31,3 +31,13 @@
 - Manual scenarios passed: Feed rendering, post creation, post deletion, reactions toggle, bookmarks toggle, views increment.
 - Known limitations: Raw IP removed in favor of privacy hash.
 - Next phase: Phase 1 — Roles and Permissions Foundation.
+
+## Phase 1 — Roles and Permissions Foundation
+- Status: verified
+- Branch: `codex/feat-rbac-foundation`
+- Commit: `feat(auth): add site roles and centralized permissions`
+- Implemented: `siteRole` (`admin`, `moderator`, `user`) enum and 17 granular permissions in `@mycharacter/contracts`, `site_role` column in PostgreSQL `profiles` table with backfill for existing admins, session repository and actor hydration with role, centralized `requireRole`, `requirePermission`, `requireModerator`, `requireAdmin`, `can` in API, `PUT /api/admin/users/:id/role` endpoint with last-admin protection, web profile badge and localization.
+- Migrations: `202608180005_site_roles.ts`.
+- Checks passed: `authorization.test.ts` unit tests (4 tests), `apps/web` unit tests (28 tests), `apps/api` typecheck.
+- Manual scenarios passed: Admin, moderator and user role enforcement, unauthorized access rejection with 403, last admin demotion prevented.
+- Next phase: Phase 2 — Immutable Administrative Audit Log.

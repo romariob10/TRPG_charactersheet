@@ -5,12 +5,17 @@ import type { Kysely } from "kysely";
 import { AppError } from "../errors.js";
 import { findActiveSession, touchSessionIfStale } from "../modules/auth/session-repository.js";
 
+import type { Permission, SiteRole } from "@mycharacter/contracts";
+import { hasPermission } from "@mycharacter/contracts";
+
 export const sessionCookieName = "mycharacter_session";
 export const sessionCookieMaxAge = 60 * 60 * 24 * 30;
 
 export interface Actor {
   userId: string;
   sessionId: string;
+  role: SiteRole;
+  isAdmin: boolean;
 }
 
 export interface AuthPluginOptions {
@@ -45,7 +50,12 @@ export async function registerAuth(
       return;
     }
 
-    request.actor = { userId: session.userId, sessionId: session.sessionId };
+    request.actor = {
+      userId: session.userId,
+      sessionId: session.sessionId,
+      role: session.role,
+      isAdmin: session.isAdmin,
+    };
     assertCookieMutationOrigin(request, options, allowedOrigins);
     await touchSessionIfStale(db, session);
   });
@@ -58,20 +68,48 @@ export function requireActor(request: FastifyRequest): Actor {
   return request.actor;
 }
 
-export async function requireAdmin(
+export function requireRole(
   request: FastifyRequest,
-  database: Kysely<Database>,
-): Promise<Actor> {
+  ...allowedRoles: SiteRole[]
+): Actor {
   const actor = requireActor(request);
-  const profile = await database
-    .selectFrom("profiles")
-    .select("is_admin")
-    .where("id", "=", actor.userId)
-    .executeTakeFirst();
-  if (!profile?.is_admin) {
-    throw new AppError("ADMIN_REQUIRED", 403, "Administrator access is required.");
+  if (!allowedRoles.includes(actor.role)) {
+    throw new AppError(
+      "FORBIDDEN",
+      403,
+      "Insufficient permissions for this action.",
+    );
   }
   return actor;
+}
+
+export function requirePermission(
+  request: FastifyRequest,
+  permission: Permission,
+): Actor {
+  const actor = requireActor(request);
+  if (!hasPermission(actor.role, permission)) {
+    throw new AppError("FORBIDDEN", 403, `Permission denied: ${permission}`);
+  }
+  return actor;
+}
+
+export function can(actor: Actor | null, permission: Permission): boolean {
+  if (!actor) return false;
+  return hasPermission(actor.role, permission);
+}
+
+export async function requireAdmin(
+  request: FastifyRequest,
+  _database?: Kysely<Database>,
+): Promise<Actor> {
+  return requireRole(request, "admin");
+}
+
+export async function requireModerator(
+  request: FastifyRequest,
+): Promise<Actor> {
+  return requireRole(request, "admin", "moderator");
 }
 
 function assertCookieMutationOrigin(

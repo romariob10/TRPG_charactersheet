@@ -146,6 +146,8 @@ export interface SocialFeedItem {
   remixedByMe: boolean;
 }
 
+export type SiteRole = "admin" | "moderator" | "user";
+
 export interface MyProfile {
   id: string;
   email: string;
@@ -153,6 +155,7 @@ export interface MyProfile {
   displayName: string | null;
   bio: string;
   isAdmin: boolean;
+  siteRole: SiteRole;
 }
 
 export interface TemplateEditorData extends TemplateSummary {

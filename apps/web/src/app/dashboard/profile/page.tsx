@@ -44,9 +44,14 @@ export default async function ProfileSettingsPage() {
                 <p className="text-xs font-semibold text-[var(--muted)] sm:text-sm">
                   @{p.username} · {p.email}
                 </p>
-                {p.isAdmin && (
+                {p.siteRole === "admin" && (
                   <span className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 text-[11px] font-bold text-emerald-800">
                     <ShieldCheck className="size-3" /> Admin
+                  </span>
+                )}
+                {p.siteRole === "moderator" && (
+                  <span className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-indigo-100 px-2.5 py-0.5 text-[11px] font-bold text-indigo-800">
+                    <ShieldCheck className="size-3" /> Moderator
                   </span>
                 )}
               </div>
