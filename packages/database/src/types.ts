@@ -335,6 +335,19 @@ export interface PostViewsTable {
   viewed_at: Timestamp;
 }
 
+export interface AdminAuditEventsTable {
+  id: Generated<Uuid>;
+  actor_id: string | null;
+  actor_role: string;
+  action: string;
+  target_type: string;
+  target_id: string | null;
+  reason: string | null;
+  metadata: unknown;
+  request_id: string | null;
+  created_at: Timestamp;
+}
+
 export interface Database {
   users: UsersTable;
   profiles: ProfilesTable;
@@ -365,4 +378,5 @@ export interface Database {
   post_comments: PostCommentsTable;
   post_bookmarks: PostBookmarksTable;
   post_views: PostViewsTable;
+  admin_audit_events: AdminAuditEventsTable;
 }

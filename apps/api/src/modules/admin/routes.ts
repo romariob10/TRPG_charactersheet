@@ -14,6 +14,7 @@ import {
 import type { FastifyInstance } from "fastify";
 import { AppError } from "../../errors.js";
 import { requireAdmin } from "../../plugins/auth.js";
+import { AuditService } from "../audit/service.js";
 import { ProfileService } from "../profiles/service.js";
 
 export async function registerAdminRoutes(
@@ -47,7 +48,7 @@ export async function registerAdminRoutes(
   });
 
   app.put("/api/admin/ai-settings", async (request) => {
-    await requireAdmin(request, app.db);
+    const actor = await requireAdmin(request, app.db);
     const parsed = updateAiSettingsRequestSchema.safeParse(request.body);
     if (!parsed.success) {
       throw new AppError(
@@ -68,6 +69,22 @@ export async function registerAdminRoutes(
       );
     }
     await settingsStore.write({ ...parsed.data, apiKey });
+
+    await new AuditService(app.db).log({
+      actorId: actor.userId,
+      actorRole: actor.role,
+      action: "update_ai_settings",
+      targetType: "system_settings",
+      targetId: "ai",
+      metadata: {
+        provider: parsed.data.provider,
+        baseUrl: parsed.data.baseUrl,
+        chatModel: parsed.data.chatModel,
+        visionModel: parsed.data.visionModel,
+        hasApiKey: Boolean(apiKey),
+      },
+    });
+
     return settingsResponse(
       { ...parsed.data, apiKey, source: "admin" },
       environment,

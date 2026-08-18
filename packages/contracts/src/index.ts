@@ -155,3 +155,13 @@ export type {
   SiteRole,
   UpdateUserRoleRequest,
 } from "./roles.js";
+export {
+  adminAuditEventSchema,
+  adminAuditEventsResponseSchema,
+  listAdminAuditEventsQuerySchema,
+} from "./audit.js";
+export type {
+  AdminAuditEvent,
+  AdminAuditEventsResponse,
+  ListAdminAuditEventsQuery,
+} from "./audit.js";

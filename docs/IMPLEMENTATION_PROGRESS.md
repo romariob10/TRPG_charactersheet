@@ -41,3 +41,13 @@
 - Checks passed: `authorization.test.ts` unit tests (4 tests), `apps/web` unit tests (28 tests), `apps/api` typecheck.
 - Manual scenarios passed: Admin, moderator and user role enforcement, unauthorized access rejection with 403, last admin demotion prevented.
 - Next phase: Phase 2 — Immutable Administrative Audit Log.
+
+## Phase 2 — Immutable Administrative Audit Log
+- Status: verified
+- Branch: `codex/feat-audit-log`
+- Commit: `feat(admin): add immutable administrative audit log`
+- Implemented: Append-only `admin_audit_events` PostgreSQL table with indexes, `@mycharacter/contracts` audit schemas & query contracts, `AuditService` with automatic metadata sanitization (redacting passwords, secrets, tokens, API keys and enforcing payload size limits), `GET /api/admin/audit` endpoint with role-based filtering (moderators restricted to moderation target types), automatic audit event logging for role changes and AI settings updates.
+- Migrations: `202608180006_admin_audit_events.ts`.
+- Checks passed: `audit.test.ts` unit tests (2 tests), `apps/api` typecheck, `apps/web` vitest (28 tests).
+- Manual scenarios passed: Sensitive field redaction, payload truncation, role change and AI settings audit records.
+- Next phase: Phase 3 — Professional Administration Console Framework.

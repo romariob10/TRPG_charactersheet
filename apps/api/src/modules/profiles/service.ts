@@ -10,6 +10,7 @@ import type { Database } from "@mycharacter/database";
 import { sql, type Kysely } from "kysely";
 import { AppError } from "../../errors.js";
 import type { Actor } from "../../plugins/auth.js";
+import { AuditService } from "../audit/service.js";
 import {
   listPublicTemplatesByOwner,
   templateSummaryFromRow,
@@ -252,6 +253,18 @@ export class ProfileService {
       })
       .where("id", "=", targetUserId)
       .execute();
+
+    await new AuditService(this.db).log({
+      actorId: actor.userId,
+      actorRole: actor.role,
+      action: "update_user_role",
+      targetType: "user",
+      targetId: targetUserId,
+      metadata: {
+        previousRole: currentRole,
+        newRole,
+      },
+    });
 
     return { id: targetUserId, siteRole: newRole };
   }
