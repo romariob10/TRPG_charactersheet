@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
+import { ApiClientError } from "@/lib/api/client";
 import { apiFetch } from "@/lib/api/server";
 import { safeRedirectPath } from "@/lib/auth";
 
@@ -62,8 +63,6 @@ export async function signOut() {
   }
   redirect("/");
 }
-
-import { ApiClientError } from "@/lib/api/client";
 
 function errorMessage(error: unknown) {
   if (error instanceof ApiClientError) {
