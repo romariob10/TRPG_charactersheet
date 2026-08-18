@@ -147,3 +147,13 @@
 - Checks passed: `direct-messages.test.ts` unit tests (2 tests), `apps/api` typecheck, `apps/web` vitest (28 passed).
 - Manual scenarios passed: Starting conversation from public profile, dual-pane conversation list and chat thread, sending messages, auto-scroll and polling refresh.
 - Next phase: Phase 13 — RPG System Catalog, Tagging, Rating & Review Engine.
+
+## Phase 13 — RPG System Catalog, Tagging, Rating & Review Engine
+- Status: verified
+- Branch: `codex/feat-systems-catalog`
+- Commit: `feat(systems): add RPG system reviews, star ratings, and community catalog feedback`
+- Implemented: `template_reviews` PostgreSQL table and added `tags`, `genre`, `complexity`, `rating_average`, `rating_count` columns to `pdf_templates`, contracts for reviews and system metadata in `@mycharacter/contracts`, `TemplateReviewService` supporting upserting star ratings with reviews, automatic weighted average rating recomputations on templates, review deletion by author or moderator/admin, and notifications to system authors, added `GET /api/templates/:id/reviews`, `POST /api/templates/:id/reviews`, `DELETE /api/templates/:id/reviews/:reviewId`, and `PUT /api/templates/:id/metadata` API routes, built interactive `TemplateReviews` component in `/community/[username]/[slug]` with 1-5 star picker, review input and list with full RU/EN localization.
+- Migrations: `202608180013_template_reviews.ts`.
+- Checks passed: `template-reviews.test.ts` unit test, `apps/api` typecheck, `apps/web` vitest (28 passed).
+- Manual scenarios passed: Star rating submission, review posting and deletion, average rating recomputation, and rating badge display.
+- Next phase: Phase 14 — Performance, Caching & Realtime Subscriptions.

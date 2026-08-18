@@ -255,3 +255,17 @@ export type {
   SendMessageRequest,
   StartConversationRequest,
 } from "./direct-messages.js";
+export {
+  createReviewRequestSchema,
+  listTemplateReviewsResponseSchema,
+  templateComplexitySchema,
+  templateReviewSchema,
+  updateTemplateMetadataRequestSchema,
+} from "./template-reviews.js";
+export type {
+  CreateReviewRequest,
+  ListTemplateReviewsResponse,
+  TemplateComplexity,
+  TemplateReview,
+  UpdateTemplateMetadataRequest,
+} from "./template-reviews.js";

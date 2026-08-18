@@ -717,5 +717,20 @@
     "send": "Send",
     "sendMessage": "Send message",
     "startDialog": "Start conversation"
+  },
+  "TemplateReviews": {
+    "title": "Ratings & Reviews",
+    "subtitle": "Feedback from players and game masters on mechanics and usability.",
+    "average": "{avg} out of 5",
+    "count": "{count, plural, one {# review} other {# reviews}}",
+    "noReviews": "No reviews yet. Be the first to rate this system!",
+    "rateSystem": "Rate system",
+    "yourRating": "Your rating",
+    "reviewTitle": "Title (optional)",
+    "reviewBody": "Review text (optional)",
+    "submit": "Post review",
+    "submitting": "Posting…",
+    "signInToReview": "Sign in to leave a review",
+    "delete": "Delete"
   }
 }

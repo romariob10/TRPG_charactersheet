@@ -103,6 +103,11 @@ export interface PdfTemplatesTable {
   catalog_approved_at: Timestamp | null;
   catalog_approved_by: string | null;
   is_public: boolean;
+  tags: Generated<string[]>;
+  genre: string | null;
+  complexity: string | null;
+  rating_average: Generated<number>;
+  rating_count: Generated<number>;
   deleted_at: Timestamp | null;
   created_at: Timestamp;
   updated_at: Timestamp;
@@ -413,6 +418,17 @@ export interface DirectMessagesTable {
   created_at: Timestamp;
 }
 
+export interface TemplateReviewsTable {
+  id: Generated<Uuid>;
+  template_id: string;
+  user_id: string;
+  rating: number;
+  title: string | null;
+  body: string | null;
+  created_at: Timestamp;
+  updated_at: Timestamp;
+}
+
 export interface Database {
   users: UsersTable;
   profiles: ProfilesTable;
@@ -449,4 +465,5 @@ export interface Database {
   user_notifications: UserNotificationsTable;
   direct_conversations: DirectConversationsTable;
   direct_messages: DirectMessagesTable;
+  template_reviews: TemplateReviewsTable;
 }
