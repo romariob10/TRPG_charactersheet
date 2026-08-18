@@ -6,6 +6,7 @@ import {
 import type { FastifyInstance } from "fastify";
 import { AppError } from "../../errors.js";
 import { requireActor, requireModerator } from "../../plugins/auth.js";
+import { globalRateLimiter } from "../../plugins/rate-limit.js";
 import { ModerationService } from "./service.js";
 
 export async function registerModerationRoutes(
@@ -16,6 +17,7 @@ export async function registerModerationRoutes(
   // User submits a content report
   app.post("/api/reports", async (request) => {
     const actor = requireActor(request);
+    globalRateLimiter.assertLimit("reports:" + actor.userId, 10, 60000);
     const parsed = createContentReportRequestSchema.safeParse(request.body);
     if (!parsed.success) {
       throw new AppError(

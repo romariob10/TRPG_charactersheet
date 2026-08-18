@@ -5,6 +5,7 @@ import {
 import type { FastifyInstance } from "fastify";
 import { AppError } from "../../errors.js";
 import { requireActor } from "../../plugins/auth.js";
+import { globalRateLimiter } from "../../plugins/rate-limit.js";
 import { DirectMessageService } from "./service.js";
 
 export async function registerDirectMessageRoutes(app: FastifyInstance): Promise<void> {
@@ -53,6 +54,7 @@ export async function registerDirectMessageRoutes(app: FastifyInstance): Promise
 
   app.post("/api/messages/conversations/:id", async (request, reply) => {
     const actor = requireActor(request);
+    globalRateLimiter.assertLimit("messages:" + actor.userId, 30, 60000);
     const id = (request.params as { id: string }).id;
     const body = sendMessageRequestSchema.safeParse(request.body);
     if (!body.success) {

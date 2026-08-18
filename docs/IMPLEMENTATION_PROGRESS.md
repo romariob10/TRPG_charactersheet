@@ -166,3 +166,12 @@
 - Checks passed: `realtime-bus.test.ts` unit test, `apps/api` typecheck, `apps/web` vitest (28 passed).
 - Manual scenarios passed: Topic-based event dispatch, subscription cleanup on unsubscribe.
 - Next phase: Phase 15 — Security Hardening, Rate Limiting & Abuse Prevention.
+
+## Phase 15 — Security Hardening, Rate Limiting & Abuse Prevention
+- Status: verified
+- Branch: `codex/feat-security-hardening`
+- Commit: `feat(security): add in-memory rate limiting and abuse mitigation`
+- Implemented: `InMemoryRateLimiter` with automatic bucket cleanup and 429 Retry-After responses, applied rate limiting guards to post creation (`POST /api/posts`), direct messages (`POST /api/messages/conversations/:id`), and content reports (`POST /api/reports`).
+- Checks passed: `rate-limit.test.ts` unit test, `apps/api` typecheck, `apps/web` vitest (28 passed).
+- Manual scenarios passed: Rate limit enforcement on rapid mutations.
+- Next phase: Phase 16 — Polish, Final Integration Verification & Production Readiness.
