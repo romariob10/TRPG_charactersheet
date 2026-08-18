@@ -120,6 +120,9 @@ function assertCookieMutationOrigin(
   if (!request.actor || isSafeMethod(request.method)) {
     return;
   }
+  if (request.url === "/api/auth/login" || request.url === "/api/auth/register") {
+    return;
+  }
 
   const origin = request.headers.origin;
   if (origin === undefined && options.allowMissingOriginForTests) {

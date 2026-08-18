@@ -15,9 +15,16 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
   const incoming = await headers();
   const requestHeaders = new Headers(init.headers);
   const cookie = incoming.get("cookie");
-  const origin = incoming.get("origin");
+  const defaultOrigin = process.env.PUBLIC_ORIGIN ?? "http://localhost:8080";
+  const rawOrigin = incoming.get("origin") || incoming.get("referer") || defaultOrigin;
+  let origin = defaultOrigin;
+  try {
+    origin = new URL(rawOrigin).origin;
+  } catch {
+    origin = defaultOrigin;
+  }
   if (cookie) requestHeaders.set("cookie", cookie);
-  if (origin) requestHeaders.set("origin", origin);
+  requestHeaders.set("origin", origin);
   if (init.body && !requestHeaders.has("content-type")) {
     requestHeaders.set("content-type", "application/json");
   }

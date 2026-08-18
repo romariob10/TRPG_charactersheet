@@ -63,8 +63,25 @@ export async function signOut() {
   redirect("/");
 }
 
+import { ApiClientError } from "@/lib/api/client";
+
 function errorMessage(error: unknown) {
-  return error instanceof Error ? error.message : "Authentication request failed.";
+  if (error instanceof ApiClientError) {
+    if (error.code === "AUTH_INVALID_CREDENTIALS" || error.status === 401) {
+      return "Неверный email или пароль.";
+    }
+    if (error.code === "AUTH_EMAIL_ALREADY_REGISTERED" || error.status === 409) {
+      return "Пользователь с таким email уже зарегистрирован.";
+    }
+    if (error.code === "RATE_LIMITED" || error.code === "RATE_LIMIT_EXCEEDED" || error.status === 429) {
+      return "Слишком много попыток. Пожалуйста, подождите минуту и повторите.";
+    }
+    if (error.code === "VALIDATION_FAILED" || error.status === 400) {
+      return "Пароль должен содержать не менее 12 символов.";
+    }
+    return error.message || "Не удалось выполнить запрос авторизации.";
+  }
+  return error instanceof Error ? error.message : "Не удалось выполнить запрос авторизации.";
 }
 
 async function copyResponseCookies(responseHeaders: Headers) {
