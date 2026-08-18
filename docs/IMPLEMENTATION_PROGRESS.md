@@ -157,3 +157,12 @@
 - Checks passed: `template-reviews.test.ts` unit test, `apps/api` typecheck, `apps/web` vitest (28 passed).
 - Manual scenarios passed: Star rating submission, review posting and deletion, average rating recomputation, and rating badge display.
 - Next phase: Phase 14 — Performance, Caching & Realtime Subscriptions.
+
+## Phase 14 — Performance, Caching & Realtime Subscriptions
+- Status: verified
+- Branch: `codex/feat-realtime-performance`
+- Commit: `feat(realtime): add topic-based pub-sub streaming and caching optimizations`
+- Implemented: Topic-based pub-sub on `RealtimeBus` (`publishTopic`, `subscribeTopic`) in `LocalRealtimeBus`, enabling targeted subscriptions for user notifications (`user:${id}:notifications`) and direct message threads (`conversation:${id}:messages`), along with granular HTTP caching headers (`private, no-store` for stateful views and `public, max-age` for discovery endpoints).
+- Checks passed: `realtime-bus.test.ts` unit test, `apps/api` typecheck, `apps/web` vitest (28 passed).
+- Manual scenarios passed: Topic-based event dispatch, subscription cleanup on unsubscribe.
+- Next phase: Phase 15 — Security Hardening, Rate Limiting & Abuse Prevention.
