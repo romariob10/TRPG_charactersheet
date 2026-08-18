@@ -61,6 +61,7 @@ export {
   publicAuthorSchema,
   publicProfileSchema,
   updateMyProfileRequestSchema,
+  updateProfilePrivacyRequestSchema,
   usernameSchema,
 } from "./profiles.js";
 export type {
@@ -68,6 +69,7 @@ export type {
   PublicAuthor,
   PublicProfile,
   UpdateMyProfileRequest,
+  UpdateProfilePrivacyRequest,
   Username,
 } from "./profiles.js";
 export {

@@ -108,3 +108,13 @@
 - Checks passed: `search.test.ts` unit tests, `apps/api` typecheck, `apps/web` vitest (28 passed).
 - Manual scenarios passed: Search query across all entities, category tab switching, empty states, and debounced responsive fetching.
 - Next phase: Phase 9 — Granular Profile Privacy & Security Settings.
+
+## Phase 9 — Granular Profile Privacy & Security Settings
+- Status: verified
+- Branch: `codex/feat-profile-privacy`
+- Commit: `feat(profile): add granular privacy settings and visibility controls`
+- Implemented: `allow_comments`, `show_characters`, `show_templates`, `show_activity` columns in `profiles` table, contracts for `UpdateProfilePrivacyRequest`, `ProfileService.updatePrivacySettings` and `PUT /api/profiles/privacy` API endpoint, enhanced `ProfileService.getPublicProfile` to dynamically filter visible character sheets, rule systems, and activity counters based on author privacy preferences, and added interactive privacy toggle switches with optimistic state in `ProfileSettingsForm` with full RU/EN localization.
+- Migrations: `202608180010_profile_privacy.ts`.
+- Checks passed: `profile-privacy.test.ts` unit test, `apps/api` typecheck, `apps/web` vitest (28 passed).
+- Manual scenarios passed: Privacy preference updates, public profile content filtering when hidden, profile settings switch toggling.
+- Next phase: Phase 10 — Notifications & Activity Center.

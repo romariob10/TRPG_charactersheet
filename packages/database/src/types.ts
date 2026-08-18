@@ -47,6 +47,10 @@ export interface ProfilesTable {
   locale: "ru" | "en";
   is_admin: boolean;
   site_role: "admin" | "moderator" | "user";
+  allow_comments: Generated<boolean>;
+  show_characters: Generated<boolean>;
+  show_templates: Generated<boolean>;
+  show_activity: Generated<boolean>;
   created_at: Timestamp;
   updated_at: Timestamp;
 }

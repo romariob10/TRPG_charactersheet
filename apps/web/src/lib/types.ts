@@ -116,6 +116,10 @@ export interface PublicProfile {
   followingCount: number;
   followedByMe: boolean;
   totalLikes: number;
+  allowComments?: boolean;
+  showCharacters?: boolean;
+  showTemplates?: boolean;
+  showActivity?: boolean;
 }
 
 export interface PublicCharacterSummary {
@@ -156,6 +160,10 @@ export interface MyProfile {
   bio: string;
   isAdmin: boolean;
   siteRole: SiteRole;
+  allowComments?: boolean;
+  showCharacters?: boolean;
+  showTemplates?: boolean;
+  showActivity?: boolean;
 }
 
 export interface TemplateEditorData extends TemplateSummary {

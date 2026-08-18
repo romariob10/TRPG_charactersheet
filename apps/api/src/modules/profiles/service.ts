@@ -5,6 +5,7 @@ import type {
   SiteRole,
   TemplateSummary,
   UpdateMyProfileRequest,
+  UpdateProfilePrivacyRequest,
 } from "@mycharacter/contracts";
 import type { Database } from "@mycharacter/database";
 import { sql, type Kysely } from "kysely";
@@ -38,6 +39,10 @@ export class ProfileService {
         "profile.username",
         "profile.display_name as displayName",
         "profile.bio",
+        "profile.allow_comments as allowComments",
+        "profile.show_characters as showCharacters",
+        "profile.show_templates as showTemplates",
+        "profile.show_activity as showActivity",
         "user_row.created_at as joinedAt",
       ])
       .where("profile.username", "=", username.toLowerCase())
@@ -138,6 +143,10 @@ export class ProfileService {
       likeCount: character.likeCount,
       likedByMe: character.likedByMeCount > 0,
     }));
+    const isOwner = actorId === profile.id;
+    const finalTemplates = isOwner || profile.showTemplates ? templates : [];
+    const finalCharacters = isOwner || profile.showCharacters ? publicCharacters : [];
+
     return {
       profile: {
         id: profile.id,
@@ -145,15 +154,19 @@ export class ProfileService {
         displayName: profile.displayName,
         bio: profile.bio,
         joinedAt: profile.joinedAt.toISOString(),
-        publicTemplateCount: templates.length,
-        publicCharacterCount: publicCharacters.length,
-        followerCount: followerCount?.count ?? 0,
-        followingCount: followingCount?.count ?? 0,
+        publicTemplateCount: finalTemplates.length,
+        publicCharacterCount: finalCharacters.length,
+        followerCount: isOwner || profile.showActivity ? (followerCount?.count ?? 0) : 0,
+        followingCount: isOwner || profile.showActivity ? (followingCount?.count ?? 0) : 0,
         followedByMe: Boolean(followedByMe),
         totalLikes: (templateLikes?.count ?? 0) + (characterLikes?.count ?? 0),
+        allowComments: profile.allowComments ?? true,
+        showCharacters: profile.showCharacters ?? true,
+        showTemplates: profile.showTemplates ?? true,
+        showActivity: profile.showActivity ?? true,
       },
-      templates,
-      characters: publicCharacters,
+      templates: finalTemplates,
+      characters: finalCharacters,
     };
   }
 
@@ -190,6 +203,10 @@ export class ProfileService {
         "profile.bio",
         "profile.is_admin as isAdmin",
         "profile.site_role as siteRole",
+        "profile.allow_comments as allowComments",
+        "profile.show_characters as showCharacters",
+        "profile.show_templates as showTemplates",
+        "profile.show_activity as showActivity",
       ])
       .where("profile.id", "=", actorId)
       .executeTakeFirst();
@@ -204,7 +221,38 @@ export class ProfileService {
       bio: profile.bio,
       isAdmin: Boolean(profile.isAdmin || profile.siteRole === "admin"),
       siteRole: (profile.siteRole as SiteRole) ?? (profile.isAdmin ? "admin" : "user"),
+      allowComments: profile.allowComments ?? true,
+      showCharacters: profile.showCharacters ?? true,
+      showTemplates: profile.showTemplates ?? true,
+      showActivity: profile.showActivity ?? true,
     };
+  }
+
+  async updatePrivacySettings(
+    actorId: string,
+    input: UpdateProfilePrivacyRequest,
+  ): Promise<MyProfile> {
+    await this.db
+      .updateTable("profiles")
+      .set({
+        ...(input.allowComments !== undefined
+          ? { allow_comments: input.allowComments }
+          : {}),
+        ...(input.showCharacters !== undefined
+          ? { show_characters: input.showCharacters }
+          : {}),
+        ...(input.showTemplates !== undefined
+          ? { show_templates: input.showTemplates }
+          : {}),
+        ...(input.showActivity !== undefined
+          ? { show_activity: input.showActivity }
+          : {}),
+        updated_at: new Date(),
+      })
+      .where("id", "=", actorId)
+      .execute();
+
+    return this.getMyProfile(actorId);
   }
 
   async updateUserRole(

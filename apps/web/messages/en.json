@@ -508,7 +508,17 @@
     "saveFailed": "Could not save the profile",
     "usernameTaken": "This username is already taken.",
     "validationFailed": "Check the profile field values.",
-    "openAdmin": "Open admin panel"
+    "openAdmin": "Open admin panel",
+    "privacyTitle": "Privacy and Visibility",
+    "allowCommentsLabel": "Allow comments on my posts",
+    "allowCommentsDesc": "Other users will be able to comment on your feed posts.",
+    "showCharactersLabel": "Show character sheets on public profile",
+    "showCharactersDesc": "Your public character sheets will be visible on your profile.",
+    "showTemplatesLabel": "Show game systems on public profile",
+    "showTemplatesDesc": "Your published rule systems will be visible on your profile.",
+    "showActivityLabel": "Show follower and following counts",
+    "showActivityDesc": "Your follower and following stats will be publicly visible.",
+    "privacySaved": "Privacy settings saved."
   },
   "AdminAi": {
     "eyebrow": "Administration",
