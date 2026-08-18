@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { CircleUserRound, LogOut } from "lucide-react";
-import { getTranslations } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
 import { Logo } from "@/components/logo";
 import { LanguageSwitch } from "@/components/language-switch";
 import { AppTabs } from "@/components/app-tabs";
+import { NotificationBell } from "@/components/notification-bell";
 import { buttonClassName } from "@/components/ui/button";
 import { signOut } from "@/app/auth/actions";
 import { cn } from "@/lib/utils";
@@ -13,7 +14,10 @@ export async function SiteHeader({
 }: {
   authenticated?: boolean;
 }) {
-  const t = await getTranslations("Common");
+  const [t, locale] = await Promise.all([
+    getTranslations("Common"),
+    getLocale(),
+  ]);
   return (
     <header className="border-b border-[var(--border)] bg-[var(--surface)]">
       <div className="mx-auto flex h-[63px] max-w-7xl items-center gap-1 px-3 sm:gap-2.5 sm:px-8">
@@ -22,6 +26,7 @@ export async function SiteHeader({
         />
         {authenticated && <AppTabs />}
         <div className="ml-auto flex items-center gap-1">
+          {authenticated && <NotificationBell locale={locale} />}
           <LanguageSwitch />
           {authenticated && (
             <Link

@@ -12,6 +12,7 @@ import { sql, type Kysely } from "kysely";
 import { AppError } from "../../errors.js";
 import type { Actor } from "../../plugins/auth.js";
 import { AuditService } from "../audit/service.js";
+import { NotificationService } from "../notifications/service.js";
 import {
   listPublicTemplatesByOwner,
   templateSummaryFromRow,
@@ -180,6 +181,16 @@ export class ProfileService {
       .values({ follower_id: actorId, following_id: target.id })
       .onConflict((oc) => oc.columns(["follower_id", "following_id"]).doNothing())
       .execute();
+
+    await new NotificationService(this.db).notify({
+      userId: target.id,
+      actorId,
+      type: "follow",
+      targetType: "user",
+      targetId: actorId,
+      title: "New follower",
+      body: "started following your profile",
+    });
   }
 
   async unfollow(actorId: string, username: string): Promise<void> {

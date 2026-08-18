@@ -118,3 +118,13 @@
 - Checks passed: `profile-privacy.test.ts` unit test, `apps/api` typecheck, `apps/web` vitest (28 passed).
 - Manual scenarios passed: Privacy preference updates, public profile content filtering when hidden, profile settings switch toggling.
 - Next phase: Phase 10 — Notifications & Activity Center.
+
+## Phase 10 — Notifications & Activity Center
+- Status: verified
+- Branch: `codex/feat-notifications`
+- Commit: `feat(notifications): add user notification center and social event triggers`
+- Implemented: `user_notifications` PostgreSQL table with indexes, `@mycharacter/contracts` notification schemas and types, `NotificationService` supporting notification dispatch, listing with unread count, single and bulk mark-as-read, integrated notification triggers across follows (`ProfileService.follow`), post reactions and comments (`PostService.addReaction`, `PostService.addComment`), added `GET /api/notifications`, `PUT /api/notifications/:id/read`, and `PUT /api/notifications/read-all` API routes, created interactive `NotificationBell` in `SiteHeader` with unread badge and dropdown, and dedicated `/dashboard/notifications` page with full RU/EN localization.
+- Migrations: `202608180011_notifications.ts`.
+- Checks passed: `notifications.test.ts` unit tests (2 tests), `apps/api` typecheck, `apps/web` vitest (28 passed).
+- Manual scenarios passed: Follow and post interaction notifications, unread count badge update, dropdown preview, and mark all read.
+- Next phase: Phase 11 — Analytics, Metrics & Platform Reporting.

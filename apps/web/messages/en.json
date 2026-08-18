@@ -675,5 +675,13 @@
     "emptyHint": "Try changing keywords or selecting another category.",
     "startPrompt": "Enter at least 1 character to search",
     "foundResults": "Found results: {count}"
+  },
+  "Notifications": {
+    "title": "Notifications",
+    "subtitle": "Activity, post reactions, new followers and platform alerts.",
+    "markAllRead": "Mark all read",
+    "empty": "No notifications yet",
+    "emptyHint": "When someone interacts with your posts or follows you, you will see alerts here.",
+    "viewAll": "All notifications"
   }
 }

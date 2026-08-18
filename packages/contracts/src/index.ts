@@ -221,3 +221,13 @@ export type {
   SearchResponse,
   SearchType,
 } from "./search.js";
+export {
+  listNotificationsResponseSchema,
+  notificationItemSchema,
+  notificationTypeSchema,
+} from "./notifications.js";
+export type {
+  ListNotificationsResponse,
+  NotificationItem,
+  NotificationType,
+} from "./notifications.js";

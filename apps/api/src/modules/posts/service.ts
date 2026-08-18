@@ -14,6 +14,7 @@ import { sql } from "kysely";
 import { AppError } from "../../errors.js";
 import { AuditService } from "../audit/service.js";
 import { UserModerationService } from "../moderation/user-moderation-service.js";
+import { NotificationService } from "../notifications/service.js";
 
 const NO_ACTOR_UUID = "00000000-0000-0000-0000-000000000000";
 const REACTIONS = [
@@ -252,6 +253,25 @@ export class PostService {
         )
         .execute();
     });
+
+    const post = await this.db
+      .selectFrom("posts")
+      .select(["author_id as authorId", "title", "slug"])
+      .where("id", "=", postId)
+      .executeTakeFirst();
+    if (post && post.authorId !== actorId) {
+      await new NotificationService(this.db).notify({
+        userId: post.authorId,
+        actorId,
+        type: "post_reaction",
+        targetType: "post",
+        targetId: postId,
+        title: "New reaction on your post",
+        body: `reacted with :${reaction}:`,
+        metadata: { reaction, slug: post.slug },
+      });
+    }
+
     return this.reactionsFor([postId], actorId).then((items) =>
       items.get(postId)!,
     );
@@ -315,11 +335,45 @@ export class PostService {
   ): Promise<PostComment> {
     await new UserModerationService(this.db).assertCanComment(actorId);
     await this.requirePost(postId);
+
+    const post = await this.db
+      .selectFrom("posts")
+      .innerJoin("profiles as author", "author.id", "posts.author_id")
+      .select([
+        "posts.author_id as authorId",
+        "author.allow_comments as allowComments",
+        "posts.slug",
+      ])
+      .where("posts.id", "=", postId)
+      .executeTakeFirst();
+
+    if (post && post.allowComments === false && post.authorId !== actorId) {
+      throw new AppError(
+        "COMMENTS_DISABLED",
+        403,
+        "The author has disabled comments on this post.",
+      );
+    }
+
     const comment = await this.db
       .insertInto("post_comments")
       .values({ post_id: postId, author_id: actorId, body: body.trim() })
       .returning("id")
       .executeTakeFirstOrThrow();
+
+    if (post && post.authorId !== actorId) {
+      await new NotificationService(this.db).notify({
+        userId: post.authorId,
+        actorId,
+        type: "post_comment",
+        targetType: "post",
+        targetId: postId,
+        title: "New comment on your post",
+        body: body.trim().slice(0, 100),
+        metadata: { commentId: comment.id, slug: post.slug },
+      });
+    }
+
     const comments = await this.listComments(postId);
     return comments.find((item) => item.id === comment.id)!;
   }

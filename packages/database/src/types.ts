@@ -382,6 +382,20 @@ export interface UserRestrictionsTable {
   created_at: Timestamp;
 }
 
+export interface UserNotificationsTable {
+  id: Generated<Uuid>;
+  user_id: string;
+  actor_id: string | null;
+  type: string;
+  target_type: string | null;
+  target_id: string | null;
+  title: string;
+  body: string | null;
+  metadata: Generated<Json>;
+  read_at: Timestamp | null;
+  created_at: Timestamp;
+}
+
 export interface Database {
   users: UsersTable;
   profiles: ProfilesTable;
@@ -415,4 +429,5 @@ export interface Database {
   admin_audit_events: AdminAuditEventsTable;
   content_reports: ContentReportsTable;
   user_restrictions: UserRestrictionsTable;
+  user_notifications: UserNotificationsTable;
 }
