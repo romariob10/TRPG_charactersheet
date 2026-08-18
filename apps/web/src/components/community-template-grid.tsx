@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Check, FileText, MessageCircle, Users } from "lucide-react";
+import { Check, FileText, GitFork, MessageCircle, Users } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { apiFetch } from "@/lib/api/client";
@@ -162,13 +162,13 @@ export function CommunityTemplateGrid({
                   {subscribed ? (
                     <Check className="size-4" />
                   ) : (
-                    <Users className="size-4" />
+                    <GitFork className="size-4" />
                   )}
                   {pendingId === template.id
-                    ? t("subscriptionPending")
-                    : subscribed
-                      ? t("removeFromMine")
-                      : t("addToMine")}
+                      ? t("subscriptionPending")
+                      : subscribed
+                        ? t("removeFromMine")
+                      : t("remix")}
                 </Button>
               </div>
             </article>

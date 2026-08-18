@@ -41,8 +41,10 @@ export type {
   FieldMutationResponse,
   FieldValue,
   FieldWidget,
+  PublicCharacterSummary,
   UpdateCharacterRequest,
 } from "./characters.js";
+export type { SocialFeedItem } from "./feed.js";
 export {
   commentIdSchema,
   createTemplateCommentRequestSchema,

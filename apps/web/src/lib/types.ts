@@ -55,6 +55,13 @@ export interface TemplateField extends FieldDescriptor {
 export interface CharacterSummary {
   id: string;
   name: string;
+  slug?: string;
+  isPublic?: boolean;
+  publishedAt?: string | null;
+  author?: PublicAuthor;
+  gameSystem?: string | null;
+  likeCount?: number;
+  likedByMe?: boolean;
   role: "owner" | "editor";
   revision: number;
   status: "active" | "trashed";
@@ -98,12 +105,45 @@ export interface TemplateComment {
 }
 
 export interface PublicProfile {
+  id: string;
   username: string;
   displayName: string | null;
   bio: string;
   joinedAt: string;
   publicTemplateCount: number;
+  publicCharacterCount: number;
+  followerCount: number;
+  followingCount: number;
+  followedByMe: boolean;
   totalLikes: number;
+}
+
+export interface PublicCharacterSummary {
+  id: string;
+  name: string;
+  slug: string;
+  gameSystem: string | null;
+  pageCount: number;
+  updatedAt: string;
+  publishedAt: string;
+  author: PublicAuthor;
+  likeCount: number;
+  likedByMe: boolean;
+}
+
+export interface SocialFeedItem {
+  kind: "system" | "character";
+  id: string;
+  slug: string;
+  title: string;
+  gameSystem: string | null;
+  pageCount: number;
+  publishedAt: string;
+  author: PublicAuthor;
+  likeCount: number;
+  commentCount: number;
+  likedByMe: boolean;
+  remixedByMe: boolean;
 }
 
 export interface MyProfile {

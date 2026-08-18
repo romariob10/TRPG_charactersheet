@@ -16,8 +16,10 @@ export async function SiteHeader({
   const t = await getTranslations("Common");
   return (
     <header className="border-b border-[var(--border)] bg-[var(--surface)]">
-      <div className="mx-auto flex h-[63px] max-w-7xl items-center gap-2.5 px-5 sm:px-8">
-        <Logo />
+      <div className="mx-auto flex h-[63px] max-w-7xl items-center gap-1 px-3 sm:gap-2.5 sm:px-8">
+        <Logo
+          className={authenticated ? "shrink-0 [&>span:last-child]:hidden xl:[&>span:last-child]:inline" : "shrink-0"}
+        />
         {authenticated && <AppTabs />}
         <div className="ml-auto flex items-center gap-1">
           <LanguageSwitch />

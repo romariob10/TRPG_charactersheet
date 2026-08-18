@@ -749,7 +749,8 @@ const AiAssistantSurface = memo(function AiAssistantSurface({
             accept:
               "image/png,image/jpeg,image/webp,application/pdf,text/*,application/json,application/xml,.md,.csv,.xml",
             maxSize: 4 * 1024 * 1024,
-            onUploadFailed: ({ message }) => setAttachmentError(message),
+            onUploadFailed: ({ message }: { message: string }) =>
+              setAttachmentError(message),
           }}
           input={{ addMenuButton: DirectAttachmentButton }}
           labels={{

@@ -45,7 +45,11 @@ describe("initial migration", () => {
         "pdf_fields",
         "pdf_field_widgets",
         "template_subscriptions",
+        "template_likes",
+        "template_comments",
         "characters",
+        "character_likes",
+        "profile_follows",
         "character_members",
         "character_values",
         "character_mutations",
@@ -59,6 +63,21 @@ describe("initial migration", () => {
     );
     expect(names).not.toContain("field_catalog_overrides");
     expect(names).not.toContain("template_field_settings");
+  });
+
+  it("creates public character and social graph columns", async () => {
+    const rows = await testDb.db
+      .selectFrom("information_schema.columns")
+      .select(["column_name", "is_nullable"])
+      .where("table_schema", "=", testDb.schema)
+      .where("table_name", "=", "characters")
+      .where("column_name", "in", ["slug", "is_public", "published_at", "remix_source_id"])
+      .execute();
+    const columns = new Map(rows.map((row) => [row.column_name, row.is_nullable]));
+    expect(columns.get("slug")).toBe("NO");
+    expect(columns.get("is_public")).toBe("NO");
+    expect(columns.get("published_at")).toBe("YES");
+    expect(columns.get("remix_source_id")).toBe("YES");
   });
 
   it("preserves final template, message, and storage columns", async () => {

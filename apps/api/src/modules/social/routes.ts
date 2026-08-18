@@ -1,4 +1,5 @@
 import {
+  characterIdSchema,
   commentIdSchema,
   createTemplateCommentRequestSchema,
   templateIdSchema,
@@ -22,6 +23,50 @@ const commentRateLimit = {
 
 export async function registerSocialRoutes(app: FastifyInstance): Promise<void> {
   const service = new SocialService(app.db);
+
+  app.get("/api/feed", async (request) => {
+    const actor = requireActor(request);
+    return { items: await service.listFeed(actor.userId) };
+  });
+
+  app.put("/api/characters/:id/like", async (request, reply) => {
+    const actor = requireActor(request);
+    await service.likeCharacter(actor.userId, parseCharacterId(request.params));
+    return reply.status(204).send();
+  });
+
+  app.delete("/api/characters/:id/like", async (request, reply) => {
+    const actor = requireActor(request);
+    await service.unlikeCharacter(actor.userId, parseCharacterId(request.params));
+    return reply.status(204).send();
+  });
+
+  app.post("/api/characters/:id/remix", async (request, reply) => {
+    const actor = requireActor(request);
+    return reply
+      .status(201)
+      .send(await service.remixCharacter(actor.userId, parseCharacterId(request.params)));
+  });
+
+  app.get("/api/sheets/:username/:slug", async (request) => {
+    const params = request.params as { username?: unknown; slug?: unknown };
+    if (
+      typeof params.username !== "string" ||
+      !USERNAME_PATH_PATTERN.test(params.username) ||
+      typeof params.slug !== "string" ||
+      !SLUG_PATH_PATTERN.test(params.slug) ||
+      params.slug.length > 80
+    ) {
+      throw new AppError("CHARACTER_NOT_FOUND", 404, "Character not found.");
+    }
+    return {
+      character: await service.getPublicCharacter(
+        request.actor?.userId ?? null,
+        params.username,
+        params.slug,
+      ),
+    };
+  });
 
   app.put("/api/templates/:id/like", async (request, reply) => {
     const actor = requireActor(request);
@@ -95,6 +140,12 @@ export async function registerSocialRoutes(app: FastifyInstance): Promise<void> 
 
 function parseId(params: unknown): string {
   const parsed = templateIdSchema.safeParse((params as { id?: unknown }).id);
+  if (!parsed.success) throw validationError();
+  return parsed.data;
+}
+
+function parseCharacterId(params: unknown): string {
+  const parsed = characterIdSchema.safeParse((params as { id?: unknown }).id);
   if (!parsed.success) throw validationError();
   return parsed.data;
 }

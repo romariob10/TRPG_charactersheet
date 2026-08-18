@@ -23,6 +23,6 @@ describe("Home", () => {
     const html = renderToStaticMarkup(await Home());
 
     expect(html).toContain('href="/dashboard/new"');
-    expect(html).toContain('href="/dashboard"');
+    expect(html).toContain('href="/dashboard/feed"');
   });
 });
