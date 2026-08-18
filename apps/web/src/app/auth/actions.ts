@@ -35,7 +35,7 @@ export async function signUp(_: AuthState, formData: FormData): Promise<AuthStat
   } catch (error) {
     return { error: errorMessage(error) };
   }
-  redirect("/dashboard");
+  redirect("/dashboard/feed");
 }
 
 export async function updatePassword(_: AuthState, formData: FormData): Promise<AuthState> {
@@ -50,7 +50,7 @@ export async function updatePassword(_: AuthState, formData: FormData): Promise<
   } catch (error) {
     return { error: errorMessage(error) };
   }
-  redirect("/dashboard");
+  redirect("/dashboard/feed");
 }
 
 export async function signOut() {

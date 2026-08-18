@@ -227,14 +227,36 @@ export async function loadTemplateFields(
 export async function listPublicTemplatesByOwner(
   db: Kysely<Database>,
   ownerId: string,
+  actorId = ownerId,
 ): Promise<TemplateRow[]> {
-  return (await baseQuery(db, ownerId)
+  return (await baseQuery(db, actorId)
     .where("template.owner_id", "=", ownerId)
     .where("template.deleted_at", "is", null)
     .where("template.visibility", "=", "private")
     .where("template.is_public", "=", true)
     .where("template.catalog_approved_at", "is not", null)
     .where("template.catalog_status", "in", ["ready", "partial"])
+    .select([
+      (eb) =>
+        eb
+          .selectFrom("template_likes")
+          .select(sql<number>`count(*)::int`.as("count"))
+          .whereRef("template_likes.template_id", "=", "template.id")
+          .as("likeCount"),
+      (eb) =>
+        eb
+          .selectFrom("template_comments")
+          .select(sql<number>`count(*)::int`.as("count"))
+          .whereRef("template_comments.template_id", "=", "template.id")
+          .as("commentCount"),
+      (eb) =>
+        eb
+          .selectFrom("template_likes")
+          .select(sql<number>`count(*)::int`.as("count"))
+          .whereRef("template_likes.template_id", "=", "template.id")
+          .where("template_likes.user_id", "=", actorId)
+          .as("likedByMeCount"),
+    ])
     .orderBy("template.updated_at", "desc")
     .execute()) as TemplateRow[];
 }

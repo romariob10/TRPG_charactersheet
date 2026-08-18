@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 
 export function LikeButton({
   templateId,
+  characterId,
   initialLiked,
   initialCount,
   authenticated,
@@ -16,7 +17,8 @@ export function LikeButton({
   signInLabel,
   className,
 }: {
-  templateId: string;
+  templateId?: string;
+  characterId?: string;
   initialLiked: boolean;
   initialCount: number;
   authenticated: boolean;
@@ -62,7 +64,10 @@ export function LikeButton({
     setCount((current) => current + (next ? 1 : -1));
     setPending(true);
     try {
-      await apiFetch(`/api/templates/${templateId}/like`, {
+      const endpoint = characterId
+        ? `/api/characters/${characterId}/like`
+        : `/api/templates/${templateId}/like`;
+      await apiFetch(endpoint, {
         method: next ? "PUT" : "DELETE",
       });
     } catch {

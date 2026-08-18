@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { BookOpen, Users } from "lucide-react";
+import { BookOpen, Compass, Users } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
@@ -10,6 +10,12 @@ export function AppTabs() {
   const pathname = usePathname();
   const t = useTranslations("Common");
   const tabs = [
+    {
+      href: "/dashboard/feed",
+      label: t("feed"),
+      icon: Compass,
+      active: pathname.startsWith("/dashboard/feed"),
+    },
     {
       href: "/dashboard",
       label: t("characters"),
@@ -28,7 +34,7 @@ export function AppTabs() {
   ];
 
   return (
-    <nav className="flex items-center rounded-[var(--radius-control)] bg-[var(--keylime)] p-1">
+    <nav className="flex min-w-0 items-center rounded-[var(--radius-control)] bg-[var(--keylime)] p-1">
       {tabs.map((tab) => {
         const Icon = tab.icon;
         return (
@@ -36,7 +42,7 @@ export function AppTabs() {
             key={tab.href}
             href={tab.href}
             className={cn(
-              "flex h-8 items-center gap-2 rounded-[7px] px-2.5 text-[13px] font-semibold text-[var(--muted)] transition-colors hover:text-[var(--brand)]",
+              "flex h-8 items-center gap-2 rounded-[7px] px-2 text-[13px] font-semibold text-[var(--muted)] transition-colors hover:text-[var(--brand)] sm:px-2.5",
               tab.active && "bg-[var(--surface)] text-[var(--brand)]",
             )}
           >

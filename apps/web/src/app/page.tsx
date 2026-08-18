@@ -37,7 +37,7 @@ export default async function Home() {
                 <Link href={authenticated ? "/dashboard/new" : "/auth/sign-up"} className={buttonClassName({ size: "lg" })}>
                   {t("primary")} <ArrowRight className="size-4" />
                 </Link>
-                <Link href={authenticated ? "/dashboard" : "/auth/sign-in"} className={buttonClassName({ variant: "secondary", size: "lg" })}>
+                <Link href={authenticated ? "/dashboard/feed" : "/auth/sign-in"} className={buttonClassName({ variant: "secondary", size: "lg" })}>
                   {authenticated ? t("dashboard") : t("secondary")}
                 </Link>
               </div>

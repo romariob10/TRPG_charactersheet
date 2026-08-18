@@ -28,6 +28,28 @@ export async function registerProfileRoutes(app: FastifyInstance): Promise<void>
     if (typeof username !== "string" || !USERNAME_PATH_PATTERN.test(username)) {
       throw new AppError("PROFILE_NOT_FOUND", 404, "Profile not found.");
     }
-    return service.getPublicProfile(username);
+    return service.getPublicProfile(username, request.actor?.userId ?? null);
   });
+
+  app.put("/api/profiles/:username/follow", async (request, reply) => {
+    const actor = requireActor(request);
+    const username = parseUsername(request.params);
+    await service.follow(actor.userId, username);
+    return reply.status(204).send();
+  });
+
+  app.delete("/api/profiles/:username/follow", async (request, reply) => {
+    const actor = requireActor(request);
+    const username = parseUsername(request.params);
+    await service.unfollow(actor.userId, username);
+    return reply.status(204).send();
+  });
+}
+
+function parseUsername(params: unknown): string {
+  const username = (params as { username?: unknown }).username;
+  if (typeof username !== "string" || !USERNAME_PATH_PATTERN.test(username)) {
+    throw new AppError("PROFILE_NOT_FOUND", 404, "Profile not found.");
+  }
+  return username;
 }

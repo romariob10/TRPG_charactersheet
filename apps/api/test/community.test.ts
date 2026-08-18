@@ -45,6 +45,8 @@ describe("template likes and comments", () => {
   });
 
   beforeEach(async () => {
+    await testDb.db.deleteFrom("profile_follows").execute();
+    await testDb.db.deleteFrom("character_likes").execute();
     await testDb.db.deleteFrom("template_comments").execute();
     await testDb.db.deleteFrom("template_likes").execute();
     await testDb.db.deleteFrom("template_subscriptions").execute();
@@ -54,6 +56,83 @@ describe("template likes and comments", () => {
     slug = `sheet-${crypto.randomUUID().slice(0, 8)}`;
     publicTemplateId = await seedTemplate({ isPublic: true, approved: true, slug });
     privateTemplateId = await seedTemplate({ isPublic: false, approved: true });
+  });
+
+  it("serves a mixed feed and lets viewers like, follow, and remix public sheets", async () => {
+    const character = await testDb.db
+      .insertInto("characters")
+      .values({
+        template_id: publicTemplateId,
+        owner_id: author.userId,
+        name: "Mira Ashfall",
+        is_public: true,
+        published_at: new Date(),
+      })
+      .returning(["id", "slug"])
+      .executeTakeFirstOrThrow();
+
+    const like = await app.inject({
+      method: "PUT",
+      url: `/api/characters/${character.id}/like`,
+      cookies: { mycharacter_session: viewer.cookie },
+    });
+    expect(like.statusCode).toBe(204);
+
+    const feed = await app.inject({
+      method: "GET",
+      url: "/api/feed",
+      cookies: { mycharacter_session: viewer.cookie },
+    });
+    expect(feed.statusCode).toBe(200);
+    expect(feed.json().items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: "system", id: publicTemplateId }),
+        expect.objectContaining({
+          kind: "character",
+          id: character.id,
+          likedByMe: true,
+          likeCount: 1,
+        }),
+      ]),
+    );
+
+    const username = await authorUsername();
+    expect(
+      (
+        await app.inject({
+          method: "PUT",
+          url: `/api/profiles/${username}/follow`,
+          cookies: { mycharacter_session: viewer.cookie },
+        })
+      ).statusCode,
+    ).toBe(204);
+    const profile = await app.inject({
+      method: "GET",
+      url: `/api/profiles/${username}`,
+      cookies: { mycharacter_session: viewer.cookie },
+    });
+    expect(profile.json()).toMatchObject({
+      profile: {
+        publicCharacterCount: 1,
+        followerCount: 1,
+        followedByMe: true,
+        totalLikes: 1,
+      },
+      characters: [expect.objectContaining({ id: character.id, slug: character.slug })],
+    });
+
+    const remix = await app.inject({
+      method: "POST",
+      url: `/api/characters/${character.id}/remix`,
+      cookies: { mycharacter_session: viewer.cookie },
+    });
+    expect(remix.statusCode).toBe(201);
+    const remixed = await testDb.db
+      .selectFrom("characters")
+      .select(["owner_id as ownerId", "remix_source_id as sourceId", "is_public as isPublic"])
+      .where("id", "=", remix.json().id)
+      .executeTakeFirstOrThrow();
+    expect(remixed).toEqual({ ownerId: viewer.userId, sourceId: character.id, isPublic: false });
   });
 
   afterAll(async () => {

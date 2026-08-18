@@ -9,11 +9,16 @@ export const publicAuthorSchema = z.object({
 });
 
 export const publicProfileSchema = z.object({
+  id: z.string().uuid(),
   username: usernameSchema,
   displayName: z.string().max(80).nullable(),
   bio: z.string().max(500),
   joinedAt: z.string(),
   publicTemplateCount: z.number().int().nonnegative(),
+  publicCharacterCount: z.number().int().nonnegative(),
+  followerCount: z.number().int().nonnegative(),
+  followingCount: z.number().int().nonnegative(),
+  followedByMe: z.boolean(),
   totalLikes: z.number().int().nonnegative(),
 });
 
