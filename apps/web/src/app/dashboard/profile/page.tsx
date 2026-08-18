@@ -2,6 +2,9 @@ import { getTranslations } from "next-intl/server";
 import { ProfileSettingsForm } from "@/components/profile-settings-form";
 import { apiFetch } from "@/lib/api/server";
 import type { MyProfile } from "@/lib/types";
+import Link from "next/link";
+import { ShieldCheck } from "lucide-react";
+import { buttonClassName } from "@/components/ui/button";
 
 export default async function ProfileSettingsPage() {
   const [t, profile] = await Promise.all([
@@ -20,6 +23,16 @@ export default async function ProfileSettingsPage() {
           {t("emailNote", { email: profile.data.email })}
         </p>
         <ProfileSettingsForm initial={profile.data} />
+        {profile.data.isAdmin && (
+          <div className="mt-6 border-t border-[var(--border)] pt-5">
+            <Link
+              href="/dashboard/admin"
+              className={buttonClassName({ variant: "secondary", size: "md" })}
+            >
+              <ShieldCheck className="size-4" /> {t("openAdmin")}
+            </Link>
+          </div>
+        )}
       </div>
     </main>
   );

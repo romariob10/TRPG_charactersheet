@@ -1,20 +1,25 @@
 import Link from "next/link";
 import { Compass, Plus, Sparkles, UsersRound } from "lucide-react";
+import type { SocialPost } from "@mycharacter/contracts";
 import { getLocale, getTranslations } from "next-intl/server";
-import { SocialFeed } from "@/components/social-feed";
+import { PostFeed } from "@/components/post-feed";
+import type { PostEmbedOptions } from "@/components/post-composer";
 import { buttonClassName } from "@/components/ui/button";
 import { apiFetch } from "@/lib/api/server";
-import type { MyProfile, SocialFeedItem } from "@/lib/types";
+import type { MyProfile } from "@/lib/types";
 
 export default async function FeedPage() {
-  const [feed, profile, t, locale] = await Promise.all([
-    apiFetch<{ items: SocialFeedItem[] }>("/api/feed"),
+  const [feed, profile, embedOptions, t, locale] = await Promise.all([
+    apiFetch<{ posts: SocialPost[] }>("/api/posts"),
     apiFetch<MyProfile>("/api/profiles/me"),
+    apiFetch<PostEmbedOptions>("/api/posts/embed-options"),
     getTranslations("Feed"),
     getLocale(),
   ]);
   const people = Array.from(
-    new Map(feed.data.items.map((item) => [item.author.username, item.author])).values(),
+    new Map(
+      feed.data.posts.map((post) => [post.author.username, post.author]),
+    ).values(),
   )
     .filter((author) => author.id !== profile.data.id)
     .slice(0, 4);
@@ -28,23 +33,45 @@ export default async function FeedPage() {
               <div className="flex items-center gap-2 text-xs font-bold tracking-[.13em] text-[var(--brand)] uppercase">
                 <Compass className="size-4" /> {t("eyebrow")}
               </div>
-              <h1 className="display-heading mt-1 text-4xl text-[var(--brand)] sm:text-[2.75rem]">{t("title")}</h1>
-              <p className="mt-1 max-w-xl text-sm text-[var(--muted)] sm:text-base">{t("subtitle")}</p>
+              <h1 className="display-heading mt-1 text-4xl text-[var(--brand)] sm:text-[2.75rem]">
+                {t("title")}
+              </h1>
+              <p className="mt-1 max-w-xl text-sm text-[var(--muted)] sm:text-base">
+                {t("subtitle")}
+              </p>
             </div>
           </div>
-          <SocialFeed items={feed.data.items} locale={locale} />
+          <PostFeed
+            initialPosts={feed.data.posts}
+            profile={profile.data}
+            embedOptions={embedOptions.data}
+            locale={locale}
+          />
         </section>
 
         <aside className="hidden space-y-4 lg:sticky lg:top-5 lg:block">
           <section className="overflow-hidden rounded-[1.15rem] bg-[var(--brand)] p-5 text-white">
             <Sparkles className="size-5 text-[var(--sage)]" />
-            <h2 className="display-heading mt-3 text-2xl">{t("createTitle")}</h2>
-            <p className="mt-2 text-sm leading-6 text-white/70">{t("createText")}</p>
+            <h2 className="display-heading mt-3 text-2xl">
+              {t("createTitle")}
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-white/70">
+              {t("createText")}
+            </p>
             <div className="mt-5 grid gap-2">
-              <Link href="/dashboard/new" className={buttonClassName({ variant: "secondary", size: "sm" }) + " w-full border-white/20 bg-white text-[var(--brand)]"}>
+              <Link
+                href="/dashboard/new"
+                className={
+                  buttonClassName({ variant: "secondary", size: "sm" }) +
+                  " w-full border-white/20 bg-white text-[var(--brand)]"
+                }
+              >
                 <Plus className="size-4" /> {t("newCharacter")}
               </Link>
-              <Link href="/dashboard/systems/new" className="inline-flex h-9 items-center justify-center gap-2 rounded-[var(--radius-control)] border border-white/20 px-3 text-sm font-semibold text-white hover:bg-white/10">
+              <Link
+                href="/dashboard/systems/new"
+                className="inline-flex h-9 items-center justify-center gap-2 rounded-[var(--radius-control)] border border-white/20 px-3 text-sm font-semibold text-white hover:bg-white/10"
+              >
                 <Plus className="size-4" /> {t("newSystem")}
               </Link>
             </div>
@@ -58,13 +85,23 @@ export default async function FeedPage() {
               </div>
               <div className="mt-4 space-y-3">
                 {people.map((author) => (
-                  <Link key={author.id} href={`/users/${author.username}`} className="flex items-center gap-3 rounded-xl p-1.5 transition-colors hover:bg-[var(--keylime)]">
+                  <Link
+                    key={author.id}
+                    href={`/users/${author.username}`}
+                    className="flex items-center gap-3 rounded-xl p-1.5 transition-colors hover:bg-[var(--keylime)]"
+                  >
                     <span className="grid size-9 place-items-center rounded-full bg-[var(--brand-soft)] text-xs font-black text-[var(--brand)]">
-                      {(author.displayName ?? author.username).slice(0, 1).toUpperCase()}
+                      {(author.displayName ?? author.username)
+                        .slice(0, 1)
+                        .toUpperCase()}
                     </span>
                     <span className="min-w-0">
-                      <span className="block truncate text-sm font-bold">{author.displayName ?? author.username}</span>
-                      <span className="block truncate text-xs text-[var(--muted)]">@{author.username}</span>
+                      <span className="block truncate text-sm font-bold">
+                        {author.displayName ?? author.username}
+                      </span>
+                      <span className="block truncate text-xs text-[var(--muted)]">
+                        @{author.username}
+                      </span>
                     </span>
                   </Link>
                 ))}

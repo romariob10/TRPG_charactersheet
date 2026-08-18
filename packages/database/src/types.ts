@@ -1,18 +1,34 @@
 import type { ColumnType, Generated } from "kysely";
 
-export type Timestamp = ColumnType<Date, Date | string | undefined, Date | string>;
+export type Timestamp = ColumnType<
+  Date,
+  Date | string | undefined,
+  Date | string
+>;
 export type Json = ColumnType<unknown, unknown, unknown>;
 export type Uuid = Generated<string>;
 
 export type UserStatus = "active" | "disabled";
-export type AuthTokenKind = "email_verification" | "password_reset" | "email_change";
+export type AuthTokenKind =
+  "email_verification" | "password_reset" | "email_change";
 export type TemplateVisibility = "private" | "curated";
-export type CatalogStatus = "pending" | "processing" | "ready" | "partial" | "failed";
+export type CatalogStatus =
+  "pending" | "processing" | "ready" | "partial" | "failed";
 export type CharacterStatus = "active" | "trashed";
 export type CharacterRole = "owner" | "editor";
-export type FieldKind = "text" | "multiline" | "checkbox" | "radio" | "dropdown" | "list" | "button" | "signature" | "unknown";
+export type FieldKind =
+  | "text"
+  | "multiline"
+  | "checkbox"
+  | "radio"
+  | "dropdown"
+  | "list"
+  | "button"
+  | "signature"
+  | "unknown";
 export type CatalogSource = "pdf" | "heuristic" | "ocr" | "vision" | "manual";
 export type ProposalStatus = "pending" | "applied" | "rejected" | "expired";
+export type PostReaction = "like" | "fire" | "dice";
 
 export interface UsersTable {
   id: Uuid;
@@ -146,7 +162,11 @@ export interface CharactersTable {
   name: string;
   slug: Generated<string>;
   is_public: Generated<boolean>;
-  published_at: ColumnType<Date | null, Date | string | null | undefined, Date | string | null>;
+  published_at: ColumnType<
+    Date | null,
+    Date | string | null | undefined,
+    Date | string | null
+  >;
   remix_source_id: Generated<string | null>;
   status: CharacterStatus;
   revision: string;
@@ -262,6 +282,43 @@ export interface AiProposalItemsTable {
   created_at: Timestamp;
 }
 
+export interface PostsTable {
+  id: Uuid;
+  author_id: string;
+  slug: string;
+  title: string | null;
+  content: Json;
+  plain_text: string;
+  published_at: Timestamp;
+  created_at: Timestamp;
+  updated_at: Timestamp;
+}
+
+export interface PostImagesTable {
+  file_id: string;
+  uploader_id: string;
+  post_id: string | null;
+  width: number | null;
+  height: number | null;
+  created_at: Timestamp;
+}
+
+export interface PostReactionsTable {
+  user_id: string;
+  post_id: string;
+  reaction: PostReaction;
+  created_at: Timestamp;
+}
+
+export interface PostCommentsTable {
+  id: Uuid;
+  post_id: string;
+  author_id: string;
+  body: string;
+  created_at: Timestamp;
+  updated_at: Timestamp;
+}
+
 export interface Database {
   users: UsersTable;
   profiles: ProfilesTable;
@@ -286,4 +343,8 @@ export interface Database {
   ai_messages: AiMessagesTable;
   ai_proposals: AiProposalsTable;
   ai_proposal_items: AiProposalItemsTable;
+  posts: PostsTable;
+  post_images: PostImagesTable;
+  post_reactions: PostReactionsTable;
+  post_comments: PostCommentsTable;
 }

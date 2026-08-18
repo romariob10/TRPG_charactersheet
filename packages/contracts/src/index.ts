@@ -113,3 +113,33 @@ export type {
   AiProposalStatus,
   ApplyProposalResponse,
 } from "./ai.js";
+export {
+  aiProviderSchema,
+  aiSettingsResponseSchema,
+  updateAiSettingsRequestSchema,
+} from "./admin.js";
+export type {
+  AiProvider,
+  AiSettingsResponse,
+  UpdateAiSettingsRequest,
+} from "./admin.js";
+export {
+  createPostCommentRequestSchema,
+  createPostRequestSchema,
+  postBlockSchema,
+  postCommentSchema,
+  postEmbedSchema,
+  postReactionSchema,
+  postReactionSummarySchema,
+  socialPostSchema,
+} from "./posts.js";
+export type {
+  CreatePostCommentRequest,
+  CreatePostRequest,
+  PostBlock,
+  PostComment,
+  PostEmbed,
+  PostReaction,
+  PostReactionSummary,
+  SocialPost,
+} from "./posts.js";

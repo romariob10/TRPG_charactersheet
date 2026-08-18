@@ -58,6 +58,22 @@ export function requireActor(request: FastifyRequest): Actor {
   return request.actor;
 }
 
+export async function requireAdmin(
+  request: FastifyRequest,
+  database: Kysely<Database>,
+): Promise<Actor> {
+  const actor = requireActor(request);
+  const profile = await database
+    .selectFrom("profiles")
+    .select("is_admin")
+    .where("id", "=", actor.userId)
+    .executeTakeFirst();
+  if (!profile?.is_admin) {
+    throw new AppError("ADMIN_REQUIRED", 403, "Administrator access is required.");
+  }
+  return actor;
+}
+
 function assertCookieMutationOrigin(
   request: FastifyRequest,
   options: AuthPluginOptions,

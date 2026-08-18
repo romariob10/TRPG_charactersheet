@@ -16,6 +16,7 @@ if (getMigrationFolder() !== bundledMigrationFolder) {
 }
 await access(new URL("../dist/migrations/202607270001_initial.js", import.meta.url));
 await access(new URL("../dist/migrations/202607270002_indexes.js", import.meta.url));
+await access(new URL("../dist/migrations/202608180002_social_posts.js", import.meta.url));
 const rootDb = createDatabase(databaseUrl);
 let db;
 
@@ -27,10 +28,10 @@ try {
   const rows = await sql`
     select table_name
     from information_schema.tables
-    where table_schema = ${schema} and table_name in ('users', 'characters', 'ai_messages')
+    where table_schema = ${schema} and table_name in ('users', 'characters', 'ai_messages', 'posts')
     order by table_name
   `.execute(db);
-  if (rows.rows.map((row) => row.table_name).join(",") !== "ai_messages,characters,users") {
+  if (rows.rows.map((row) => row.table_name).join(",") !== "ai_messages,characters,posts,users") {
     throw new Error("The built package did not apply both database migrations.");
   }
 } finally {

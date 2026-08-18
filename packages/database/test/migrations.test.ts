@@ -59,10 +59,32 @@ describe("initial migration", () => {
         "ai_messages",
         "ai_proposals",
         "ai_proposal_items",
+        "posts",
+        "post_images",
+        "post_reactions",
+        "post_comments",
       ]),
     );
     expect(names).not.toContain("field_catalog_overrides");
     expect(names).not.toContain("template_field_settings");
+  });
+
+  it("creates social post constraints and indexes", async () => {
+    const constraints = await sql<{ constraint_name: string }>`
+      select constraint_name
+      from information_schema.table_constraints
+      where table_schema = ${testDb.schema}
+        and table_name in ('posts', 'post_reactions', 'post_comments')
+    `.execute(testDb.db);
+    const names = constraints.rows.map((row) => row.constraint_name);
+    expect(names).toEqual(
+      expect.arrayContaining([
+        "posts_author_slug_key",
+        "post_reactions_pkey",
+        "post_reactions_kind_check",
+        "post_comments_body_length_check",
+      ]),
+    );
   });
 
   it("creates public character and social graph columns", async () => {
@@ -71,9 +93,16 @@ describe("initial migration", () => {
       .select(["column_name", "is_nullable"])
       .where("table_schema", "=", testDb.schema)
       .where("table_name", "=", "characters")
-      .where("column_name", "in", ["slug", "is_public", "published_at", "remix_source_id"])
+      .where("column_name", "in", [
+        "slug",
+        "is_public",
+        "published_at",
+        "remix_source_id",
+      ])
       .execute();
-    const columns = new Map(rows.map((row) => [row.column_name, row.is_nullable]));
+    const columns = new Map(
+      rows.map((row) => [row.column_name, row.is_nullable]),
+    );
     expect(columns.get("slug")).toBe("NO");
     expect(columns.get("is_public")).toBe("NO");
     expect(columns.get("published_at")).toBe("YES");
@@ -87,7 +116,9 @@ describe("initial migration", () => {
       .where("table_schema", "=", testDb.schema)
       .where("table_name", "in", ["pdf_templates", "pdf_fields", "ai_messages"])
       .execute();
-    const columns = new Map(rows.map((row) => [`${row.table_name}.${row.column_name}`, row]));
+    const columns = new Map(
+      rows.map((row) => [`${row.table_name}.${row.column_name}`, row]),
+    );
 
     expect(columns.get("pdf_templates.file_id")?.is_nullable).toBe("NO");
     expect(columns.get("pdf_templates.catalog_approved_at")).toBeDefined();
@@ -105,7 +136,12 @@ describe("initial migration", () => {
       .executeTakeFirstOrThrow();
     const objectFile = await testDb.db
       .insertInto("object_files")
-      .values({ storage_key: "view.pdf", sha256: "a".repeat(64), size_bytes: "1", media_type: "application/pdf" })
+      .values({
+        storage_key: "view.pdf",
+        sha256: "a".repeat(64),
+        size_bytes: "1",
+        media_type: "application/pdf",
+      })
       .returning("id")
       .executeTakeFirstOrThrow();
     const template = await testDb.db
@@ -179,7 +215,10 @@ describe("initial migration", () => {
       .where("column_name", "in", ["username", "bio", "slug"])
       .execute();
     const byColumn = new Map(
-      columns.map((row) => [`${row.table_name}.${row.column_name}`, row.is_nullable]),
+      columns.map((row) => [
+        `${row.table_name}.${row.column_name}`,
+        row.is_nullable,
+      ]),
     );
     expect(byColumn.get("profiles.username")).toBe("NO");
     expect(byColumn.get("profiles.bio")).toBe("NO");
@@ -192,10 +231,16 @@ describe("initial migration", () => {
       order by indexname
     `.execute(testDb.db);
     expect(indexes.rows).toHaveLength(2);
-    const byName = new Map(indexes.rows.map((row) => [row.indexname, row.indexdef.toLowerCase()]));
+    const byName = new Map(
+      indexes.rows.map((row) => [row.indexname, row.indexdef.toLowerCase()]),
+    );
     expect(byName.get("profiles_username_idx")).toContain("lower(username)");
-    expect(byName.get("pdf_templates_owner_slug_idx")).toContain("owner_id, slug");
-    expect(byName.get("pdf_templates_owner_slug_idx")).toContain("owner_id is not null");
+    expect(byName.get("pdf_templates_owner_slug_idx")).toContain(
+      "owner_id, slug",
+    );
+    expect(byName.get("pdf_templates_owner_slug_idx")).toContain(
+      "owner_id is not null",
+    );
   });
 
   it("keeps deleted templates out of the private duplicate index", async () => {
@@ -301,9 +346,10 @@ describe("initial migration", () => {
       `.execute(rootDb);
       expect(schemas.rows).toEqual([{ schema_name: untouchedSchema }]);
     } finally {
-      await sql`drop schema if exists ${sql.id(untouchedSchema)} cascade`.execute(rootDb);
+      await sql`drop schema if exists ${sql.id(untouchedSchema)} cascade`.execute(
+        rootDb,
+      );
       await rootDb.destroy();
     }
   });
-
 });

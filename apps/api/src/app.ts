@@ -15,6 +15,10 @@ import {
 } from "fastify-type-provider-zod";
 import type { Kysely } from "kysely";
 import type { ObjectStorage } from "@mycharacter/storage";
+import {
+  FileAiSettingsStore,
+  type AiSettingsWriter,
+} from "@mycharacter/storage";
 import { AppError } from "./errors.js";
 import { registerHealthRoutes } from "./modules/health/routes.js";
 import { registerAuthRoutes } from "./modules/auth/routes.js";
@@ -29,6 +33,8 @@ import { registerExportRoutes } from "./modules/export/routes.js";
 import { registerRealtimeRoutes } from "./modules/realtime/routes.js";
 import { registerAiRoutes } from "./modules/ai/routes.js";
 import { registerAssetRoutes } from "./modules/assets/routes.js";
+import { registerAdminRoutes } from "./modules/admin/routes.js";
+import { registerPostRoutes } from "./modules/posts/routes.js";
 import { registerAuth } from "./plugins/auth.js";
 import { registerDatabase } from "./plugins/database.js";
 import { registerStorage } from "./plugins/storage.js";
@@ -51,6 +57,7 @@ export interface BuildAppOptions {
   storageRoot?: string;
   jobs?: JobClient;
   enableBackgroundInfrastructure?: boolean;
+  aiSettings?: AiSettingsWriter;
 }
 
 function errorBody(error: AppError, requestId: string) {
@@ -100,6 +107,9 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
     allowMissingOriginForTests: options.allowMissingOriginForTests,
   });
   const realtime = new LocalRealtimeBus();
+  const aiSettings =
+    options.aiSettings ??
+    new FileAiSettingsStore(options.storageRoot ?? "/var/lib/mycharacter/pdfs");
   const catalogProgressBridge = options.enableBackgroundInfrastructure
     ? new CatalogProgressBridge(options.databaseUrl, realtime)
     : null;
@@ -109,15 +119,17 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
   }
   await registerHealthRoutes(app);
   await registerAssetRoutes(app);
+  await registerAdminRoutes(app, aiSettings);
   await registerAuthRoutes(app, { cookieSecure: options.cookieSecure ?? false });
   await registerCharacterRoutes(app);
   await registerTemplateRoutes(app);
   await registerProfileRoutes(app);
   await registerSocialRoutes(app);
+  await registerPostRoutes(app);
   await registerInvitationRoutes(app);
   await registerPdfRoutes(app);
   await registerFieldRoutes(app, realtime);
-  await registerAiRoutes(app, realtime);
+  await registerAiRoutes(app, realtime, aiSettings);
   await registerExportRoutes(app);
   await registerRealtimeRoutes(app, realtime, {
     allowedOrigins,

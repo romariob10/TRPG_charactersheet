@@ -6,6 +6,7 @@ import type {
   TemplateComment,
   TemplateSummary,
 } from "@/lib/types";
+import type { SocialPost } from "@mycharacter/contracts";
 
 export async function getCommunityTemplate(
   username: string,
@@ -22,9 +23,7 @@ export async function getCommunityTemplate(
   }
 }
 
-export async function getPublicProfile(
-  username: string,
-): Promise<{
+export async function getPublicProfile(username: string): Promise<{
   profile: PublicProfile;
   templates: TemplateSummary[];
   characters: PublicCharacterSummary[];
@@ -65,4 +64,19 @@ export async function getTemplateComments(
     nextCursor: string | null;
   }>(`/api/templates/${templateId}/comments?limit=20`);
   return data;
+}
+
+export async function getPublicPost(
+  username: string,
+  slug: string,
+): Promise<SocialPost | null> {
+  try {
+    const { data } = await apiFetch<{ post: SocialPost }>(
+      `/api/public/posts/${encodeURIComponent(username)}/${encodeURIComponent(slug)}`,
+    );
+    return data.post;
+  } catch (error) {
+    if (error instanceof ApiClientError && error.status === 404) return null;
+    throw error;
+  }
 }

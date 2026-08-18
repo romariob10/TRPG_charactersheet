@@ -47,6 +47,63 @@
     "newSystem": "New system",
     "people": "Creators in the feed"
   },
+  "Posts": {
+    "startPost": "What is new in your game?",
+    "newPost": "New post",
+    "editorHint": "Use “+” to add text, an image, a character, or a system.",
+    "placeholder": "Tell a story, share a discovery, or show your character…",
+    "close": "Close editor",
+    "blocksHint": "Text, media, and game cards",
+    "publish": "Publish",
+    "publishing": "Publishing…",
+    "publishFailed": "Could not publish the post.",
+    "empty": "Add at least one text block to the post.",
+    "imageCaption": "Image caption",
+    "chooseImage": "Choose an image",
+    "characterBlock": "Character",
+    "systemBlock": "RPG system",
+    "selectCharacter": "Select a public character",
+    "selectSystem": "Select a public system",
+    "noPublicCharacters": "Publish a character first",
+    "noPublicSystems": "Publish and approve a system first",
+    "search": "Search posts",
+    "filter": {
+      "all": "All posts",
+      "articles": "Articles"
+    },
+    "article": "Article",
+    "more": "more",
+    "readFull": "Read full post",
+    "emptyFeed": "The feed is quiet",
+    "emptyFeedText": "Create the first post and embed a character or system.",
+    "reaction": {
+      "like": "Like",
+      "fire": "Fire",
+      "dice": "Critical hit"
+    },
+    "comments": {
+      "loading": "Loading comments…",
+      "empty": "No comments yet. Start the conversation.",
+      "placeholder": "Write a comment…",
+      "toggle": "Show comments",
+      "send": "Send comment",
+      "delete": "Delete comment",
+      "loadFailed": "Could not load comments.",
+      "sendFailed": "Could not send the comment.",
+      "deleteFailed": "Could not delete the comment."
+    },
+    "embed": {
+      "character": "Character sheet",
+      "system": "RPG system",
+      "pages": "{count, plural, one {# page} other {# pages}}",
+      "like": "Like “{title}”",
+      "unlike": "Remove like from “{title}”",
+      "signIn": "Sign in to like"
+    },
+    "signInToReact": "Sign in to react",
+    "backToFeed": "Back to feed",
+    "postBy": "Post by @{username}"
+  },
   "Landing": {
     "eyebrow": "Character sheets your AI can understand",
     "title": "Your character lives inside the PDF",
@@ -413,6 +470,47 @@
     "saved": "Profile updated.",
     "saveFailed": "Could not save the profile",
     "usernameTaken": "This username is already taken.",
-    "validationFailed": "Check the profile field values."
+    "validationFailed": "Check the profile field values.",
+    "openAdmin": "Open admin panel"
+  },
+  "AdminAi": {
+    "eyebrow": "Administration",
+    "title": "AI settings",
+    "subtitle": "One configuration powers both the character assistant and AI-assisted PDF mapping. Changes apply immediately without restarting services.",
+    "sectionTitle": "Provider and models",
+    "sectionText": "The key stays server-side in a private Docker volume and is never returned to the browser.",
+    "provider": "AI provider",
+    "providers": {
+      "qwen": "QwenCloud Token Plan",
+      "openai": "OpenAI",
+      "openrouter": "OpenRouter",
+      "custom": "Custom endpoint"
+    },
+    "providerHelp": {
+      "qwen": "The existing QwenCloud subscription Token Plan API.",
+      "openai": "A direct OpenAI-compatible API connection.",
+      "openrouter": "One key for models from multiple providers.",
+      "custom": "Any OpenAI-compatible endpoint."
+    },
+    "apiKey": "API key",
+    "keyConfigured": "Configured: {hint}",
+    "keyPlaceholder": "Paste a new API key",
+    "keyKeepHint": "Leave this empty to keep the current key.",
+    "keyStorageHint": "A key is required for a new provider and stays on the server.",
+    "keyRequired": "Enter an API key for the new provider.",
+    "advanced": "Models and API address",
+    "baseUrl": "Base URL",
+    "chatModel": "Assistant model",
+    "visionModel": "PDF model",
+    "visionImages": "Model accepts images",
+    "visionImagesHelp": "Disable this if the endpoint only supports text.",
+    "save": "Save settings",
+    "saving": "Saving…",
+    "saved": "AI settings were saved and are already active.",
+    "saveFailed": "Could not save AI settings.",
+    "test": "Test connection",
+    "testing": "Testing…",
+    "testSuccess": "Connection works and the model can call tools.",
+    "testFailed": "The provider failed the connection test."
   }
 }

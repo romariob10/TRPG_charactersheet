@@ -1,4 +1,4 @@
-import type { ReadStream } from "node:fs";
+import type { Readable } from "node:stream";
 
 export interface ObjectStat {
   size: number;
@@ -7,7 +7,7 @@ export interface ObjectStat {
 
 export interface OpenedObject extends ObjectStat {
   path: string;
-  stream: ReadStream;
+  stream: Readable;
 }
 
 export interface ObjectRange {

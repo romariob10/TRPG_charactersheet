@@ -1,8 +1,5 @@
 import multipart from "@fastify/multipart";
-import {
-  FilesystemStorage,
-  type ObjectStorage,
-} from "@mycharacter/storage";
+import { createConfiguredStorage, type ObjectStorage } from "@mycharacter/storage";
 import "fastify";
 import type { FastifyInstance } from "fastify";
 
@@ -24,7 +21,7 @@ export async function registerStorage(
 ): Promise<void> {
   const storage =
     options.storage ??
-    new FilesystemStorage(options.storageRoot ?? "/var/lib/mycharacter/pdfs");
+    createConfiguredStorage(process.env, options.storageRoot);
   app.decorate("storage", storage);
   await app.register(multipart, {
     limits: {
