@@ -69,3 +69,13 @@
 - Checks passed: `apps/api` typecheck, `apps/web` typecheck and vitest (28 passed).
 - Manual scenarios passed: Search and filter users by role, assign roles with last-admin guard, revoke user sessions with audit event generation.
 - Next phase: Phase 5 — Content Moderation and Moderation Queue.
+
+## Phase 5 — Content Moderation and Moderation Queue
+- Status: verified
+- Branch: `codex/feat-content-moderation`
+- Commit: `feat(moderation): add user report pipeline and moderation queue`
+- Implemented: `content_reports` PostgreSQL table with indexes, `@mycharacter/contracts` moderation schemas and contracts, `ModerationService` with duplicate report rate limiting and cascading content action enforcement (posts, comments, characters, templates), `POST /api/reports`, `GET /api/admin/reports`, and `PUT /api/admin/reports/:id/resolve` endpoints, integrated 3-dots post report action with API, created `AdminReportsTable` in `/dashboard/admin/reports` with tabbed queues (`pending`, `resolved`, `dismissed`, `all`) and direct resolution actions, with audit logging and full RU/EN localization.
+- Migrations: `202608180007_content_reports.ts`.
+- Checks passed: `moderation.test.ts` unit test, `apps/api` typecheck, `apps/web` vitest (28 passed).
+- Manual scenarios passed: Report creation from feed, duplicate prevention, queue categorization and resolution with audit log recording.
+- Next phase: Phase 6 — Content State Management and Lifecycle.

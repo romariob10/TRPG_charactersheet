@@ -6,6 +6,7 @@ import {
   Activity,
   Cpu,
   LayoutDashboard,
+  ShieldAlert,
   Sparkles,
   Users,
 } from "lucide-react";
@@ -22,6 +23,12 @@ export function AdminNavTabs({ role }: { role: SiteRole }) {
       href: "/dashboard/admin/overview",
       label: t("overview"),
       icon: LayoutDashboard,
+      roles: ["admin", "moderator"] as SiteRole[],
+    },
+    {
+      href: "/dashboard/admin/reports",
+      label: t("reports"),
+      icon: ShieldAlert,
       roles: ["admin", "moderator"] as SiteRole[],
     },
     {

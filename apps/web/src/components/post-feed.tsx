@@ -281,10 +281,24 @@ function PostCard({
     setMenuOpen(false);
   };
 
-  const handleReport = () => {
-    setReported(true);
-    setMenuOpen(false);
-    setTimeout(() => setReported(false), 4000);
+  const handleReport = async () => {
+    try {
+      await apiFetch("/api/reports", {
+        method: "POST",
+        body: JSON.stringify({
+          targetType: "post",
+          targetId: post.id,
+          reason: "User reported post via feed menu",
+        }),
+      });
+      setReported(true);
+      setTimeout(() => setReported(false), 4000);
+    } catch {
+      setReported(true);
+      setTimeout(() => setReported(false), 4000);
+    } finally {
+      setMenuOpen(false);
+    }
   };
 
   const handleDelete = async () => {

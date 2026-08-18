@@ -35,6 +35,7 @@ import { registerAiRoutes } from "./modules/ai/routes.js";
 import { registerAssetRoutes } from "./modules/assets/routes.js";
 import { registerAdminRoutes } from "./modules/admin/routes.js";
 import { registerAuditRoutes } from "./modules/audit/routes.js";
+import { registerModerationRoutes } from "./modules/moderation/routes.js";
 import { registerPostRoutes } from "./modules/posts/routes.js";
 import { registerAuth } from "./plugins/auth.js";
 import { registerDatabase } from "./plugins/database.js";
@@ -122,6 +123,7 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
   await registerAssetRoutes(app);
   await registerAdminRoutes(app, aiSettings);
   await registerAuditRoutes(app);
+  await registerModerationRoutes(app);
   await registerAuthRoutes(app, { cookieSecure: options.cookieSecure ?? false });
   await registerCharacterRoutes(app);
   await registerTemplateRoutes(app);

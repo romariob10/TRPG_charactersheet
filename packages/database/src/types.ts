@@ -348,6 +348,20 @@ export interface AdminAuditEventsTable {
   created_at: Timestamp;
 }
 
+export interface ContentReportsTable {
+  id: Generated<Uuid>;
+  reporter_id: string | null;
+  target_type: string;
+  target_id: string;
+  reason: string;
+  details: string | null;
+  status: Generated<string>;
+  moderator_id: string | null;
+  resolution_note: string | null;
+  created_at: Timestamp;
+  resolved_at: Timestamp | null;
+}
+
 export interface Database {
   users: UsersTable;
   profiles: ProfilesTable;
@@ -379,4 +393,5 @@ export interface Database {
   post_bookmarks: PostBookmarksTable;
   post_views: PostViewsTable;
   admin_audit_events: AdminAuditEventsTable;
+  content_reports: ContentReportsTable;
 }

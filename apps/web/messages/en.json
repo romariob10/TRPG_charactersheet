@@ -555,6 +555,7 @@
     "subtitle": "User management, content moderation, system audit, and platform settings.",
     "nav": {
       "overview": "Overview",
+      "reports": "Reports",
       "users": "Users",
       "audit": "Audit Log",
       "aiSettings": "AI Settings",
@@ -579,6 +580,27 @@
       "recentAuditTitle": "Recent Administrative Actions",
       "viewFullAudit": "View Full Audit Log",
       "noAuditEvents": "No audit events recorded yet"
+    },
+    "reports": {
+      "title": "Moderation Queue",
+      "subtitle": "User reports on posts, comments, characters and user accounts.",
+      "tabPending": "Pending ({count})",
+      "tabResolved": "Resolved",
+      "tabDismissed": "Dismissed",
+      "tabAll": "All Reports",
+      "reporter": "Reporter",
+      "target": "Content",
+      "reason": "Reason",
+      "details": "Details",
+      "date": "Date",
+      "status": "Status",
+      "actions": "Actions",
+      "resolveAndDelete": "Delete content",
+      "resolveKeep": "Approve / Close",
+      "dismiss": "Dismiss report",
+      "reportResolved": "Report marked as resolved.",
+      "reportDismissed": "Report dismissed.",
+      "empty": "No reports in this category"
     },
     "users": {
       "title": "User Management",

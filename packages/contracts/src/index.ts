@@ -177,3 +177,21 @@ export type {
   AdminUsersListResponse,
   ListAdminUsersQuery,
 } from "./users.js";
+export {
+  contentReportSchema,
+  contentReportsListResponseSchema,
+  createContentReportRequestSchema,
+  listContentReportsQuerySchema,
+  reportStatusSchema,
+  reportTargetTypeSchema,
+  resolveReportRequestSchema,
+} from "./moderation.js";
+export type {
+  ContentReport,
+  ContentReportsListResponse,
+  CreateContentReportRequest,
+  ListContentReportsQuery,
+  ReportStatus,
+  ReportTargetType,
+  ResolveReportRequest,
+} from "./moderation.js";
