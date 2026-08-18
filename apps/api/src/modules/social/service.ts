@@ -1,5 +1,7 @@
 import {
   commentIdSchema,
+  type PublicCharacterSummary,
+  type SocialFeedItem,
   type TemplateComment,
   type TemplateSummary,
 } from "@mycharacter/contracts";
@@ -36,6 +38,126 @@ export class SocialService {
 
   public constructor(database: Kysely<Database>) {
     this.db = database;
+  }
+
+  async listFeed(actorId: string): Promise<SocialFeedItem[]> {
+    const [templates, characters] = await Promise.all([
+      this.publicTemplateQuery(actorId)
+        .orderBy("template.updated_at", "desc")
+        .limit(60)
+        .execute() as Promise<PublicTemplateRow[]>,
+      this.publicCharacterQuery(actorId)
+        .orderBy("character.published_at", "desc")
+        .limit(60)
+        .execute() as Promise<PublicCharacterRow[]>,
+    ]);
+    return [
+      ...templates.map((row): SocialFeedItem => ({
+        kind: "system",
+        id: row.id,
+        slug: row.slug,
+        title: row.title,
+        gameSystem: row.gameSystem,
+        pageCount: row.pageCount,
+        publishedAt: (row.approvedAt ?? row.updatedAt).toISOString(),
+        author: {
+          id: row.ownerId,
+          username: row.authorUsername,
+          displayName: row.authorDisplayName,
+        },
+        likeCount: row.likeCount,
+        commentCount: row.commentCount,
+        likedByMe: (row.likedByMeCount ?? 0) > 0,
+        remixedByMe: row.ownerId === actorId || Boolean(row.subscriberId),
+      })),
+      ...characters.map((row): SocialFeedItem => ({
+        kind: "character",
+        id: row.id,
+        slug: row.slug,
+        title: row.name,
+        gameSystem: row.gameSystem,
+        pageCount: row.pageCount,
+        publishedAt: (row.publishedAt ?? row.updatedAt).toISOString(),
+        author: {
+          id: row.ownerId,
+          username: row.authorUsername,
+          displayName: row.authorDisplayName,
+        },
+        likeCount: row.likeCount,
+        commentCount: 0,
+        likedByMe: row.likedByMeCount > 0,
+        remixedByMe: row.remixCount > 0,
+      })),
+    ]
+      .sort((left, right) => right.publishedAt.localeCompare(left.publishedAt))
+      .slice(0, 80);
+  }
+
+  async likeCharacter(actorId: string, characterId: string): Promise<void> {
+    await this.requirePublicCharacter(characterId);
+    await this.db
+      .insertInto("character_likes")
+      .values({ user_id: actorId, character_id: characterId })
+      .onConflict((oc) => oc.columns(["user_id", "character_id"]).doNothing())
+      .execute();
+  }
+
+  async unlikeCharacter(actorId: string, characterId: string): Promise<void> {
+    await this.requirePublicCharacter(characterId);
+    await this.db
+      .deleteFrom("character_likes")
+      .where("user_id", "=", actorId)
+      .where("character_id", "=", characterId)
+      .execute();
+  }
+
+  async getPublicCharacter(
+    actorId: string | null,
+    username: string,
+    slug: string,
+  ): Promise<PublicCharacterSummary> {
+    const row = (await this.publicCharacterQuery(actorId)
+      .where("author.username", "=", username.toLowerCase())
+      .where("character.slug", "=", slug)
+      .executeTakeFirst()) as PublicCharacterRow | undefined;
+    if (!row) {
+      throw new AppError("CHARACTER_NOT_FOUND", 404, "Character not found.");
+    }
+    return toPublicCharacter(row);
+  }
+
+  async remixCharacter(actorId: string, characterId: string): Promise<{ id: string }> {
+    const source = await this.requirePublicCharacter(characterId);
+    const id = await this.db.transaction().execute(async (trx) => {
+      const created = await trx
+        .insertInto("characters")
+        .values({
+          template_id: source.templateId,
+          owner_id: actorId,
+          name: `${source.name} — remix`,
+          remix_source_id: source.id,
+        })
+        .returning("id")
+        .executeTakeFirstOrThrow();
+      await trx
+        .insertInto("character_values")
+        .columns(["character_id", "field_id", "value", "version", "updated_by"])
+        .expression((eb) =>
+          eb
+            .selectFrom("character_values")
+            .select([
+              eb.val(created.id).as("character_id"),
+              "field_id",
+              "value",
+              eb.val(0).as("version"),
+              eb.val(actorId).as("updated_by"),
+            ])
+            .where("character_id", "=", characterId),
+        )
+        .execute();
+      return created.id;
+    });
+    return { id };
   }
 
   async like(actorId: string, templateId: string): Promise<void> {
@@ -195,6 +317,60 @@ export class SocialService {
     }
   }
 
+  private async requirePublicCharacter(characterId: string): Promise<PublicCharacterRow> {
+    const row = (await this.publicCharacterQuery(null)
+      .where("character.id", "=", characterId)
+      .executeTakeFirst()) as PublicCharacterRow | undefined;
+    if (!row) {
+      throw new AppError("CHARACTER_NOT_FOUND", 404, "Character not found.");
+    }
+    return row;
+  }
+
+  private publicCharacterQuery(actorId: string | null) {
+    const joinActorId = actorId ?? NO_ACTOR_UUID;
+    return this.db
+      .selectFrom("characters as character")
+      .innerJoin("profiles as author", "author.id", "character.owner_id")
+      .innerJoin("pdf_templates as template", "template.id", "character.template_id")
+      .select([
+        "character.id",
+        "character.template_id as templateId",
+        "character.owner_id as ownerId",
+        "character.name",
+        "character.slug",
+        "character.updated_at as updatedAt",
+        "character.published_at as publishedAt",
+        "template.game_system as gameSystem",
+        "template.page_count as pageCount",
+        "author.username as authorUsername",
+        "author.display_name as authorDisplayName",
+        (eb) =>
+          eb
+            .selectFrom("character_likes")
+            .select(sql<number>`count(*)::int`.as("count"))
+            .whereRef("character_likes.character_id", "=", "character.id")
+            .as("likeCount"),
+        (eb) =>
+          eb
+            .selectFrom("character_likes")
+            .select(sql<number>`count(*)::int`.as("count"))
+            .whereRef("character_likes.character_id", "=", "character.id")
+            .where("character_likes.user_id", "=", joinActorId)
+            .as("likedByMeCount"),
+        (eb) =>
+          eb
+            .selectFrom("characters as remix")
+            .select(sql<number>`count(*)::int`.as("count"))
+            .whereRef("remix.remix_source_id", "=", "character.id")
+            .where("remix.owner_id", "=", joinActorId)
+            .where("remix.status", "=", "active")
+            .as("remixCount"),
+      ])
+      .where("character.status", "=", "active")
+      .where("character.is_public", "=", true);
+  }
+
   private publicTemplateQuery(actorId: string | null) {
     const joinActorId = actorId ?? NO_ACTOR_UUID;
     return this.db
@@ -245,6 +421,42 @@ export class SocialService {
       .where("template.catalog_approved_at", "is not", null)
       .where("template.catalog_status", "in", ["ready", "partial"]);
   }
+}
+
+interface PublicCharacterRow {
+  id: string;
+  templateId: string;
+  ownerId: string;
+  name: string;
+  slug: string;
+  updatedAt: Date;
+  publishedAt: Date | null;
+  gameSystem: string | null;
+  pageCount: number;
+  authorUsername: string;
+  authorDisplayName: string | null;
+  likeCount: number;
+  likedByMeCount: number;
+  remixCount: number;
+}
+
+function toPublicCharacter(row: PublicCharacterRow): PublicCharacterSummary {
+  return {
+    id: row.id,
+    name: row.name,
+    slug: row.slug,
+    gameSystem: row.gameSystem,
+    pageCount: row.pageCount,
+    updatedAt: row.updatedAt.toISOString(),
+    publishedAt: (row.publishedAt ?? row.updatedAt).toISOString(),
+    author: {
+      id: row.ownerId,
+      username: row.authorUsername,
+      displayName: row.authorDisplayName,
+    },
+    likeCount: row.likeCount,
+    likedByMe: row.likedByMeCount > 0,
+  };
 }
 
 function toSummary(row: PublicTemplateRow): TemplateSummary {

@@ -1,6 +1,7 @@
 import type { Database } from "@mycharacter/database";
 import type { CharacterField, TemplateField } from "@mycharacter/contracts";
 import type { Kysely, Transaction } from "kysely";
+import { sql } from "kysely";
 import { loadTemplateFields } from "../templates/repository.js";
 
 export type CharacterDatabase = Kysely<Database> | Transaction<Database>;
@@ -10,12 +11,18 @@ export interface CharacterAccessRow {
   templateId: string;
   ownerId: string;
   name: string;
+  slug: string;
+  isPublic: boolean;
+  publishedAt: Date | null;
   status: "active" | "trashed";
   revision: string;
   deletedAt: Date | null;
   updatedAt: Date;
   catalogStatus: "pending" | "processing" | "ready" | "partial" | "failed";
   pageCount: number;
+  gameSystem: string | null;
+  likeCount: number;
+  likedByMeCount: number;
   memberRole: "editor" | null;
 }
 
@@ -37,13 +44,30 @@ export async function findCharacterAccess(
       "character.template_id as templateId",
       "character.owner_id as ownerId",
       "character.name",
+      "character.slug",
+      "character.is_public as isPublic",
+      "character.published_at as publishedAt",
       "character.status",
       "character.revision",
       "character.deleted_at as deletedAt",
       "character.updated_at as updatedAt",
       "template.catalog_status as catalogStatus",
       "template.page_count as pageCount",
+      "template.game_system as gameSystem",
       "member.role as memberRole",
+      (eb) =>
+        eb
+          .selectFrom("character_likes")
+          .select(sql<number>`count(*)::int`.as("count"))
+          .whereRef("character_likes.character_id", "=", "character.id")
+          .as("likeCount"),
+      (eb) =>
+        eb
+          .selectFrom("character_likes")
+          .select(sql<number>`count(*)::int`.as("count"))
+          .whereRef("character_likes.character_id", "=", "character.id")
+          .where("character_likes.user_id", "=", actorId)
+          .as("likedByMeCount"),
     ])
     .where("character.id", "=", characterId)
     .executeTakeFirst();
@@ -67,13 +91,30 @@ export async function listCharacters(
       "character.template_id as templateId",
       "character.owner_id as ownerId",
       "character.name",
+      "character.slug",
+      "character.is_public as isPublic",
+      "character.published_at as publishedAt",
       "character.status",
       "character.revision",
       "character.deleted_at as deletedAt",
       "character.updated_at as updatedAt",
       "template.catalog_status as catalogStatus",
       "template.page_count as pageCount",
+      "template.game_system as gameSystem",
       "member.role as memberRole",
+      (eb) =>
+        eb
+          .selectFrom("character_likes")
+          .select(sql<number>`count(*)::int`.as("count"))
+          .whereRef("character_likes.character_id", "=", "character.id")
+          .as("likeCount"),
+      (eb) =>
+        eb
+          .selectFrom("character_likes")
+          .select(sql<number>`count(*)::int`.as("count"))
+          .whereRef("character_likes.character_id", "=", "character.id")
+          .where("character_likes.user_id", "=", actorId)
+          .as("likedByMeCount"),
     ])
     .where((eb) =>
       eb.or([

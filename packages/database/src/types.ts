@@ -144,11 +144,27 @@ export interface CharactersTable {
   template_id: string;
   owner_id: string;
   name: string;
+  slug: Generated<string>;
+  is_public: Generated<boolean>;
+  published_at: ColumnType<Date | null, Date | string | null | undefined, Date | string | null>;
+  remix_source_id: Generated<string | null>;
   status: CharacterStatus;
   revision: string;
   deleted_at: Timestamp | null;
   created_at: Timestamp;
   updated_at: Timestamp;
+}
+
+export interface CharacterLikesTable {
+  user_id: string;
+  character_id: string;
+  created_at: Timestamp;
+}
+
+export interface ProfileFollowsTable {
+  follower_id: string;
+  following_id: string;
+  created_at: Timestamp;
 }
 
 export interface CharacterMembersTable {
@@ -259,6 +275,8 @@ export interface Database {
   template_likes: TemplateLikesTable;
   template_comments: TemplateCommentsTable;
   characters: CharactersTable;
+  character_likes: CharacterLikesTable;
+  profile_follows: ProfileFollowsTable;
   character_members: CharacterMembersTable;
   character_values: CharacterValuesTable;
   character_mutations: CharacterMutationsTable;

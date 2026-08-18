@@ -3,7 +3,7 @@ import Link from "next/link";
 import { CheckCircle2, FileText, Globe2 } from "lucide-react";
 import { notFound } from "next/navigation";
 import { getLocale, getTranslations } from "next-intl/server";
-import { CommunityAddButton } from "@/components/community-add-button";
+import { RemixButton } from "@/components/remix-button";
 import { LikeButton } from "@/components/social-like-button";
 import { SiteHeader } from "@/components/site-header";
 import { TemplateComments } from "@/components/template-comments";
@@ -32,11 +32,13 @@ export async function generateMetadata({
   if (!template) {
     return { title: "MyCharacter" };
   }
+  const title = `${template.title} · @${template.author?.username ?? username}`;
+  const description = template.gameSystem ?? `${template.title} — community template on MyCharacter`;
   return {
-    title: `${template.title} · @${template.author?.username ?? username}`,
-    description:
-      template.gameSystem ??
-      `${template.title} — community template on MyCharacter`,
+    title,
+    description,
+    openGraph: { title, description, images: [] },
+    twitter: { title, description, images: [] },
   };
 }
 
@@ -149,20 +151,17 @@ export default async function CommunityTemplatePage({
               </div>
               <div className="mt-4 border-t pt-4">
                 {session && template.author?.id !== myProfile?.id ? (
-                  <CommunityAddButton
-                    templateId={template.id}
-                    initialSubscribed={Boolean(template.subscribed)}
-                    addLabel={tSystems("addToMine")}
-                    removeLabel={tSystems("removeFromMine")}
-                    pendingLabel={tSystems("subscriptionPending")}
-                    failedLabel={tSystems("subscribeFailed")}
+                  <RemixButton
+                    kind="system"
+                    itemId={template.id}
+                    initialRemixed={Boolean(template.subscribed)}
                   />
                 ) : !session ? (
                   <Link
                     href="/auth/sign-in"
                     className={buttonClassName({ variant: "primary", size: "md" }) + " w-full"}
                   >
-                    {tSystems("addToMine")}
+                    {tSystems("remix")}
                   </Link>
                 ) : null}
               </div>

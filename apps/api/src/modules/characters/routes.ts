@@ -38,7 +38,7 @@ export async function registerCharacterRoutes(app: FastifyInstance): Promise<voi
     const actor = requireActor(request);
     const id = parseId(request.params);
     const input = parse(updateCharacterRequestSchema, request.body);
-    return service.rename(actor.userId, id, input.name);
+    return service.update(actor.userId, id, input);
   });
 
   app.post("/api/characters/:id/clone", async (request, reply) => {

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import {
   Copy,
+  Globe2,
   FileText,
   MoreHorizontal,
   RotateCcw,
@@ -16,6 +17,7 @@ import {
 import { buttonClassName } from "@/components/ui/button";
 import { PermanentDeleteForm } from "@/components/permanent-delete-form";
 import { RenameCharacterForm } from "@/components/rename-character-form";
+import { CharacterVisibilityButton } from "@/components/character-visibility-button";
 import { cn, formatRelativeDate } from "@/lib/utils";
 
 export function CharacterCard({
@@ -70,6 +72,10 @@ export function CharacterCard({
                     {t("clone")}
                   </button>
                 </form>
+                <CharacterVisibilityButton
+                  characterId={character.id}
+                  initialPublic={Boolean(character.isPublic)}
+                />
                 <form action={trashCharacter}>
                   <input
                     type="hidden"
@@ -109,6 +115,11 @@ export function CharacterCard({
         {character.name}
       </h2>
       <div className="pointer-events-none relative z-10 mt-2 flex flex-wrap items-center gap-2 text-xs">
+        {character.isPublic && (
+          <span className="inline-flex items-center gap-1 rounded-full bg-[var(--brand-soft)] px-2.5 py-1 font-semibold text-[var(--brand)]">
+            <Globe2 className="size-3" /> {t("inFeed")}
+          </span>
+        )}
         <span className="rounded-full bg-black/5 px-2.5 py-1">
           {t(character.role)}
         </span>

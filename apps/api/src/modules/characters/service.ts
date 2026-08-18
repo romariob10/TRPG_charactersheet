@@ -3,6 +3,7 @@ import type {
   CharacterEditorData,
   CharacterSummary,
   CreateCharacterRequest,
+  UpdateCharacterRequest,
 } from "@mycharacter/contracts";
 import type { Database } from "@mycharacter/database";
 import type { Kysely } from "kysely";
@@ -121,11 +122,22 @@ export class CharacterService {
     return this.get(actorId, characterId);
   }
 
-  async rename(actorId: string, characterId: string, name: string): Promise<CharacterSummary> {
-    await this.authorizeCharacter(actorId, characterId, "edit");
+  async update(actorId: string, characterId: string, input: UpdateCharacterRequest): Promise<CharacterSummary> {
+    const character = await this.authorizeCharacter(actorId, characterId, "edit");
+    if (input.isPublic !== undefined && character.ownerId !== actorId) {
+      throw forbidden();
+    }
     await this.db
       .updateTable("characters")
-      .set({ name })
+      .set({
+        ...(input.name === undefined ? {} : { name: input.name }),
+        ...(input.isPublic === undefined
+          ? {}
+          : {
+              is_public: input.isPublic,
+              published_at: input.isPublic ? character.publishedAt ?? new Date() : null,
+            }),
+      })
       .where("id", "=", characterId)
       .execute();
     return this.get(actorId, characterId);
@@ -171,7 +183,7 @@ export class CharacterService {
     await this.authorizeCharacter(actorId, characterId, "trash");
     await this.db
       .updateTable("characters")
-      .set({ status: "trashed", deleted_at: new Date() })
+      .set({ status: "trashed", deleted_at: new Date(), is_public: false, published_at: null })
       .where("id", "=", characterId)
       .execute();
     return this.get(actorId, characterId);
@@ -287,6 +299,12 @@ export class CharacterService {
     return {
       id: row.id,
       name: row.name,
+      slug: row.slug,
+      isPublic: row.isPublic,
+      publishedAt: row.publishedAt?.toISOString() ?? null,
+      gameSystem: row.gameSystem,
+      likeCount: row.likeCount,
+      likedByMe: row.likedByMeCount > 0,
       role: row.ownerId === actorId ? "owner" : "editor",
       revision: Number(row.revision),
       status: row.status,

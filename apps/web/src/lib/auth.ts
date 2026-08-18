@@ -19,7 +19,7 @@ export async function getSession(): Promise<AuthSession | null> {
   }
 }
 
-export function safeRedirectPath(value: string | null | undefined, fallback = "/dashboard") {
+export function safeRedirectPath(value: string | null | undefined, fallback = "/dashboard/feed") {
   if (!value || !value.startsWith("/")) return fallback;
   try {
     const decoded = decodeURIComponent(value);
