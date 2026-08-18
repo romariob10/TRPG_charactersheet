@@ -6,6 +6,7 @@ import { getLocale, getTranslations } from "next-intl/server";
 import { FollowButton } from "@/components/follow-button";
 import { LikeButton } from "@/components/social-like-button";
 import { RemixButton } from "@/components/remix-button";
+import { SendMessageButton } from "@/components/send-message-button";
 import { SiteHeader } from "@/components/site-header";
 import { buttonClassName } from "@/components/ui/button";
 import { getSession } from "@/lib/auth";
@@ -53,7 +54,10 @@ export default async function PublicProfilePage({ params }: { params: Promise<Ro
                 {ownProfile ? (
                   <Link href="/dashboard/profile" className={buttonClassName({ variant: "secondary", size: "sm" })}><Pencil className="size-4" /> {t("edit")}</Link>
                 ) : session ? (
-                  <FollowButton username={profile.username} initialFollowing={profile.followedByMe} />
+                  <div className="flex items-center gap-2">
+                    <SendMessageButton recipientUsername={profile.username} />
+                    <FollowButton username={profile.username} initialFollowing={profile.followedByMe} />
+                  </div>
                 ) : (
                   <Link href="/auth/sign-in" className={buttonClassName({ size: "sm" })}>{t("follow")}</Link>
                 )}

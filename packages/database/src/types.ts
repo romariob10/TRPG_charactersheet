@@ -396,6 +396,23 @@ export interface UserNotificationsTable {
   created_at: Timestamp;
 }
 
+export interface DirectConversationsTable {
+  id: Generated<Uuid>;
+  participant_one_id: string;
+  participant_two_id: string;
+  last_message_at: Timestamp;
+  created_at: Timestamp;
+}
+
+export interface DirectMessagesTable {
+  id: Generated<Uuid>;
+  conversation_id: string;
+  sender_id: string;
+  body: string;
+  read_at: Timestamp | null;
+  created_at: Timestamp;
+}
+
 export interface Database {
   users: UsersTable;
   profiles: ProfilesTable;
@@ -430,4 +447,6 @@ export interface Database {
   content_reports: ContentReportsTable;
   user_restrictions: UserRestrictionsTable;
   user_notifications: UserNotificationsTable;
+  direct_conversations: DirectConversationsTable;
+  direct_messages: DirectMessagesTable;
 }

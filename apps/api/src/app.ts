@@ -36,6 +36,7 @@ import { registerAssetRoutes } from "./modules/assets/routes.js";
 import { registerAdminRoutes } from "./modules/admin/routes.js";
 import { registerAuditRoutes } from "./modules/audit/routes.js";
 import { registerModerationRoutes } from "./modules/moderation/routes.js";
+import { registerDirectMessageRoutes } from "./modules/messages/routes.js";
 import { registerNotificationRoutes } from "./modules/notifications/routes.js";
 import { registerPostRoutes } from "./modules/posts/routes.js";
 import { registerSearchRoutes } from "./modules/search/routes.js";
@@ -134,6 +135,7 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
   await registerPostRoutes(app);
   await registerSearchRoutes(app);
   await registerNotificationRoutes(app);
+  await registerDirectMessageRoutes(app);
   await registerInvitationRoutes(app);
   await registerPdfRoutes(app);
   await registerFieldRoutes(app, realtime);

@@ -137,3 +137,13 @@
 - Checks passed: `analytics.test.ts` unit test, `apps/api` typecheck, `apps/web` vitest (28 passed).
 - Manual scenarios passed: Analytics tab access, 7d/30d/90d period switching, metric aggregation display and bar hover tooltips.
 - Next phase: Phase 12 — Direct Messaging & Realtime Chat Foundations.
+
+## Phase 12 — Direct Messaging & Conversations
+- Status: verified
+- Branch: `codex/feat-direct-messages`
+- Commit: `feat(messages): add private direct messaging, conversation threads, and live chat UI`
+- Implemented: `direct_conversations` and `direct_messages` PostgreSQL tables with unique participant constraints and composite indexes, `@mycharacter/contracts` direct message schemas and types, `DirectMessageService` supporting normalized participant conversations, message sending with moderation enforcement and notifications, conversation listing with unread counts, and message history retrieval with auto-marking as read, added `GET /api/messages/conversations`, `POST /api/messages/conversations`, `GET /api/messages/conversations/:id`, and `POST /api/messages/conversations/:id` API routes, added Messages tab to `AppTabs`, built dual-pane responsive `DirectMessagesView` in `/dashboard/messages`, and added `SendMessageButton` on public user profiles (`/users/[username]`) with full RU/EN localization.
+- Migrations: `202608180012_direct_messages.ts`.
+- Checks passed: `direct-messages.test.ts` unit tests (2 tests), `apps/api` typecheck, `apps/web` vitest (28 passed).
+- Manual scenarios passed: Starting conversation from public profile, dual-pane conversation list and chat thread, sending messages, auto-scroll and polling refresh.
+- Next phase: Phase 13 — RPG System Catalog, Tagging, Rating & Review Engine.

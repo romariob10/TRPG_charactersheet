@@ -241,3 +241,17 @@ export type {
   AnalyticsSummary,
   TimeSeriesPoint,
 } from "./analytics.js";
+export {
+  directConversationSummarySchema,
+  directMessageSchema,
+  listConversationsResponseSchema,
+  sendMessageRequestSchema,
+  startConversationRequestSchema,
+} from "./direct-messages.js";
+export type {
+  DirectConversationSummary,
+  DirectMessage,
+  ListConversationsResponse,
+  SendMessageRequest,
+  StartConversationRequest,
+} from "./direct-messages.js";
