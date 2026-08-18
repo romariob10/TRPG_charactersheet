@@ -580,6 +580,26 @@
       "viewFullAudit": "View Full Audit Log",
       "noAuditEvents": "No audit events recorded yet"
     },
+    "users": {
+      "title": "User Management",
+      "subtitle": "Directory of registered accounts, site role assignment, and session control.",
+      "searchPlaceholder": "Search by username, display name or email...",
+      "filterByRole": "All roles",
+      "user": "User",
+      "email": "Email",
+      "role": "Role",
+      "joined": "Joined",
+      "activity": "Content",
+      "actions": "Actions",
+      "changeRole": "Change role",
+      "revokeSessions": "Revoke sessions",
+      "sessionsRevoked": "All active user sessions were revoked.",
+      "roleUpdated": "User role updated successfully.",
+      "roleUpdateFailed": "Failed to update role",
+      "lastAdminWarning": "Cannot demote the last remaining administrator.",
+      "confirmRevoke": "Are you sure you want to revoke all active sessions for this user?",
+      "empty": "No users found"
+    },
     "audit": {
       "title": "Audit Log",
       "subtitle": "Immutable log of administrative actions and moderation decisions.",

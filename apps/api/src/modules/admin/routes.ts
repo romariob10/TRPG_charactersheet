@@ -1,7 +1,10 @@
 import {
+  listAdminUsersQuerySchema,
   updateAiSettingsRequestSchema,
   updateUserRoleRequestSchema,
+  type AdminUserSummary,
   type AiSettingsResponse,
+  type SiteRole,
 } from "@mycharacter/contracts";
 import {
   aiKeyHint,
@@ -17,6 +20,16 @@ import { requireAdmin, requireModerator } from "../../plugins/auth.js";
 import { AuditService } from "../audit/service.js";
 import { ProfileService } from "../profiles/service.js";
 import { sql } from "kysely";
+
+function maskEmail(email: string): string {
+  const parts = email.split("@");
+  if (parts.length !== 2) return "***";
+  const name = parts[0];
+  const domain = parts[1];
+  const maskedName =
+    name.length <= 2 ? `${name[0]}*` : `${name[0]}***${name[name.length - 1]}`;
+  return `${maskedName}@${domain}`;
+}
 
 export async function registerAdminRoutes(
   app: FastifyInstance,
@@ -109,6 +122,123 @@ export async function registerAdminRoutes(
     };
   });
 
+  app.get("/api/admin/users", async (request, reply) => {
+    const actor = await requireModerator(request);
+    reply.header("Cache-Control", "private, no-store");
+
+    const query = listAdminUsersQuerySchema.safeParse(request.query);
+    if (!query.success) {
+      throw new AppError("VALIDATION_FAILED", 400, "Invalid query parameters.");
+    }
+
+    const limit = Math.min(Math.max(query.data.limit ?? 50, 1), 100);
+
+    let baseQuery = app.db
+      .selectFrom("users")
+      .innerJoin("profiles", "profiles.id", "users.id")
+      .select([
+        "users.id",
+        "profiles.username",
+        "profiles.display_name as displayName",
+        "users.email",
+        "profiles.site_role as siteRole",
+        "profiles.is_admin as isAdmin",
+        "users.created_at as joinedAt",
+        (eb) =>
+          eb
+            .selectFrom("sessions")
+            .select("sessions.last_used_at")
+            .whereRef("sessions.user_id", "=", "users.id")
+            .orderBy("sessions.last_used_at", "desc")
+            .limit(1)
+            .as("lastUsedAt"),
+        (eb) =>
+          eb
+            .selectFrom("posts")
+            .select(sql<number>`count(*)::int`.as("count"))
+            .whereRef("posts.author_id", "=", "users.id")
+            .as("postsCount"),
+        (eb) =>
+          eb
+            .selectFrom("characters")
+            .select(sql<number>`count(*)::int`.as("count"))
+            .whereRef("characters.owner_id", "=", "users.id")
+            .where("characters.status", "=", "active")
+            .as("charactersCount"),
+        (eb) =>
+          eb
+            .selectFrom("pdf_templates")
+            .select(sql<number>`count(*)::int`.as("count"))
+            .whereRef("pdf_templates.owner_id", "=", "users.id")
+            .where("pdf_templates.deleted_at", "is", null)
+            .as("templatesCount"),
+      ])
+      .orderBy("users.created_at", "desc")
+      .limit(limit + 1);
+
+    if (query.data.search) {
+      const s = `%${query.data.search.trim().toLowerCase()}%`;
+      baseQuery = baseQuery.where((eb) =>
+        eb.or([
+          eb(sql`lower(profiles.username)`, "like", s),
+          eb(sql`lower(profiles.display_name)`, "like", s),
+          eb(sql`lower(users.email)`, "like", s),
+        ]),
+      );
+    }
+
+    if (query.data.role) {
+      baseQuery = baseQuery.where("profiles.site_role", "=", query.data.role);
+    }
+
+    if (query.data.cursor) {
+      baseQuery = baseQuery.where(
+        "users.created_at",
+        "<",
+        new Date(query.data.cursor),
+      );
+    }
+
+    const [rows, totalResult] = await Promise.all([
+      baseQuery.execute(),
+      app.db
+        .selectFrom("users")
+        .innerJoin("profiles", "profiles.id", "users.id")
+        .select(sql<number>`count(*)::int`.as("count"))
+        .executeTakeFirst(),
+    ]);
+
+    const hasNext = rows.length > limit;
+    const items = hasNext ? rows.slice(0, limit) : rows;
+    const nextCursor =
+      hasNext && items.length > 0
+        ? items[items.length - 1].joinedAt.toISOString()
+        : null;
+
+    const users: AdminUserSummary[] = items.map((row) => ({
+      id: String(row.id),
+      username: row.username,
+      displayName: row.displayName,
+      email: actor.role === "admin" ? row.email : maskEmail(row.email),
+      siteRole:
+        (row.siteRole as SiteRole) ?? (row.isAdmin ? "admin" : "user"),
+      status: "active",
+      joinedAt: row.joinedAt.toISOString(),
+      lastUsedAt: row.lastUsedAt
+        ? new Date(row.lastUsedAt).toISOString()
+        : null,
+      postsCount: row.postsCount ?? 0,
+      charactersCount: row.charactersCount ?? 0,
+      templatesCount: row.templatesCount ?? 0,
+    }));
+
+    return {
+      users,
+      nextCursor,
+      total: totalResult?.count ?? 0,
+    };
+  });
+
   app.put("/api/admin/users/:id/role", async (request) => {
     const actor = await requireAdmin(request, app.db);
     const userId = (request.params as { id: string }).id;
@@ -121,6 +251,27 @@ export async function registerAdminRoutes(
       );
     }
     return profileService.updateUserRole(actor, userId, parsed.data.role);
+  });
+
+  app.post("/api/admin/users/:id/revoke-sessions", async (request) => {
+    const actor = await requireAdmin(request, app.db);
+    const targetUserId = (request.params as { id: string }).id;
+
+    await app.db
+      .deleteFrom("sessions")
+      .where("user_id", "=", targetUserId)
+      .execute();
+
+    await new AuditService(app.db).log({
+      actorId: actor.userId,
+      actorRole: actor.role,
+      action: "revoke_user_sessions",
+      targetType: "user",
+      targetId: targetUserId,
+      metadata: { targetUserId },
+    });
+
+    return { success: true };
   });
 
   app.get("/api/admin/ai-settings", async (request, reply) => {

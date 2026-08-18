@@ -167,3 +167,13 @@ export type {
   AdminAuditEventsResponse,
   ListAdminAuditEventsQuery,
 } from "./audit.js";
+export {
+  adminUserSummarySchema,
+  adminUsersListResponseSchema,
+  listAdminUsersQuerySchema,
+} from "./users.js";
+export type {
+  AdminUserSummary,
+  AdminUsersListResponse,
+  ListAdminUsersQuery,
+} from "./users.js";

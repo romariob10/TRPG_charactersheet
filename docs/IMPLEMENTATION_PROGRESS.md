@@ -60,3 +60,12 @@
 - Checks passed: `apps/api` typecheck, `apps/web` vitest (28 passed).
 - Manual scenarios passed: Admin and Moderator navigation, statistics overview display, interactive audit filtering, system health diagnostic view.
 - Next phase: Phase 4 — User and Social Profile Administration.
+
+## Phase 4 — User and Social Profile Administration
+- Status: verified
+- Branch: `codex/feat-user-management`
+- Commit: `feat(admin): add user management table and session control`
+- Implemented: `GET /api/admin/users` with searching across usernames/display names/emails, role filtering, joined content activity counts (posts, characters, systems), `POST /api/admin/users/:id/revoke-sessions` with audit logging, role-based email masking for moderators, interactive `AdminUsersTable` in web dashboard with inline role change select, session revocation, and full localization in RU & EN.
+- Checks passed: `apps/api` typecheck, `apps/web` typecheck and vitest (28 passed).
+- Manual scenarios passed: Search and filter users by role, assign roles with last-admin guard, revoke user sessions with audit event generation.
+- Next phase: Phase 5 — Content Moderation and Moderation Queue.
