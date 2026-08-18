@@ -207,3 +207,15 @@ export type {
   UnbanUserRequest,
   UserRestriction,
 } from "./user-moderation.js";
+export {
+  searchItemSchema,
+  searchQuerySchema,
+  searchResponseSchema,
+  searchTypeSchema,
+} from "./search.js";
+export type {
+  SearchItem,
+  SearchQuery,
+  SearchResponse,
+  SearchType,
+} from "./search.js";

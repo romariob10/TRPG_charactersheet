@@ -17,6 +17,7 @@
     "following": "Following",
     "characters": "Characters",
     "systems": "TTRPG systems",
+    "search": "Search",
     "language": "Русский",
     "languageRu": "RU",
     "languageEn": "EN",
@@ -650,5 +651,19 @@
       "statusOk": "Healthy",
       "statusWarning": "Action Required"
     }
+  },
+  "Search": {
+    "title": "Universe Search",
+    "subtitle": "Discover posts, character sheets, game systems, and community creators.",
+    "placeholder": "Search posts, characters, systems, creators…",
+    "tabAll": "All",
+    "tabPosts": "Posts",
+    "tabCharacters": "Characters",
+    "tabTemplates": "Systems",
+    "tabUsers": "Creators",
+    "empty": "No results found for \"{query}\"",
+    "emptyHint": "Try changing keywords or selecting another category.",
+    "startPrompt": "Enter at least 1 character to search",
+    "foundResults": "Found results: {count}"
   }
 }

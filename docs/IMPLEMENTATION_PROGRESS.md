@@ -99,3 +99,12 @@
 - Checks passed: `user-moderation.test.ts` unit tests (2 tests), `apps/api` typecheck, `apps/web` vitest (28 passed).
 - Manual scenarios passed: Admin protection against moderator bans, active posting and commenting restriction enforcement, user unbanning with audit trail.
 - Next phase: Phase 8 — Content Search & Discovery Foundation.
+
+## Phase 8 — Content Search & Discovery Foundation
+- Status: verified
+- Branch: `codex/feat-search-discovery`
+- Commit: `feat(search): add unified search endpoint and discovery interface`
+- Implemented: `@mycharacter/contracts` search contracts (`SearchQuery`, `SearchItem`, `SearchResponse`), `SearchService` supporting multi-entity discovery across posts, characters, RPG templates, and community profiles with relevance sorting and privacy safeguards, `GET /api/search` API route with caching headers, interactive `SearchView` at `/dashboard/search` with category filtering tabs and debounced query execution, and updated navigation tabs with Search shortcut.
+- Checks passed: `search.test.ts` unit tests, `apps/api` typecheck, `apps/web` vitest (28 passed).
+- Manual scenarios passed: Search query across all entities, category tab switching, empty states, and debounced responsive fetching.
+- Next phase: Phase 9 — Granular Profile Privacy & Security Settings.

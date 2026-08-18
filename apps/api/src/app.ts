@@ -37,6 +37,7 @@ import { registerAdminRoutes } from "./modules/admin/routes.js";
 import { registerAuditRoutes } from "./modules/audit/routes.js";
 import { registerModerationRoutes } from "./modules/moderation/routes.js";
 import { registerPostRoutes } from "./modules/posts/routes.js";
+import { registerSearchRoutes } from "./modules/search/routes.js";
 import { registerAuth } from "./plugins/auth.js";
 import { registerDatabase } from "./plugins/database.js";
 import { registerStorage } from "./plugins/storage.js";
@@ -130,6 +131,7 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
   await registerProfileRoutes(app);
   await registerSocialRoutes(app);
   await registerPostRoutes(app);
+  await registerSearchRoutes(app);
   await registerInvitationRoutes(app);
   await registerPdfRoutes(app);
   await registerFieldRoutes(app, realtime);
