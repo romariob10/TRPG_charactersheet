@@ -89,3 +89,13 @@
 - Checks passed: `content-lifecycle.test.ts` unit test, `apps/api` typecheck, `apps/web` vitest (28 passed).
 - Manual scenarios passed: Author soft-delete, feed exclusion of hidden/deleted posts, moderator visibility toggling and post restoration with audit trail.
 - Next phase: Phase 7 — User Moderation Actions (Warn, Restrict, Suspend, Ban).
+
+## Phase 7 — User Moderation Actions (Warn, Restrict, Suspend, Ban)
+- Status: verified
+- Branch: `codex/feat-user-moderation`
+- Commit: `feat(moderation): add user restrictions, suspension and ban pipeline`
+- Implemented: `user_restrictions` PostgreSQL table with indexes, expanded `UserStatus` enum in DB types (`suspended`, `banned`), created `UserModerationService` with active restriction enforcement (`assertCanPost`, `assertCanComment`), admin-protected restriction checks, automated session termination on suspension/ban, added `POST /api/admin/users/:id/moderate`, `POST /api/admin/users/:id/unban`, and `GET /api/admin/users/:id/moderation-history` endpoints, integrated restriction checks in post and comment authoring, added moderation action controls in web user table, and recorded all moderation actions into the audit log.
+- Migrations: `202608180009_user_moderation.ts`.
+- Checks passed: `user-moderation.test.ts` unit tests (2 tests), `apps/api` typecheck, `apps/web` vitest (28 passed).
+- Manual scenarios passed: Admin protection against moderator bans, active posting and commenting restriction enforcement, user unbanning with audit trail.
+- Next phase: Phase 8 — Content Search & Discovery Foundation.

@@ -195,3 +195,15 @@ export type {
   ReportTargetType,
   ResolveReportRequest,
 } from "./moderation.js";
+export {
+  moderateUserRequestSchema,
+  moderationActionSchema,
+  unbanUserRequestSchema,
+  userRestrictionSchema,
+} from "./user-moderation.js";
+export type {
+  ModerateUserRequest,
+  ModerationAction,
+  UnbanUserRequest,
+  UserRestriction,
+} from "./user-moderation.js";

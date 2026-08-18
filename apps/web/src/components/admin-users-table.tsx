@@ -220,20 +220,50 @@ export function AdminUsersTable({
                       {formatRelativeDate(u.joinedAt, locale)}
                     </td>
                     <td className="px-3 py-2.5 text-right">
-                      {currentUserRole === "admin" && (
+                      <div className="flex items-center justify-end gap-1.5">
                         <button
                           type="button"
                           disabled={actionLoadingId === u.id}
-                          onClick={() => handleRevokeSessions(u.id, u.username)}
-                          title={t("revokeSessions")}
-                          className="inline-flex items-center gap-1 rounded-lg border border-[var(--border)] px-2.5 py-1 text-xs font-semibold text-[var(--muted)] hover:bg-rose-50 hover:text-rose-700 hover:border-rose-300"
+                          onClick={async () => {
+                            const reason = window.prompt("Reason for warning / restriction:");
+                            if (!reason) return;
+                            const action = window.prompt("Action (warn, mute_comments, mute_posts, suspend, ban):", "warn");
+                            if (!action) return;
+                            try {
+                              setActionLoadingId(u.id);
+                              await apiFetch(`/api/admin/users/${u.id}/moderate`, {
+                                method: "POST",
+                                body: JSON.stringify({ action, reason }),
+                              });
+                              setFeedback({ type: "success", message: `Moderation action "${action}" applied.` });
+                            } catch (err: any) {
+                              setFeedback({ type: "error", message: err.message || "Failed to moderate user" });
+                            } finally {
+                              setActionLoadingId(null);
+                            }
+                          }}
+                          title="Moderate user"
+                          className="inline-flex items-center gap-1 rounded-lg border border-[var(--border)] px-2.5 py-1 text-xs font-semibold text-[var(--muted)] hover:bg-amber-50 hover:text-amber-700 hover:border-amber-300"
                         >
-                          <KeyRound className="size-3" />
-                          <span className="hidden sm:inline">
-                            {t("revokeSessions")}
-                          </span>
+                          <ShieldCheck className="size-3" />
+                          <span className="hidden sm:inline">Moderate</span>
                         </button>
-                      )}
+
+                        {currentUserRole === "admin" && (
+                          <button
+                            type="button"
+                            disabled={actionLoadingId === u.id}
+                            onClick={() => handleRevokeSessions(u.id, u.username)}
+                            title={t("revokeSessions")}
+                            className="inline-flex items-center gap-1 rounded-lg border border-[var(--border)] px-2.5 py-1 text-xs font-semibold text-[var(--muted)] hover:bg-rose-50 hover:text-rose-700 hover:border-rose-300"
+                          >
+                            <KeyRound className="size-3" />
+                            <span className="hidden sm:inline">
+                              {t("revokeSessions")}
+                            </span>
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );

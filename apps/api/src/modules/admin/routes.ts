@@ -1,5 +1,7 @@
 import {
   listAdminUsersQuerySchema,
+  moderateUserRequestSchema,
+  unbanUserRequestSchema,
   updateAiSettingsRequestSchema,
   updateUserRoleRequestSchema,
   type AdminUserSummary,
@@ -18,6 +20,7 @@ import type { FastifyInstance } from "fastify";
 import { AppError } from "../../errors.js";
 import { requireAdmin, requireModerator } from "../../plugins/auth.js";
 import { AuditService } from "../audit/service.js";
+import { UserModerationService } from "../moderation/user-moderation-service.js";
 import { PostService } from "../posts/service.js";
 import { ProfileService } from "../profiles/service.js";
 import { sql } from "kysely";
@@ -274,6 +277,47 @@ export async function registerAdminRoutes(
 
     return { success: true };
   });
+
+  const userModerationService = new UserModerationService(app.db);
+
+  app.post("/api/admin/users/:id/moderate", async (request) => {
+    const actor = await requireModerator(request);
+    const targetUserId = (request.params as { id: string }).id;
+    const parsed = moderateUserRequestSchema.safeParse(request.body);
+    if (!parsed.success) {
+      throw new AppError(
+        "VALIDATION_FAILED",
+        400,
+        "Invalid moderation parameters.",
+      );
+    }
+    return userModerationService.moderateUser(
+      actor,
+      targetUserId,
+      parsed.data,
+    );
+  });
+
+  app.post("/api/admin/users/:id/unban", async (request) => {
+    const actor = await requireModerator(request);
+    const targetUserId = (request.params as { id: string }).id;
+    const parsed = unbanUserRequestSchema.safeParse(request.body ?? {});
+    return userModerationService.unbanUser(
+      actor,
+      targetUserId,
+      parsed.success ? parsed.data.reason : undefined,
+    );
+  });
+
+  app.get(
+    "/api/admin/users/:id/moderation-history",
+    async (request, reply) => {
+      await requireModerator(request);
+      reply.header("Cache-Control", "private, no-store");
+      const targetUserId = (request.params as { id: string }).id;
+      return userModerationService.getModerationHistory(targetUserId);
+    },
+  );
 
   const postService = new PostService(app.db);
 

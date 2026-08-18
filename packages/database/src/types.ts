@@ -8,7 +8,7 @@ export type Timestamp = ColumnType<
 export type Json = ColumnType<unknown, unknown, unknown>;
 export type Uuid = Generated<string>;
 
-export type UserStatus = "active" | "disabled";
+export type UserStatus = "active" | "disabled" | "suspended" | "banned";
 export type AuthTokenKind =
   "email_verification" | "password_reset" | "email_change";
 export type TemplateVisibility = "private" | "curated";
@@ -365,6 +365,19 @@ export interface ContentReportsTable {
   resolved_at: Timestamp | null;
 }
 
+export interface UserRestrictionsTable {
+  id: Generated<Uuid>;
+  user_id: string;
+  moderator_id: string | null;
+  action: string;
+  reason: string;
+  expires_at: Timestamp | null;
+  revoked_at: Timestamp | null;
+  revoked_by: string | null;
+  revocation_reason: string | null;
+  created_at: Timestamp;
+}
+
 export interface Database {
   users: UsersTable;
   profiles: ProfilesTable;
@@ -397,4 +410,5 @@ export interface Database {
   post_views: PostViewsTable;
   admin_audit_events: AdminAuditEventsTable;
   content_reports: ContentReportsTable;
+  user_restrictions: UserRestrictionsTable;
 }

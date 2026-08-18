@@ -13,6 +13,7 @@ import type { Kysely } from "kysely";
 import { sql } from "kysely";
 import { AppError } from "../../errors.js";
 import { AuditService } from "../audit/service.js";
+import { UserModerationService } from "../moderation/user-moderation-service.js";
 
 const NO_ACTOR_UUID = "00000000-0000-0000-0000-000000000000";
 const REACTIONS = [
@@ -47,6 +48,8 @@ export class PostService {
   }
 
   async create(actorId: string, blocks: PostBlock[]): Promise<SocialPost> {
+    await new UserModerationService(this.db).assertCanPost(actorId);
+
     const normalized = normalizeBlocks(blocks);
     const plainText = blocksToPlainText(normalized);
     if (!plainText) {
@@ -310,6 +313,7 @@ export class PostService {
     postId: string,
     body: string,
   ): Promise<PostComment> {
+    await new UserModerationService(this.db).assertCanComment(actorId);
     await this.requirePost(postId);
     const comment = await this.db
       .insertInto("post_comments")
