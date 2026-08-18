@@ -1,4 +1,5 @@
 import {
+  analyticsPeriodSchema,
   listAdminUsersQuerySchema,
   moderateUserRequestSchema,
   unbanUserRequestSchema,
@@ -19,6 +20,7 @@ import {
 import type { FastifyInstance } from "fastify";
 import { AppError } from "../../errors.js";
 import { requireAdmin, requireModerator } from "../../plugins/auth.js";
+import { AnalyticsService } from "./analytics-service.js";
 import { AuditService } from "../audit/service.js";
 import { UserModerationService } from "../moderation/user-moderation-service.js";
 import { PostService } from "../posts/service.js";
@@ -115,15 +117,26 @@ export async function registerAdminRoutes(
         aiProvider: aiSettings?.provider ?? "none",
         nodeEnv: environment.NODE_ENV ?? "development",
       },
-      recentAudit: recentAuditEvents.events.map((e) => ({
-        id: e.id,
-        action: e.action,
-        actorRole: e.actorRole,
-        actorUsername: e.actorUsername,
-        targetType: e.targetType,
-        createdAt: e.createdAt,
+      recentActivity: recentAuditEvents.events.map((evt) => ({
+        id: evt.id,
+        actorUsername: evt.actorUsername,
+        actorRole: evt.actorRole,
+        action: evt.action,
+        targetType: evt.targetType,
+        targetId: evt.targetId,
+        createdAt: evt.createdAt,
       })),
     };
+  });
+
+  const analyticsService = new AnalyticsService(app.db);
+
+  app.get("/api/admin/analytics", async (request, reply) => {
+    await requireModerator(request);
+    reply.header("Cache-Control", "private, no-store");
+    const rawPeriod = (request.query as { period?: unknown })?.period;
+    const parsed = analyticsPeriodSchema.safeParse(rawPeriod ?? "30d");
+    return analyticsService.getSummary(parsed.success ? parsed.data : "30d");
   });
 
   app.get("/api/admin/users", async (request, reply) => {

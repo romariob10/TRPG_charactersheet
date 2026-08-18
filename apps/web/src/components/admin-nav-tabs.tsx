@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Activity,
+  BarChart3,
   Cpu,
   LayoutDashboard,
   ShieldAlert,
@@ -35,6 +36,12 @@ export function AdminNavTabs({ role }: { role: SiteRole }) {
       href: "/dashboard/admin/users",
       label: t("users"),
       icon: Users,
+      roles: ["admin", "moderator"] as SiteRole[],
+    },
+    {
+      href: "/dashboard/admin/analytics",
+      label: t("analytics"),
+      icon: BarChart3,
       roles: ["admin", "moderator"] as SiteRole[],
     },
     {

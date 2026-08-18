@@ -128,3 +128,12 @@
 - Checks passed: `notifications.test.ts` unit tests (2 tests), `apps/api` typecheck, `apps/web` vitest (28 passed).
 - Manual scenarios passed: Follow and post interaction notifications, unread count badge update, dropdown preview, and mark all read.
 - Next phase: Phase 11 — Analytics, Metrics & Platform Reporting.
+
+## Phase 11 — Analytics, Metrics & Platform Reporting
+- Status: verified
+- Branch: `codex/feat-platform-analytics`
+- Commit: `feat(analytics): add admin platform analytics and growth metrics dashboard`
+- Implemented: `@mycharacter/contracts` analytics schemas (`AnalyticsPeriod`, `AnalyticsSummary`, `TimeSeriesPoint`), `AnalyticsService` in `apps/api` aggregating user growth, content creation velocity, social engagement totals (reactions, comments, bookmarks), and moderation queue status across 7d/30d/90d time windows, added `GET /api/admin/analytics` endpoint, added Analytics tab in `AdminNavTabs`, and built interactive `AdminAnalyticsView` in `/dashboard/admin/analytics` with dynamic time-window switcher and bar/sparkline charts with full RU/EN localization.
+- Checks passed: `analytics.test.ts` unit test, `apps/api` typecheck, `apps/web` vitest (28 passed).
+- Manual scenarios passed: Analytics tab access, 7d/30d/90d period switching, metric aggregation display and bar hover tooltips.
+- Next phase: Phase 12 — Direct Messaging & Realtime Chat Foundations.
