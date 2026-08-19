@@ -156,6 +156,23 @@
     "historyPin": "Pin",
     "historyUnpin": "Unpin"
   },
+  "SystemWorkspace": {
+    "eyebrow": "System workspace",
+    "characters": "Characters",
+    "emptyCharacters": "No characters in this system yet.",
+    "posts": "Posts and discussions",
+    "emptyPosts": "No posts have been filed into this system yet.",
+    "materials": "Materials",
+    "emptyMaterials": "No materials yet. Upload a PDF or an image.",
+    "materialTitle": "Title",
+    "materialTitlePlaceholder": "e.g. House rules",
+    "materialFile": "File (PDF, PNG, JPEG, WebP)",
+    "upload": "Upload",
+    "uploading": "Uploading…",
+    "uploadFailed": "Could not upload the material.",
+    "selectFile": "Choose a file.",
+    "deleteMaterial": "Delete material"
+  },
   "Auth": {
     "signIn": "Sign in",
     "signUp": "Create account",
@@ -233,6 +250,8 @@
     "review": "Needs review",
     "unknownSystem": "System not specified",
     "openTemplate": "Open mapping for “{name}”",
+    "openWorkspace": "Open workspace for “{name}”",
+    "workspace": "Workspace",
     "pages": "{count, plural, one {# page} other {# pages}}",
     "empty": "No templates yet",
     "emptyText": "Add a system PDF, review the detected fields, and approve the mapping. The template will then appear when creating a character.",

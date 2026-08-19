@@ -281,3 +281,21 @@ export type {
   WorkspaceItem,
   WorkspaceItemKind,
 } from "./workspace.js";
+export {
+  filePostRequestSchema,
+  listSystemMaterialsResponseSchema,
+  materialFileTypeSchema,
+  systemMaterialSchema,
+  systemWorkspaceResponseSchema,
+  workspaceCharacterSchema,
+  workspacePostSchema,
+} from "./system-workspace.js";
+export type {
+  FilePostRequest,
+  ListSystemMaterialsResponse,
+  MaterialFileType,
+  SystemMaterial,
+  SystemWorkspaceResponse,
+  WorkspaceCharacter,
+  WorkspacePost,
+} from "./system-workspace.js";

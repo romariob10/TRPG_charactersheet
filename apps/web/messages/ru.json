@@ -156,6 +156,23 @@
     "historyPin": "Закрепить",
     "historyUnpin": "Открепить"
   },
+  "SystemWorkspace": {
+    "eyebrow": "Рабочее пространство системы",
+    "characters": "Персонажи",
+    "emptyCharacters": "В этой системе пока нет персонажей.",
+    "posts": "Посты и обсуждения",
+    "emptyPosts": "В эту систему пока не подшито ни одного поста.",
+    "materials": "Материалы",
+    "emptyMaterials": "Материалов пока нет. Загрузите PDF или изображение.",
+    "materialTitle": "Название",
+    "materialTitlePlaceholder": "Например: правила дома",
+    "materialFile": "Файл (PDF, PNG, JPEG, WebP)",
+    "upload": "Загрузить",
+    "uploading": "Загрузка…",
+    "uploadFailed": "Не удалось загрузить материал.",
+    "selectFile": "Выберите файл.",
+    "deleteMaterial": "Удалить материал"
+  },
   "Auth": {
     "signIn": "Вход",
     "signUp": "Регистрация",
@@ -233,6 +250,8 @@
     "review": "Нужна проверка",
     "unknownSystem": "Система не указана",
     "openTemplate": "Открыть разметку «{name}»",
+    "openWorkspace": "Открыть пространство «{name}»",
+    "workspace": "Пространство",
     "pages": "{count, plural, one {# страница} few {# страницы} many {# страниц} other {# страницы}}",
     "empty": "Шаблонов пока нет",
     "emptyText": "Добавьте PDF системы, проверьте найденные поля и подтвердите разметку. После этого шаблон появится при создании персонажа.",

@@ -3,6 +3,7 @@ import {
   CheckCircle2,
   FileSearch,
   FileText,
+  FolderOpen,
   Globe2,
   Lock,
   Plus,
@@ -122,8 +123,18 @@ export default async function SystemsPage() {
                       : t("private")}
                   </div>
                 )}
-                <div className="pointer-events-none relative mt-6 flex items-center justify-between border-t pt-4 text-xs text-[var(--muted)]">
+                <div className="pointer-events-none relative mt-6 flex items-center justify-between gap-2 border-t pt-4 text-xs text-[var(--muted)]">
                   <span>{t("pages", { count: template.pageCount })}</span>
+                  {!template.subscribed && (
+                    <Link
+                      href={`/dashboard/systems/${template.id}/workspace`}
+                      aria-label={t("openWorkspace", { name: template.title })}
+                      className="pointer-events-auto relative z-10 inline-flex items-center gap-1.5 rounded-[var(--radius-control)] border border-[var(--border)] bg-[var(--surface-strong)] px-2 py-1 font-semibold text-[var(--brand)] transition-colors hover:border-[var(--brand)]/40"
+                    >
+                      <FolderOpen className="size-3.5" />
+                      {t("workspace")}
+                    </Link>
+                  )}
                   <span>{formatRelativeDate(template.updatedAt, locale)}</span>
                 </div>
               </article>

@@ -30,6 +30,7 @@ export type CatalogSource = "pdf" | "heuristic" | "ocr" | "vision" | "manual";
 export type ProposalStatus = "pending" | "applied" | "rejected" | "expired";
 export type PostReaction = "like" | "joy" | "moai" | "fire" | "mindblown" | "dice";
 export type WorkspaceItemKind = "post" | "conversation" | "character" | "system";
+export type MaterialFileType = "pdf" | "image";
 
 export interface UsersTable {
   id: Uuid;
@@ -306,6 +307,7 @@ export interface PostsTable {
   created_at: Timestamp;
   updated_at: Timestamp;
   deleted_at: Timestamp | null;
+  system_id: string | null;
 }
 
 export interface PostImagesTable {
@@ -441,6 +443,17 @@ export interface WorkspaceItemsTable {
   created_at: Timestamp;
 }
 
+export interface SystemMaterialsTable {
+  id: Uuid;
+  template_id: string;
+  uploader_id: string | null;
+  title: string;
+  storage_path: string;
+  file_type: string;
+  size_bytes: number;
+  created_at: Timestamp;
+}
+
 export interface Database {
   users: UsersTable;
   profiles: ProfilesTable;
@@ -479,4 +492,5 @@ export interface Database {
   direct_messages: DirectMessagesTable;
   template_reviews: TemplateReviewsTable;
   workspace_items: WorkspaceItemsTable;
+  system_materials: SystemMaterialsTable;
 }
