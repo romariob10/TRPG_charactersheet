@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { siteRoleSchema } from "./roles.js";
 
 export const usernameSchema = z.string().regex(/^[a-z0-9][a-z0-9_-]{2,29}$/);
 
@@ -20,6 +21,10 @@ export const publicProfileSchema = z.object({
   followingCount: z.number().int().nonnegative(),
   followedByMe: z.boolean(),
   totalLikes: z.number().int().nonnegative(),
+  allowComments: z.boolean().default(true),
+  showCharacters: z.boolean().default(true),
+  showTemplates: z.boolean().default(true),
+  showActivity: z.boolean().default(true),
 });
 
 export const myProfileSchema = z.object({
@@ -29,6 +34,11 @@ export const myProfileSchema = z.object({
   displayName: z.string().max(80).nullable(),
   bio: z.string().max(500),
   isAdmin: z.boolean(),
+  siteRole: siteRoleSchema.default("user"),
+  allowComments: z.boolean().default(true),
+  showCharacters: z.boolean().default(true),
+  showTemplates: z.boolean().default(true),
+  showActivity: z.boolean().default(true),
 });
 
 export const updateMyProfileRequestSchema = z
@@ -39,8 +49,16 @@ export const updateMyProfileRequestSchema = z
   })
   .refine((value) => Object.keys(value).length > 0);
 
+export const updateProfilePrivacyRequestSchema = z.object({
+  allowComments: z.boolean().optional(),
+  showCharacters: z.boolean().optional(),
+  showTemplates: z.boolean().optional(),
+  showActivity: z.boolean().optional(),
+});
+
 export type Username = z.infer<typeof usernameSchema>;
 export type PublicAuthor = z.infer<typeof publicAuthorSchema>;
 export type PublicProfile = z.infer<typeof publicProfileSchema>;
 export type MyProfile = z.infer<typeof myProfileSchema>;
 export type UpdateMyProfileRequest = z.infer<typeof updateMyProfileRequestSchema>;
+export type UpdateProfilePrivacyRequest = z.infer<typeof updateProfilePrivacyRequestSchema>;

@@ -169,3 +169,73 @@ html.ai-sidebar-resizing * {
   white-space: normal;
   overflow-wrap: anywhere;
 }
+
+.post-editor {
+  overflow: visible;
+  position: relative;
+}
+
+.post-editor .codex-editor {
+  overflow: visible;
+}
+
+.post-editor .codex-editor__redactor {
+  padding-bottom: 3rem !important;
+  padding-left: 2rem !important;
+  margin-right: 0 !important;
+}
+
+.post-editor .ce-block__content,
+.post-editor .ce-toolbar__content {
+  max-width: 100%;
+}
+
+.post-editor .ce-paragraph,
+.post-editor .ce-header {
+  line-height: 1.65;
+}
+
+.post-editor .ce-toolbar__plus,
+.post-editor .ce-toolbar__settings-btn {
+  color: var(--brand);
+}
+
+.post-editor .ce-toolbar__plus:hover,
+.post-editor .ce-toolbar__settings-btn:hover,
+.post-editor .ce-inline-toolbar,
+.post-editor .ce-popover {
+  background: var(--surface);
+  z-index: 50;
+}
+
+.editor-entity-block {
+  display: grid;
+  gap: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  padding: 1rem;
+  background: var(--keylime);
+}
+
+.editor-entity-block__label {
+  color: var(--brand);
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.editor-entity-block__select {
+  width: 100%;
+  min-height: 2.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  padding-inline: 0.75rem;
+  font-size: 0.875rem;
+}
+
+.post-card {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 620px;
+}

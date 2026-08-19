@@ -1,6 +1,6 @@
 {
   "name": "@mycharacter/database",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "private": true,
   "type": "module",
   "exports": {
@@ -12,7 +12,7 @@
   ],
   "scripts": {
     "lint": "eslint src test",
-    "typecheck": "tsc --noEmit --skipLibCheck --module NodeNext --moduleResolution NodeNext --target ES2022 src/index.ts migrations/*.ts test/migrations.test.ts",
+    "typecheck": "tsc --noEmit --skipLibCheck --module NodeNext --moduleResolution NodeNext --target ES2022 src/index.ts migrations/*.ts test/*.test.ts",
     "test": "vitest run --passWithNoTests",
     "test:dist": "node test/dist-migrations.mjs",
     "build": "tsc --declaration --skipLibCheck --outDir dist --module NodeNext --moduleResolution NodeNext --target ES2022 src/index.ts && tsc --declaration false --skipLibCheck --rootDir . --outDir dist --module NodeNext --moduleResolution NodeNext --target ES2022 migrations/*.ts"

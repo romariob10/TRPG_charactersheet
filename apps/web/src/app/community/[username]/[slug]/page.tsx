@@ -7,6 +7,7 @@ import { RemixButton } from "@/components/remix-button";
 import { LikeButton } from "@/components/social-like-button";
 import { SiteHeader } from "@/components/site-header";
 import { TemplateComments } from "@/components/template-comments";
+import { TemplateReviews } from "@/components/template-reviews";
 import { buttonClassName } from "@/components/ui/button";
 import { getSession } from "@/lib/auth";
 import {
@@ -14,6 +15,7 @@ import {
   getTemplateComments,
 } from "@/lib/community";
 import type { MyProfile } from "@/lib/types";
+import type { ListTemplateReviewsResponse } from "@mycharacter/contracts";
 import { apiFetch } from "@/lib/api/server";
 import { ApiClientError } from "@/lib/api/client";
 
@@ -51,8 +53,11 @@ export default async function CommunityTemplatePage({
   const template = await getCommunityTemplate(username, slug);
   if (!template) notFound();
 
-  const [comments, session, t, tSystems, locale] = await Promise.all([
+  const [comments, reviewsRes, session, t, tSystems, locale] = await Promise.all([
     getTemplateComments(template.id),
+    apiFetch<ListTemplateReviewsResponse>(`/api/templates/${template.id}/reviews`).catch(() => ({
+      data: { reviews: [], ratingAverage: 0, ratingCount: 0 },
+    })),
     getSession(),
     getTranslations("CommunityPage"),
     getTranslations("Systems"),
@@ -101,6 +106,15 @@ export default async function CommunityTemplatePage({
                 <Globe2 className="inline size-3.5" /> {t("publicTemplate")}
               </p>
             </article>
+
+            <TemplateReviews
+              templateId={template.id}
+              initialData={reviewsRes.data}
+              authenticated={Boolean(session)}
+              currentUserId={myProfile?.id ?? null}
+              isAdmin={myProfile?.isAdmin ?? false}
+              locale={locale}
+            />
 
             <TemplateComments
               templateId={template.id}

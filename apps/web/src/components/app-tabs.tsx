@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { BookOpen, Compass, Users } from "lucide-react";
+import { BookOpen, Compass, MessageSquare, Search, Users } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
@@ -15,6 +15,18 @@ export function AppTabs() {
       label: t("feed"),
       icon: Compass,
       active: pathname.startsWith("/dashboard/feed"),
+    },
+    {
+      href: "/dashboard/search",
+      label: t("search"),
+      icon: Search,
+      active: pathname.startsWith("/dashboard/search"),
+    },
+    {
+      href: "/dashboard/messages",
+      label: t("messages"),
+      icon: MessageSquare,
+      active: pathname.startsWith("/dashboard/messages"),
     },
     {
       href: "/dashboard",

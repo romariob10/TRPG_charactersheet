@@ -61,6 +61,7 @@ export {
   publicAuthorSchema,
   publicProfileSchema,
   updateMyProfileRequestSchema,
+  updateProfilePrivacyRequestSchema,
   usernameSchema,
 } from "./profiles.js";
 export type {
@@ -68,6 +69,7 @@ export type {
   PublicAuthor,
   PublicProfile,
   UpdateMyProfileRequest,
+  UpdateProfilePrivacyRequest,
   Username,
 } from "./profiles.js";
 export {
@@ -113,3 +115,157 @@ export type {
   AiProposalStatus,
   ApplyProposalResponse,
 } from "./ai.js";
+export {
+  adminOverviewResponseSchema,
+  aiProviderSchema,
+  aiSettingsResponseSchema,
+  updateAiSettingsRequestSchema,
+} from "./admin.js";
+export type {
+  AdminOverviewResponse,
+  AiProvider,
+  AiSettingsResponse,
+  UpdateAiSettingsRequest,
+} from "./admin.js";
+export {
+  createPostCommentRequestSchema,
+  createPostRequestSchema,
+  postBlockSchema,
+  postCommentSchema,
+  postEmbedSchema,
+  postReactionSchema,
+  postReactionSummarySchema,
+  socialPostSchema,
+} from "./posts.js";
+export type {
+  CreatePostCommentRequest,
+  CreatePostRequest,
+  PostBlock,
+  PostComment,
+  PostEmbed,
+  PostReaction,
+  PostReactionSummary,
+  SocialPost,
+} from "./posts.js";
+export {
+  ROLE_PERMISSIONS,
+  hasPermission,
+  permissionSchema,
+  siteRoleSchema,
+  updateUserRoleRequestSchema,
+} from "./roles.js";
+export type {
+  Permission,
+  SiteRole,
+  UpdateUserRoleRequest,
+} from "./roles.js";
+export {
+  adminAuditEventSchema,
+  adminAuditEventsResponseSchema,
+  listAdminAuditEventsQuerySchema,
+} from "./audit.js";
+export type {
+  AdminAuditEvent,
+  AdminAuditEventsResponse,
+  ListAdminAuditEventsQuery,
+} from "./audit.js";
+export {
+  adminUserSummarySchema,
+  adminUsersListResponseSchema,
+  listAdminUsersQuerySchema,
+} from "./users.js";
+export type {
+  AdminUserSummary,
+  AdminUsersListResponse,
+  ListAdminUsersQuery,
+} from "./users.js";
+export {
+  contentReportSchema,
+  contentReportsListResponseSchema,
+  createContentReportRequestSchema,
+  listContentReportsQuerySchema,
+  reportStatusSchema,
+  reportTargetTypeSchema,
+  resolveReportRequestSchema,
+} from "./moderation.js";
+export type {
+  ContentReport,
+  ContentReportsListResponse,
+  CreateContentReportRequest,
+  ListContentReportsQuery,
+  ReportStatus,
+  ReportTargetType,
+  ResolveReportRequest,
+} from "./moderation.js";
+export {
+  moderateUserRequestSchema,
+  moderationActionSchema,
+  unbanUserRequestSchema,
+  userRestrictionSchema,
+} from "./user-moderation.js";
+export type {
+  ModerateUserRequest,
+  ModerationAction,
+  UnbanUserRequest,
+  UserRestriction,
+} from "./user-moderation.js";
+export {
+  searchItemSchema,
+  searchQuerySchema,
+  searchResponseSchema,
+  searchTypeSchema,
+} from "./search.js";
+export type {
+  SearchItem,
+  SearchQuery,
+  SearchResponse,
+  SearchType,
+} from "./search.js";
+export {
+  listNotificationsResponseSchema,
+  notificationItemSchema,
+  notificationTypeSchema,
+} from "./notifications.js";
+export type {
+  ListNotificationsResponse,
+  NotificationItem,
+  NotificationType,
+} from "./notifications.js";
+export {
+  analyticsPeriodSchema,
+  analyticsSummarySchema,
+  timeSeriesPointSchema,
+} from "./analytics.js";
+export type {
+  AnalyticsPeriod,
+  AnalyticsSummary,
+  TimeSeriesPoint,
+} from "./analytics.js";
+export {
+  directConversationSummarySchema,
+  directMessageSchema,
+  listConversationsResponseSchema,
+  sendMessageRequestSchema,
+  startConversationRequestSchema,
+} from "./direct-messages.js";
+export type {
+  DirectConversationSummary,
+  DirectMessage,
+  ListConversationsResponse,
+  SendMessageRequest,
+  StartConversationRequest,
+} from "./direct-messages.js";
+export {
+  createReviewRequestSchema,
+  listTemplateReviewsResponseSchema,
+  templateComplexitySchema,
+  templateReviewSchema,
+  updateTemplateMetadataRequestSchema,
+} from "./template-reviews.js";
+export type {
+  CreateReviewRequest,
+  ListTemplateReviewsResponse,
+  TemplateComplexity,
+  TemplateReview,
+  UpdateTemplateMetadataRequest,
+} from "./template-reviews.js";

@@ -1,16 +1,20 @@
 import {
+  createReviewRequestSchema,
   templateIdSchema,
   templateScopeSchema,
   updateTemplateFieldRequestSchema,
+  updateTemplateMetadataRequestSchema,
   updateTemplateRequestSchema,
 } from "@mycharacter/contracts";
 import type { FastifyInstance } from "fastify";
 import { AppError } from "../../errors.js";
 import { requireActor } from "../../plugins/auth.js";
+import { TemplateReviewService } from "./review-service.js";
 import { TemplateService } from "./service.js";
 
 export async function registerTemplateRoutes(app: FastifyInstance): Promise<void> {
   const service = new TemplateService(app.db, app.storage);
+  const reviewService = new TemplateReviewService(app.db);
 
   app.get("/api/templates", async (request) => {
     const actor = requireActor(request);
@@ -74,6 +78,39 @@ export async function registerTemplateRoutes(app: FastifyInstance): Promise<void
   app.post("/api/templates/:id/restore", async (request) => {
     const actor = requireActor(request);
     return service.restore(actor.userId, parseId(request.params));
+  });
+
+  app.get("/api/templates/:id/reviews", async (request, reply) => {
+    reply.header("Cache-Control", "public, max-age=15");
+    const id = parseId(request.params);
+    return reviewService.listReviews(id);
+  });
+
+  app.post("/api/templates/:id/reviews", async (request, reply) => {
+    const actor = requireActor(request);
+    const id = parseId(request.params);
+    const body = createReviewRequestSchema.safeParse(request.body);
+    if (!body.success) throw validationError();
+    const result = await reviewService.addOrUpdateReview(actor.userId, id, body.data);
+    reply.status(201);
+    return result;
+  });
+
+  app.delete("/api/templates/:id/reviews/:reviewId", async (request, reply) => {
+    const actor = requireActor(request);
+    const id = parseId(request.params);
+    const reviewId = (request.params as { reviewId: string }).reviewId;
+    await reviewService.deleteReview(actor, id, reviewId);
+    return reply.status(204).send();
+  });
+
+  app.put("/api/templates/:id/metadata", async (request) => {
+    const actor = requireActor(request);
+    const id = parseId(request.params);
+    const body = updateTemplateMetadataRequestSchema.safeParse(request.body);
+    if (!body.success) throw validationError();
+    await reviewService.updateMetadata(actor, id, body.data);
+    return { success: true };
   });
 }
 

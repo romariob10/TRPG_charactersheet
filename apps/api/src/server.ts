@@ -6,6 +6,7 @@ export async function startServer(): Promise<void> {
   const app = await buildApp({
     ...config,
     enableBackgroundInfrastructure: true,
+    logger: { level: process.env.LOG_LEVEL ?? "info" },
   });
 
   const close = async () => {

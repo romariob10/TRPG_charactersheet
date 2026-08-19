@@ -11,15 +11,13 @@ import {
 import { BuiltInAgent } from "@copilotkit/runtime/v2";
 import { generateText, tool } from "ai";
 import type { FastifyInstance, FastifyRequest } from "fastify";
+import type { AiSettingsReader } from "@mycharacter/storage";
 import { z } from "zod";
 import { AppError } from "../../errors.js";
 import { requireActor } from "../../plugins/auth.js";
 import type { RealtimeBus } from "../../realtime/realtime-bus.js";
 import { CharacterService } from "../characters/service.js";
-import {
-  createConfiguredProvider,
-  economicalQwenProviderOptions,
-} from "./provider.js";
+import { createConfiguredProvider } from "./provider.js";
 import { AiProposalService } from "./proposal-service.js";
 import { PostgresAiRepository } from "./repository.js";
 import { LocalAgentRunner } from "./runner.js";
@@ -28,6 +26,7 @@ import { createCharacterTools } from "./tools.js";
 export async function registerAiRoutes(
   app: FastifyInstance,
   realtime: RealtimeBus,
+  settingsStore: AiSettingsReader,
 ): Promise<void> {
   const characters = new CharacterService(app.db);
   const proposals = new AiProposalService(app.db, realtime);
@@ -46,9 +45,9 @@ export async function registerAiRoutes(
       characterId.data,
       "read",
     );
-    let chatModel;
+    let configuredProvider;
     try {
-      chatModel = createConfiguredProvider().chatModel;
+      configuredProvider = await createConfiguredProvider(settingsStore);
     } catch {
       throw new AppError(
         "AI_NOT_CONFIGURED",
@@ -62,9 +61,9 @@ export async function registerAiRoutes(
       actor.userId,
     );
     const agent = new BuiltInAgent({
-      model: chatModel,
+      model: configuredProvider.chatModel,
       maxSteps: 5,
-      providerOptions: economicalQwenProviderOptions,
+      providerOptions: configuredProvider.providerOptions,
       prompt: `You are the character-sheet assistant for ${character.name}. Help in the user's language. You can only inspect the catalog and create proposals; you can never directly write a field. Always call searchFields before getFieldContext. Use labels, sections, coordinates, groups, and current versions to resolve intent. When several fields are plausible or confidence is below 0.65, ask a concise clarifying question instead of guessing. Before proposing, read the exact current field context. Put every requested change into one proposeFieldChanges call. Do not narrate intermediate tool use or emit progress messages between tool calls. Return one concise final response after the tools finish because the proposal card contains the details.`,
       tools: createCharacterTools({
         database: app.db,
@@ -95,7 +94,7 @@ export async function registerAiRoutes(
   app.get("/api/ai/capabilities", async (request, reply) => {
     requireActor(request);
     try {
-      const { chatModel } = createConfiguredProvider();
+      const { chatModel, providerOptions } = await createConfiguredProvider(settingsStore);
       const result = await generateText({
         model: chatModel,
         prompt: "Call capabilityProbe exactly once with ok=true.",
@@ -107,7 +106,7 @@ export async function registerAiRoutes(
           }),
         },
         toolChoice: { type: "tool", toolName: "capabilityProbe" },
-        providerOptions: economicalQwenProviderOptions,
+        providerOptions,
         maxOutputTokens: 32,
         timeout: 12_000,
       });

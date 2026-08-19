@@ -1,4 +1,7 @@
-import { updateMyProfileRequestSchema } from "@mycharacter/contracts";
+import {
+  updateMyProfileRequestSchema,
+  updateProfilePrivacyRequestSchema,
+} from "@mycharacter/contracts";
 import type { FastifyInstance } from "fastify";
 import { AppError } from "../../errors.js";
 import { requireActor } from "../../plugins/auth.js";
@@ -21,6 +24,15 @@ export async function registerProfileRoutes(app: FastifyInstance): Promise<void>
       throw new AppError("VALIDATION_FAILED", 400, "Request validation failed.");
     }
     return service.updateMyProfile(actor.userId, input.data);
+  });
+
+  app.put("/api/profiles/privacy", async (request) => {
+    const actor = requireActor(request);
+    const input = updateProfilePrivacyRequestSchema.safeParse(request.body);
+    if (!input.success) {
+      throw new AppError("VALIDATION_FAILED", 400, "Request validation failed.");
+    }
+    return service.updatePrivacySettings(actor.userId, input.data);
   });
 
   app.get("/api/profiles/:username", async (request) => {

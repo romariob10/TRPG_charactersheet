@@ -14,8 +14,8 @@ export async function getSession(): Promise<AuthSession | null> {
   try {
     return (await apiFetch<AuthSession>("/api/auth/session")).data;
   } catch (error) {
-    if (error instanceof ApiClientError && error.status === 401) return null;
-    throw error;
+    if (error instanceof ApiClientError) return null;
+    return null;
   }
 }
 
