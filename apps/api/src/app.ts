@@ -5,7 +5,11 @@ import rateLimit from "@fastify/rate-limit";
 import swagger from "@fastify/swagger";
 import websocket from "@fastify/websocket";
 import type { Database } from "@mycharacter/database";
-import Fastify, { type FastifyInstance, type RawServerDefault } from "fastify";
+import Fastify, {
+  type FastifyInstance,
+  type FastifyServerOptions,
+  type RawServerDefault,
+} from "fastify";
 import {
   hasZodFastifySchemaValidationErrors,
   jsonSchemaTransform,
@@ -63,6 +67,7 @@ export interface BuildAppOptions {
   jobs?: JobClient;
   enableBackgroundInfrastructure?: boolean;
   aiSettings?: AiSettingsWriter;
+  logger?: FastifyServerOptions["logger"];
 }
 
 function errorBody(error: AppError, requestId: string) {
@@ -85,6 +90,7 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
     requestIdHeader: "x-request-id",
     genReqId: () => randomUUID(),
     trustProxy: 1,
+    logger: options.logger ?? false,
   }).withTypeProvider<ZodTypeProvider>();
 
   app.setValidatorCompiler(validatorCompiler);
