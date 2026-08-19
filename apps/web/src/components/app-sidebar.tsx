@@ -14,6 +14,7 @@ import {
   Search,
   Settings,
   ShieldCheck,
+  SquarePen,
   Users,
   X,
 } from "lucide-react";
@@ -46,6 +47,10 @@ export function AppSidebar({
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(initialCollapsed);
   const [mobileOpen, setMobileOpen] = useState(false);
+  // Hovering the collapsed header reveals the expand control in the logo's
+  // place. Tracked in state so the control is focusable and testable, not a
+  // CSS-only trick.
+  const [headerHover, setHeaderHover] = useState(false);
 
   function toggleCollapsed() {
     setCollapsed((previous) => {
@@ -101,39 +106,56 @@ export function AppSidebar({
         aria-label={tSidebar("navigation")}
         className={cn(
           "fixed inset-y-0 left-0 z-50 flex shrink-0 flex-col border-r border-[var(--border)] bg-[var(--surface)] transition-[width,transform] duration-200 lg:sticky lg:top-0 lg:h-screen lg:translate-x-0",
-          collapsed ? "lg:w-[4.5rem]" : "lg:w-64",
+          collapsed ? "lg:w-[3.25rem]" : "lg:w-64",
           "w-64",
           mobileOpen ? "translate-x-0" : "-translate-x-full",
         )}
       >
         <div
+          data-testid="sidebar-header"
           className={cn(
             "flex h-[63px] shrink-0 items-center gap-1 border-b border-[var(--border)] px-3",
-            collapsed && "lg:justify-center lg:px-2",
+            collapsed && "lg:justify-center lg:px-1.5",
           )}
+          onMouseEnter={() => setHeaderHover(true)}
+          onMouseLeave={() => setHeaderHover(false)}
         >
-          <Logo
-            href="/dashboard/feed"
-            className="min-w-0"
-            labelClassName={cn("truncate", collapsed && "lg:hidden")}
-          />
-
-          <button
-            type="button"
-            onClick={toggleCollapsed}
-            aria-label={collapsed ? tSidebar("expand") : tSidebar("collapse")}
-            title={collapsed ? tSidebar("expand") : tSidebar("collapse")}
-            className={cn(
-              "ml-auto hidden size-8 place-items-center rounded-[var(--radius-control)] text-[var(--muted)] transition-colors hover:bg-[var(--keylime)] hover:text-[var(--brand)] lg:grid",
-              collapsed && "lg:ml-0",
-            )}
-          >
-            {collapsed ? (
-              <PanelLeftOpen className="size-4" />
+          {collapsed ? (
+            headerHover ? (
+              <button
+                type="button"
+                onClick={toggleCollapsed}
+                aria-label={tSidebar("expand")}
+                title={tSidebar("expand")}
+                className="grid size-8 place-items-center rounded-[var(--radius-control)] text-[var(--muted)] transition-colors hover:bg-[var(--keylime)] hover:text-[var(--brand)]"
+              >
+                <PanelLeftOpen className="size-4" />
+              </button>
             ) : (
-              <PanelLeftClose className="size-4" />
-            )}
-          </button>
+              <Logo
+                href="/dashboard/feed"
+                className="min-w-0"
+                labelClassName="lg:hidden"
+              />
+            )
+          ) : (
+            <>
+              <Logo
+                href="/dashboard/feed"
+                className="min-w-0"
+                labelClassName="truncate"
+              />
+              <button
+                type="button"
+                onClick={toggleCollapsed}
+                aria-label={tSidebar("collapse")}
+                title={tSidebar("collapse")}
+                className="ml-auto grid size-8 place-items-center rounded-[var(--radius-control)] text-[var(--muted)] transition-colors hover:bg-[var(--keylime)] hover:text-[var(--brand)]"
+              >
+                <PanelLeftClose className="size-4" />
+              </button>
+            </>
+          )}
 
           <button
             type="button"
@@ -146,6 +168,24 @@ export function AppSidebar({
         </div>
 
         <nav aria-label={tSidebar("primary")} className="shrink-0 space-y-0.5 p-2">
+          <Link
+            href="/dashboard/posts/new"
+            target="_blank"
+            rel="noreferrer"
+            onClick={() => setMobileOpen(false)}
+            title={collapsed ? tSidebar("newArticle") : undefined}
+            className={cn(
+              "flex h-10 items-center gap-3 rounded-[var(--radius-control)] px-2.5 text-[13px] font-semibold text-[var(--brand)] transition-colors hover:bg-[var(--brand-soft)]",
+              collapsed && "lg:justify-center lg:px-0",
+            )}
+          >
+            <SquarePen className="size-4 shrink-0" />
+            <span className={cn("truncate", collapsed && "lg:hidden")}>
+              {tSidebar("newArticle")}
+            </span>
+          </Link>
+          <div className="mb-1.5 mt-0.5 border-t border-[var(--border)]" />
+
           {items.map((item) => {
             const Icon = item.icon;
             const active = isActive(item.href, item.exact);
@@ -181,7 +221,17 @@ export function AppSidebar({
               collapsed && "lg:flex-col lg:items-stretch",
             )}
           >
-            <NotificationBell locale={locale} />
+            <div
+              className={cn(
+                "flex items-center",
+                collapsed && "lg:justify-center",
+              )}
+            >
+              <NotificationBell
+                locale={locale}
+                dropSide={collapsed ? "right" : "down"}
+              />
+            </div>
 
             <Popover
               label={t("language")}

@@ -148,7 +148,8 @@
     "openNavigation": "Open navigation",
     "closeNavigation": "Close navigation",
     "account": "Account",
-    "adminConsole": "Admin console"
+    "adminConsole": "Admin console",
+    "newArticle": "New article"
   },
   "Auth": {
     "signIn": "Sign in",

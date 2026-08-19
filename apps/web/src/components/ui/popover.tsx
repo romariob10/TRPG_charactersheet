@@ -9,6 +9,9 @@ import {
 } from "react";
 import { cn } from "@/lib/utils";
 
+export type PopoverSide = "top" | "bottom" | "left" | "right";
+export type PopoverAlign = "start" | "end";
+
 export interface PopoverRenderProps {
   close: () => void;
 }
@@ -25,8 +28,10 @@ export function Popover({
   trigger: (state: { open: boolean }) => ReactNode;
   children: ReactNode | ((state: PopoverRenderProps) => ReactNode);
   label: string;
-  align?: "start" | "end";
-  side?: "top" | "bottom";
+  align?: PopoverAlign;
+  // "left"/"right" place the panel beside the trigger, which is what a
+  // collapsed sidebar needs to keep the panel on screen.
+  side?: PopoverSide;
   className?: string;
   contentClassName?: string;
 }) {
@@ -55,6 +60,17 @@ export function Popover({
     };
   }, [open]);
 
+  const horizontal = side === "left" || side === "right";
+  const position = horizontal
+    ? cn(
+        side === "right" ? "left-full ml-2" : "right-full mr-2",
+        align === "end" ? "bottom-0" : "top-0",
+      )
+    : cn(
+        side === "top" ? "bottom-full mb-2" : "top-full mt-2",
+        align === "start" ? "left-0" : "right-0",
+      );
+
   return (
     <div ref={containerRef} className={cn("relative", className)}>
       <button
@@ -77,8 +93,7 @@ export function Popover({
           aria-label={label}
           className={cn(
             "absolute z-50 min-w-56 rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--surface)] p-1.5 shadow-xl",
-            side === "top" ? "bottom-full mb-2" : "top-full mt-2",
-            align === "start" ? "left-0" : "right-0",
+            position,
             contentClassName,
           )}
         >

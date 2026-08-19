@@ -51,19 +51,27 @@ afterEach(() => {
 });
 
 describe("AppSidebar", () => {
-  it("exposes every primary destination", () => {
+  it("exposes every primary destination, with the article composer first", () => {
     renderSidebar();
     const nav = screen.getByRole("navigation", { name: "primary" });
     const hrefs = Array.from(nav.querySelectorAll("a")).map((link) =>
       link.getAttribute("href"),
     );
     expect(hrefs).toEqual([
+      "/dashboard/posts/new",
       "/dashboard/search",
       "/dashboard/feed",
       "/dashboard/messages",
       "/dashboard",
       "/dashboard/systems",
     ]);
+  });
+
+  it("opens the article composer in a new tab", () => {
+    renderSidebar();
+    const composer = screen.getByRole("link", { name: "newArticle" });
+    expect(composer).toHaveAttribute("href", "/dashboard/posts/new");
+    expect(composer).toHaveAttribute("target", "_blank");
   });
 
   it("marks the current destination for assistive technology", () => {
@@ -79,7 +87,21 @@ describe("AppSidebar", () => {
     fireEvent.click(toggle);
 
     expect(document.cookie).toContain("sidebar_collapsed=1");
+  });
+
+  it("reveals the expand control over the logo when the collapsed header is hovered", () => {
+    renderSidebar({}, true);
+    expect(
+      screen.queryByRole("button", { name: "expand" }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.mouseEnter(screen.getByTestId("sidebar-header"));
     expect(screen.getByRole("button", { name: "expand" })).toBeInTheDocument();
+
+    fireEvent.mouseLeave(screen.getByTestId("sidebar-header"));
+    expect(
+      screen.queryByRole("button", { name: "expand" }),
+    ).not.toBeInTheDocument();
   });
 
   it("keeps settings and sign-out inside the account menu", () => {

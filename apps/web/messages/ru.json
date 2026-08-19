@@ -148,7 +148,8 @@
     "openNavigation": "Открыть навигацию",
     "closeNavigation": "Закрыть навигацию",
     "account": "Аккаунт",
-    "adminConsole": "Админ-панель"
+    "adminConsole": "Админ-панель",
+    "newArticle": "Новая статья"
   },
   "Auth": {
     "signIn": "Вход",
