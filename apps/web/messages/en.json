@@ -19,9 +19,9 @@
     "systems": "TTRPG systems",
     "search": "Search",
     "messages": "Messages",
-    "language": "Русский",
-    "languageRu": "RU",
-    "languageEn": "EN",
+    "language": "Language",
+    "languageRu": "Russian",
+    "languageEn": "English",
     "profileSettings": "Profile",
     "viewPublicProfile": "Public profile",
     "roles": {

@@ -19,9 +19,9 @@
     "systems": "Системы НРИ",
     "search": "Поиск",
     "messages": "Сообщения",
-    "language": "English",
-    "languageRu": "RU",
-    "languageEn": "EN",
+    "language": "Язык",
+    "languageRu": "Русский",
+    "languageEn": "English",
     "profileSettings": "Профиль",
     "viewPublicProfile": "Публичный профиль",
     "roles": {
