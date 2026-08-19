@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { sql } from "kysely";
 import { createDatabase } from "../src/db.js";
 import { createTestDatabase, destroyTestDatabase } from "../src/testing.js";
+import type { UserStatus } from "../src/types.js";
 
 describe("initial migration", () => {
   let testDb: Awaited<ReturnType<typeof createTestDatabase>>;
@@ -94,6 +95,29 @@ describe("initial migration", () => {
         "post_comments_body_length_check",
       ]),
     );
+  });
+
+  it("accepts every moderated account status", async () => {
+    const user = await testDb.db
+      .insertInto("users")
+      .values({ email: "moderated@example.com", password_hash: "hash" })
+      .returning("id")
+      .executeTakeFirstOrThrow();
+    const setStatus = (status: UserStatus) =>
+      testDb.db
+        .updateTable("users")
+        .set({ status })
+        .where("id", "=", user.id)
+        .execute();
+
+    for (const status of ["disabled", "suspended", "banned", "active"] as const) {
+      await expect(setStatus(status)).resolves.toBeDefined();
+    }
+    await expect(
+      sql`update users set status = 'not-a-status' where id = ${user.id}`.execute(
+        testDb.db,
+      ),
+    ).rejects.toMatchObject({ code: "23514" });
   });
 
   it("creates public character and social graph columns", async () => {

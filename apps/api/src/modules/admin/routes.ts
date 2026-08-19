@@ -157,6 +157,7 @@ export async function registerAdminRoutes(
         "profiles.username",
         "profiles.display_name as displayName",
         "users.email",
+        "users.status",
         "profiles.site_role as siteRole",
         "profiles.is_admin as isAdmin",
         "users.created_at as joinedAt",
@@ -238,7 +239,7 @@ export async function registerAdminRoutes(
       email: actor.role === "admin" ? row.email : maskEmail(row.email),
       siteRole:
         (row.siteRole as SiteRole) ?? (row.isAdmin ? "admin" : "user"),
-      status: "active",
+      status: row.status,
       joinedAt: row.joinedAt.toISOString(),
       lastUsedAt: row.lastUsedAt
         ? new Date(row.lastUsedAt).toISOString()

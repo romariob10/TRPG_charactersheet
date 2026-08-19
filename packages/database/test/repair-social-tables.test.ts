@@ -39,10 +39,12 @@ describe("social table repair migration", () => {
     return rows.map((row) => row.table_name).sort();
   }
 
+  // Kysely refuses to run migrations out of order, so every record from the
+  // repair migration onwards has to go for it to be replayed.
   async function forgetRepairMigration(): Promise<void> {
     await sql`
       delete from ${sql.id(testDb.schema, "kysely_migration")}
-      where name = ${REPAIR_MIGRATION}
+      where name >= ${REPAIR_MIGRATION}
     `.execute(testDb.db);
   }
 
