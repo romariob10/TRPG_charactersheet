@@ -100,7 +100,7 @@ export class DirectMessageService {
       const lastMsg = await this.db
         .selectFrom("direct_messages")
         .select(["body", "sender_id as senderId", "created_at as createdAt", "read_at as readAt"])
-        .where("conversation_id", "=", row.id as any)
+        .where("conversation_id", "=", row.id)
         .orderBy("created_at", "desc")
         .limit(1)
         .executeTakeFirst();
@@ -108,7 +108,7 @@ export class DirectMessageService {
       const unread = await this.db
         .selectFrom("direct_messages")
         .select(sql<number>`count(*)::int`.as("count"))
-        .where("conversation_id", "=", row.id as any)
+        .where("conversation_id", "=", row.id)
         .where("sender_id", "!=", userId)
         .where("read_at", "is", null)
         .executeTakeFirst();
@@ -144,7 +144,7 @@ export class DirectMessageService {
     const conv = await this.db
       .selectFrom("direct_conversations")
       .select(["id", "participant_one_id as p1", "participant_two_id as p2"])
-      .where("id", "=", conversationId as any)
+      .where("id", "=", conversationId)
       .executeTakeFirst();
 
     if (!conv || (conv.p1 !== userId && conv.p2 !== userId)) {
@@ -155,7 +155,7 @@ export class DirectMessageService {
     await this.db
       .updateTable("direct_messages")
       .set({ read_at: new Date() })
-      .where("conversation_id", "=", conversationId as any)
+      .where("conversation_id", "=", conversationId)
       .where("sender_id", "!=", userId)
       .where("read_at", "is", null)
       .execute();
@@ -163,7 +163,7 @@ export class DirectMessageService {
     const rows = await this.db
       .selectFrom("direct_messages")
       .select(["id", "conversation_id as conversationId", "sender_id as senderId", "body", "read_at as readAt", "created_at as createdAt"])
-      .where("conversation_id", "=", conversationId as any)
+      .where("conversation_id", "=", conversationId)
       .orderBy("created_at", "asc")
       .limit(Math.min(Math.max(limit, 1), 200))
       .execute();
@@ -189,7 +189,7 @@ export class DirectMessageService {
     const conv = await this.db
       .selectFrom("direct_conversations")
       .select(["id", "participant_one_id as p1", "participant_two_id as p2"])
-      .where("id", "=", conversationId as any)
+      .where("id", "=", conversationId)
       .executeTakeFirst();
 
     if (!conv || (conv.p1 !== userId && conv.p2 !== userId)) {
@@ -201,7 +201,7 @@ export class DirectMessageService {
     const row = await this.db
       .insertInto("direct_messages")
       .values({
-        conversation_id: conversationId as any,
+        conversation_id: conversationId,
         sender_id: userId,
         body: body.trim(),
       })
@@ -211,7 +211,7 @@ export class DirectMessageService {
     await this.db
       .updateTable("direct_conversations")
       .set({ last_message_at: new Date() })
-      .where("id", "=", conversationId as any)
+      .where("id", "=", conversationId)
       .execute();
 
     await new NotificationService(this.db).notify({

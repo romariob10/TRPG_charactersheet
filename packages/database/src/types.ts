@@ -340,7 +340,7 @@ export interface PostBookmarksTable {
 }
 
 export interface PostViewsTable {
-  id: Generated<Uuid>;
+  id: Uuid;
   post_id: string;
   viewer_id: string | null;
   viewer_hash: string | null;
@@ -348,7 +348,7 @@ export interface PostViewsTable {
 }
 
 export interface AdminAuditEventsTable {
-  id: Generated<Uuid>;
+  id: Uuid;
   actor_id: string | null;
   actor_role: string;
   action: string;
@@ -361,7 +361,7 @@ export interface AdminAuditEventsTable {
 }
 
 export interface ContentReportsTable {
-  id: Generated<Uuid>;
+  id: Uuid;
   reporter_id: string | null;
   target_type: string;
   target_id: string;
@@ -375,7 +375,7 @@ export interface ContentReportsTable {
 }
 
 export interface UserRestrictionsTable {
-  id: Generated<Uuid>;
+  id: Uuid;
   user_id: string;
   moderator_id: string | null;
   action: string;
@@ -388,7 +388,7 @@ export interface UserRestrictionsTable {
 }
 
 export interface UserNotificationsTable {
-  id: Generated<Uuid>;
+  id: Uuid;
   user_id: string;
   actor_id: string | null;
   type: string;
@@ -396,13 +396,13 @@ export interface UserNotificationsTable {
   target_id: string | null;
   title: string;
   body: string | null;
-  metadata: Generated<Json>;
+  metadata: Json;
   read_at: Timestamp | null;
   created_at: Timestamp;
 }
 
 export interface DirectConversationsTable {
-  id: Generated<Uuid>;
+  id: Uuid;
   participant_one_id: string;
   participant_two_id: string;
   last_message_at: Timestamp;
@@ -410,7 +410,7 @@ export interface DirectConversationsTable {
 }
 
 export interface DirectMessagesTable {
-  id: Generated<Uuid>;
+  id: Uuid;
   conversation_id: string;
   sender_id: string;
   body: string;
@@ -419,7 +419,7 @@ export interface DirectMessagesTable {
 }
 
 export interface TemplateReviewsTable {
-  id: Generated<Uuid>;
+  id: Uuid;
   template_id: string;
   user_id: string;
   rating: number;

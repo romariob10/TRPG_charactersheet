@@ -4,6 +4,8 @@ export const notificationTypeSchema = z.enum([
   "follow",
   "post_reaction",
   "post_comment",
+  "direct_message",
+  "template_review",
   "system_approved",
   "moderation_warning",
   "character_invite",

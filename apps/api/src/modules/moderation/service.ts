@@ -141,7 +141,7 @@ export class ModerationService {
     const report = await this.db
       .selectFrom("content_reports")
       .selectAll()
-      .where("id", "=", reportId as any)
+      .where("id", "=", reportId)
       .executeTakeFirst();
 
     if (!report) {
@@ -156,7 +156,7 @@ export class ModerationService {
         moderator_id: moderator.userId,
         resolved_at: new Date(),
       })
-      .where("id", "=", reportId as any)
+      .where("id", "=", reportId)
       .execute();
 
     if (input.actionTaken === "delete_content") {

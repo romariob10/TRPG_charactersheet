@@ -1,6 +1,7 @@
 import type {
   ListNotificationsResponse,
   NotificationItem,
+  NotificationType,
 } from "@mycharacter/contracts";
 import type { Database } from "@mycharacter/database";
 import { sql, type Kysely } from "kysely";
@@ -8,7 +9,7 @@ import { sql, type Kysely } from "kysely";
 export interface CreateNotificationInput {
   userId: string;
   actorId?: string | null;
-  type: string;
+  type: NotificationType;
   targetType?: string | null;
   targetId?: string | null;
   title: string;
@@ -38,7 +39,7 @@ export class NotificationService {
         target_id: input.targetId ?? null,
         title: input.title,
         body: input.body ?? null,
-        metadata: JSON.stringify(input.metadata ?? {}) as any,
+        metadata: JSON.stringify(input.metadata ?? {}),
       })
       .execute();
   }
@@ -111,7 +112,7 @@ export class NotificationService {
     await this.db
       .updateTable("user_notifications")
       .set({ read_at: new Date() })
-      .where("id", "=", notificationId as any)
+      .where("id", "=", notificationId)
       .where("user_id", "=", userId)
       .execute();
   }
