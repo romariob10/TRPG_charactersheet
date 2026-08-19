@@ -117,13 +117,12 @@ export async function registerAdminRoutes(
         aiProvider: aiSettings?.provider ?? "none",
         nodeEnv: environment.NODE_ENV ?? "development",
       },
-      recentActivity: recentAuditEvents.events.map((evt) => ({
+      recentAudit: recentAuditEvents.events.map((evt) => ({
         id: evt.id,
         actorUsername: evt.actorUsername,
         actorRole: evt.actorRole,
         action: evt.action,
         targetType: evt.targetType,
-        targetId: evt.targetId,
         createdAt: evt.createdAt,
       })),
     };
