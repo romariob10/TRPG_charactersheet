@@ -120,6 +120,56 @@ describe("initial migration", () => {
     ).rejects.toMatchObject({ code: "23514" });
   });
 
+  // Both columns only record who acted. Without a delete rule they made
+  // deleting an account impossible as soon as the person had edited one sheet
+  // or accepted one invite.
+  it("clears attribution instead of blocking account deletion", async () => {
+    const rows = await sql<{ constraint_name: string; delete_rule: string }>`
+      select tc.constraint_name, rc.delete_rule
+      from information_schema.table_constraints tc
+      join information_schema.referential_constraints rc
+        on rc.constraint_name = tc.constraint_name
+       and rc.constraint_schema = tc.constraint_schema
+      where tc.constraint_schema = ${testDb.schema}
+        and tc.constraint_type = 'FOREIGN KEY'
+        and tc.constraint_name in (
+          'character_values_updated_by_fkey',
+          'character_invites_accepted_by_fkey'
+        )
+      order by tc.constraint_name
+    `.execute(testDb.db);
+
+    expect(rows.rows).toEqual([
+      {
+        constraint_name: "character_invites_accepted_by_fkey",
+        delete_rule: "SET NULL",
+      },
+      {
+        constraint_name: "character_values_updated_by_fkey",
+        delete_rule: "SET NULL",
+      },
+    ]);
+  });
+
+  it("leaves no foreign key that would block deleting an account", async () => {
+    const rows = await sql<{ table_name: string; constraint_name: string }>`
+      select tc.table_name, tc.constraint_name
+      from information_schema.table_constraints tc
+      join information_schema.referential_constraints rc
+        on rc.constraint_name = tc.constraint_name
+       and rc.constraint_schema = tc.constraint_schema
+      join information_schema.constraint_column_usage ccu
+        on ccu.constraint_name = tc.constraint_name
+       and ccu.constraint_schema = tc.constraint_schema
+      where tc.constraint_schema = ${testDb.schema}
+        and tc.constraint_type = 'FOREIGN KEY'
+        and ccu.table_name = 'users'
+        and rc.delete_rule = 'NO ACTION'
+    `.execute(testDb.db);
+
+    expect(rows.rows).toEqual([]);
+  });
+
   it("creates public character and social graph columns", async () => {
     const rows = await testDb.db
       .selectFrom("information_schema.columns")
