@@ -32,7 +32,7 @@ export class TemplateReviewService {
       .updateTable("pdf_templates")
       .set({
         rating_count: stats?.count ?? 0,
-        rating_average: Number(stats?.avg ?? 0) as any,
+        rating_average: Number(stats?.avg ?? 0),
       })
       .where("id", "=", templateId)
       .execute();
@@ -92,18 +92,16 @@ export class TemplateReviewService {
       });
     }
 
-    const reviews = await this.listReviews(templateId);
-    return reviews.reviews.find((r) => r.id === String(row.id))!;
+    const saved = await this.reviewQuery()
+      .where("r.id", "=", row.id)
+      .executeTakeFirstOrThrow();
+    return toTemplateReview(saved);
   }
 
-  async listReviews(templateId: string): Promise<ListTemplateReviewsResponse> {
-    const template = await this.db
-      .selectFrom("pdf_templates")
-      .select(["rating_average as ratingAvg", "rating_count as ratingCount"])
-      .where("id", "=", templateId)
-      .executeTakeFirst();
-
-    const rows = await this.db
+  // Selecting the saved review by id keeps an update to a review that already
+  // fell outside the 50-row listing window from returning undefined.
+  private reviewQuery() {
+    return this.db
       .selectFrom("template_reviews as r")
       .innerJoin("profiles as author", "author.id", "r.user_id")
       .select([
@@ -117,27 +115,24 @@ export class TemplateReviewService {
         "r.body",
         "r.created_at as createdAt",
         "r.updated_at as updatedAt",
-      ])
+      ]);
+  }
+
+  async listReviews(templateId: string): Promise<ListTemplateReviewsResponse> {
+    const template = await this.db
+      .selectFrom("pdf_templates")
+      .select(["rating_average as ratingAvg", "rating_count as ratingCount"])
+      .where("id", "=", templateId)
+      .executeTakeFirst();
+
+    const rows = await this.reviewQuery()
       .where("r.template_id", "=", templateId)
       .orderBy("r.created_at", "desc")
       .limit(50)
       .execute();
 
-    const reviews: TemplateReview[] = rows.map((r) => ({
-      id: String(r.id),
-      templateId: String(r.templateId),
-      userId: String(r.userId),
-      authorUsername: r.authorUsername,
-      authorDisplayName: r.authorDisplayName,
-      rating: r.rating,
-      title: r.title,
-      body: r.body,
-      createdAt: r.createdAt.toISOString(),
-      updatedAt: r.updatedAt.toISOString(),
-    }));
-
     return {
-      reviews,
+      reviews: rows.map(toTemplateReview),
       ratingAverage: Number(template?.ratingAvg ?? 0),
       ratingCount: template?.ratingCount ?? 0,
     };
@@ -151,7 +146,7 @@ export class TemplateReviewService {
     const review = await this.db
       .selectFrom("template_reviews")
       .select(["user_id as userId"])
-      .where("id", "=", reviewId as any)
+      .where("id", "=", reviewId)
       .executeTakeFirst();
 
     if (!review) {
@@ -165,7 +160,7 @@ export class TemplateReviewService {
 
     await this.db
       .deleteFrom("template_reviews")
-      .where("id", "=", reviewId as any)
+      .where("id", "=", reviewId)
       .execute();
 
     await this.recalculateRating(templateId);
@@ -192,7 +187,7 @@ export class TemplateReviewService {
 
     const updates: Record<string, unknown> = {};
     if (input.tags !== undefined) {
-      updates.tags = input.tags as any;
+      updates.tags = input.tags;
     }
     if (input.genre !== undefined) {
       updates.genre = input.genre;
@@ -209,4 +204,32 @@ export class TemplateReviewService {
         .execute();
     }
   }
+}
+
+interface TemplateReviewRow {
+  id: string;
+  templateId: string;
+  userId: string;
+  authorUsername: string;
+  authorDisplayName: string | null;
+  rating: number;
+  title: string | null;
+  body: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+function toTemplateReview(row: TemplateReviewRow): TemplateReview {
+  return {
+    id: row.id,
+    templateId: row.templateId,
+    userId: row.userId,
+    authorUsername: row.authorUsername,
+    authorDisplayName: row.authorDisplayName,
+    rating: row.rating,
+    title: row.title,
+    body: row.body,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  };
 }
