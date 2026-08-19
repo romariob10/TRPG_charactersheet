@@ -61,7 +61,7 @@ export async function signOut() {
   } catch {
     await clearLocalSessionCookie();
   }
-  redirect("/");
+  redirect("/auth/sign-in");
 }
 
 function errorMessage(error: unknown) {

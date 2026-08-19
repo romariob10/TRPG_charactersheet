@@ -5,7 +5,7 @@ import { notFound } from "next/navigation";
 import { getLocale, getTranslations } from "next-intl/server";
 import { PostContent } from "@/components/post-content";
 import { PostReactions } from "@/components/post-reactions";
-import { SiteHeader } from "@/components/site-header";
+import { AppShell } from "@/components/app-shell";
 import { buttonClassName } from "@/components/ui/button";
 import { getSession } from "@/lib/auth";
 import { getPublicPost } from "@/lib/community";
@@ -58,8 +58,7 @@ export default async function PublicPostPage({
   }).format(new Date(post.publishedAt));
 
   return (
-    <>
-      <SiteHeader authenticated={Boolean(session)} />
+    <AppShell>
       <main className="page-shell py-5 sm:py-9">
         <article className="mx-auto max-w-3xl overflow-hidden rounded-[1.25rem] border border-[var(--border)] bg-[var(--surface)] shadow-[0_12px_45px_rgba(15,62,23,.05)]">
           <header className="border-b border-[var(--border)] px-5 py-5 sm:px-9 sm:py-7">
@@ -117,6 +116,6 @@ export default async function PublicPostPage({
           </footer>
         </article>
       </main>
-    </>
+    </AppShell>
   );
 }

@@ -140,23 +140,15 @@
     "backToFeed": "Back to feed",
     "postBy": "Post by @{username}"
   },
-  "Landing": {
-    "eyebrow": "Character sheets your AI can understand",
-    "title": "Your character lives inside the PDF",
-    "description": "Upload interactive D&D, Pathfinder, and other TTRPG sheets. Edit together, save automatically, and update stats with a natural-language command.",
-    "primary": "Create a character",
-    "secondary": "Sign in",
-    "dashboard": "Open the feed",
-    "catalog": "Smart field catalog",
-    "catalogText": "Finds labels, sections, and related groups even when fields are named str_12.",
-    "collab": "Play together",
-    "collabText": "Editor changes appear on the sheet instantly without a reload.",
-    "export": "A real PDF",
-    "exportText": "Download an editable AcroForm or a print-ready flattened copy.",
-    "strength": "Strength",
-    "dexterity": "Dexterity",
-    "constitution": "Constitution",
-    "sampleCommand": "Add two level 2 spells"
+  "Sidebar": {
+    "navigation": "Workspace",
+    "primary": "Primary navigation",
+    "collapse": "Collapse sidebar",
+    "expand": "Expand sidebar",
+    "openNavigation": "Open navigation",
+    "closeNavigation": "Close navigation",
+    "account": "Account",
+    "adminConsole": "Admin console"
   },
   "Auth": {
     "signIn": "Sign in",

@@ -5,7 +5,7 @@ import { notFound } from "next/navigation";
 import { getLocale, getTranslations } from "next-intl/server";
 import { RemixButton } from "@/components/remix-button";
 import { LikeButton } from "@/components/social-like-button";
-import { SiteHeader } from "@/components/site-header";
+import { AppShell } from "@/components/app-shell";
 import { TemplateComments } from "@/components/template-comments";
 import { TemplateReviews } from "@/components/template-reviews";
 import { buttonClassName } from "@/components/ui/button";
@@ -17,6 +17,7 @@ import {
 import type { MyProfile } from "@/lib/types";
 import type { ListTemplateReviewsResponse } from "@mycharacter/contracts";
 import { apiFetch } from "@/lib/api/server";
+import { getMyProfile } from "@/lib/profile";
 import { ApiClientError } from "@/lib/api/client";
 
 interface RouteParams {
@@ -67,18 +68,17 @@ export default async function CommunityTemplatePage({
   let myProfile: MyProfile | null = null;
   if (session) {
     try {
-      myProfile = (await apiFetch<MyProfile>("/api/profiles/me")).data;
+      myProfile = await getMyProfile();
     } catch (error) {
       if (!(error instanceof ApiClientError && error.status === 401)) throw error;
     }
   }
 
   return (
-    <>
-      <SiteHeader authenticated={Boolean(session)} />
+    <AppShell>
       <main className="page-shell py-8">
         <Link
-          href={session ? "/dashboard/systems/community" : "/"}
+          href={session ? "/dashboard/systems/community" : `/users/${username}`}
           className="text-sm font-semibold text-[var(--brand)] hover:underline"
         >
           ← {t("back")}
@@ -183,6 +183,6 @@ export default async function CommunityTemplatePage({
           </aside>
         </div>
       </main>
-    </>
+    </AppShell>
   );
 }
