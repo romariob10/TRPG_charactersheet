@@ -149,7 +149,12 @@
     "closeNavigation": "Close navigation",
     "account": "Account",
     "adminConsole": "Admin console",
-    "newArticle": "New article"
+    "newArticle": "New article",
+    "historyEmpty": "Saved posts, chats, characters and systems will appear here",
+    "historyPinned": "Pinned",
+    "historyUnread": "New activity",
+    "historyPin": "Pin",
+    "historyUnpin": "Unpin"
   },
   "Auth": {
     "signIn": "Sign in",

@@ -149,7 +149,12 @@
     "closeNavigation": "Закрыть навигацию",
     "account": "Аккаунт",
     "adminConsole": "Админ-панель",
-    "newArticle": "Новая статья"
+    "newArticle": "Новая статья",
+    "historyEmpty": "Здесь появятся сохранённые посты, переписки, персонажи и системы",
+    "historyPinned": "Закреплено",
+    "historyUnread": "Есть новые события",
+    "historyPin": "Закрепить",
+    "historyUnpin": "Открепить"
   },
   "Auth": {
     "signIn": "Вход",

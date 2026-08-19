@@ -29,6 +29,11 @@ vi.mock("@/components/notification-bell", () => ({
   NotificationBell: () => <div data-testid="notification-bell" />,
 }));
 
+// The history list fetches and navigates; the shell test only cares it mounts.
+vi.mock("@/components/workspace-history", () => ({
+  WorkspaceHistory: () => <div data-testid="workspace-history" />,
+}));
+
 const baseProfile: SidebarProfile = {
   username: "gamemaster",
   displayName: "Game Master",

@@ -22,6 +22,7 @@ import { useTranslations } from "next-intl";
 import { Logo } from "@/components/logo";
 import { NotificationBell } from "@/components/notification-bell";
 import { Popover, PopoverItem } from "@/components/ui/popover";
+import { WorkspaceHistory } from "@/components/workspace-history";
 import { signOut } from "@/app/auth/actions";
 import { cn } from "@/lib/utils";
 
@@ -211,8 +212,7 @@ export function AppSidebar({
           })}
         </nav>
 
-        {/* The unified history list is mounted here in a later stage. */}
-        <div className="min-h-0 flex-1 overflow-y-auto" />
+        <WorkspaceHistory collapsed={collapsed} />
 
         <div className="shrink-0 border-t border-[var(--border)] p-2">
           <div

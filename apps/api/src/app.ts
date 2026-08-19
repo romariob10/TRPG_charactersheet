@@ -44,6 +44,7 @@ import { registerDirectMessageRoutes } from "./modules/messages/routes.js";
 import { registerNotificationRoutes } from "./modules/notifications/routes.js";
 import { registerPostRoutes } from "./modules/posts/routes.js";
 import { registerSearchRoutes } from "./modules/search/routes.js";
+import { registerWorkspaceRoutes } from "./modules/workspace/routes.js";
 import { registerAuth } from "./plugins/auth.js";
 import { registerDatabase } from "./plugins/database.js";
 import { registerStorage } from "./plugins/storage.js";
@@ -140,6 +141,7 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
   await registerSocialRoutes(app);
   await registerPostRoutes(app);
   await registerSearchRoutes(app);
+  await registerWorkspaceRoutes(app);
   await registerNotificationRoutes(app);
   await registerDirectMessageRoutes(app);
   await registerInvitationRoutes(app);

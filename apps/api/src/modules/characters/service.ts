@@ -8,6 +8,7 @@ import type {
 import type { Database } from "@mycharacter/database";
 import type { Kysely } from "kysely";
 import { AppError } from "../../errors.js";
+import { WorkspaceService } from "../workspace/service.js";
 import {
   findCharacterAccess,
   loadCharacterFields,
@@ -119,6 +120,15 @@ export class CharacterService {
         .execute();
       return created.id;
     });
+
+    const workspace = new WorkspaceService(this.db);
+    await workspace.recordActivity(actorId, "character", characterId, {
+      markSeen: true,
+    });
+    await workspace.recordActivity(actorId, "system", input.templateId, {
+      markSeen: true,
+    });
+
     return this.get(actorId, characterId);
   }
 

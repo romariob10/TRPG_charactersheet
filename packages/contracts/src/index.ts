@@ -269,3 +269,15 @@ export type {
   TemplateReview,
   UpdateTemplateMetadataRequest,
 } from "./template-reviews.js";
+export {
+  listWorkspaceHistoryResponseSchema,
+  pinWorkspaceItemRequestSchema,
+  workspaceItemKindSchema,
+  workspaceItemSchema,
+} from "./workspace.js";
+export type {
+  ListWorkspaceHistoryResponse,
+  PinWorkspaceItemRequest,
+  WorkspaceItem,
+  WorkspaceItemKind,
+} from "./workspace.js";
