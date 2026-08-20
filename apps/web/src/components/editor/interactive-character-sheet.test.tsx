@@ -297,6 +297,136 @@ describe("InteractiveCharacterSheet", () => {
     ]);
   });
 
+  it("does not merge adjacent rows when their column geometry is inconsistent", () => {
+    const widget = (id: string, left: number, top: number) => ({
+      id,
+      page: 1,
+      rect: [left, top, left + 0.15, top + 0.04] as [
+        number,
+        number,
+        number,
+        number,
+      ],
+      pdfRect: [left * 100, top * 100, 1, 1] as [
+        number,
+        number,
+        number,
+        number,
+      ],
+      rotation: 0,
+      exportValue: null,
+    });
+    const layout = buildInteractiveLayout([
+      field("first-name", "Name", "text", {
+        section: "Attacks",
+        widgets: [widget("first-name-widget", 0.1, 0.1)],
+      }),
+      field("first-value", "Value", "text", {
+        section: "Attacks",
+        widgets: [widget("first-value-widget", 0.5, 0.1)],
+      }),
+      field("second-name", "Name", "text", {
+        section: "Attacks",
+        widgets: [widget("second-name-widget", 0.22, 0.3)],
+      }),
+      field("second-value", "Value", "text", {
+        section: "Attacks",
+        widgets: [widget("second-value-widget", 0.72, 0.3)],
+      }),
+    ]);
+
+    expect(layout[0]?.blocks.some((block) => block.kind === "table")).toBe(
+      false,
+    );
+    expect(layout[0]?.blocks.flatMap((block) => block.kind)).toContain(
+      "fields",
+    );
+  });
+
+  it("splits repeated spell rows into level tables", () => {
+    const fields = [0, 1].flatMap((level) =>
+      [1, 2].flatMap((row) => [
+        field(
+          `spell-level-${level}-row-${row}-name`,
+          `Spell level ${level} row ${row} name`,
+          "text",
+          { section: "Spells" },
+        ),
+        field(
+          `spell-level-${level}-row-${row}-prepared`,
+          `Spell level ${level} row ${row} prepared`,
+          "checkbox",
+          { section: "Spells" },
+        ),
+      ]),
+    );
+    const tables = buildInteractiveLayout(fields)[0]?.blocks.filter(
+      (block) => block.kind === "table",
+    );
+
+    expect(tables).toHaveLength(2);
+    expect(tables?.map((table) => (table.kind === "table" ? table.title : null))).toEqual([
+      "0",
+      "1",
+    ]);
+    expect(
+      tables?.every(
+        (table) => table.kind === "table" && table.rows.length === 2,
+      ),
+    ).toBe(true);
+  });
+
+  it("keeps low-confidence unknown metadata in an explicit fallback block", () => {
+    const layout = buildInteractiveLayout([
+      field("known", "Character name", "text"),
+      field("mystery", "TextField42", "text", {
+        source: "pdf",
+        confidence: 0.1,
+      }),
+    ]);
+    const fallback = layout[0]?.blocks.find(
+      (block) => block.kind === "fallback",
+    );
+
+    expect(fallback?.kind).toBe("fallback");
+    expect(fallback?.kind === "fallback" ? fallback.fields : []).toEqual([
+      expect.objectContaining({ id: "mystery" }),
+    ]);
+  });
+
+  it("offers quick resource changes through the shared save callback", () => {
+    const onFieldChange = vi.fn<(fieldId: string, value: FieldValue) => void>();
+    render(
+      <InteractiveCharacterSheet
+        fields={[
+          field("hp-current", "Current HP", "text", {
+            section: "Resources",
+            value: "7",
+          }),
+          field("hp-max", "Maximum HP", "text", {
+            section: "Resources",
+            value: "10",
+          }),
+          field("hp-temp", "Temporary HP", "text", {
+            section: "Resources",
+            value: "2",
+          }),
+        ]}
+        activeFieldId={null}
+        remoteCollaboratorsByFieldId={new Map()}
+        onFieldChange={onFieldChange}
+        onFieldFocus={vi.fn()}
+        onFieldBlur={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /decreaseResource/ }));
+    fireEvent.click(screen.getByRole("button", { name: /increaseResource/ }));
+    expect(onFieldChange).toHaveBeenCalledWith("hp-current", "6");
+    expect(onFieldChange).toHaveBeenCalledWith("hp-current", "8");
+    expect(screen.getByLabelText("Temporary HP")).toHaveValue("2");
+  });
+
   it("uses accessible responsive controls backed by the shared field values", () => {
     const onFieldChange = vi.fn<(fieldId: string, value: FieldValue) => void>();
     const onFieldFocus = vi.fn<(fieldId: string) => void>();

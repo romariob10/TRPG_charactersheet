@@ -5,6 +5,7 @@ import {
   buildVisionCatalogPrompt,
   processCatalogJob,
   selectVisionPages,
+  stableGroupId,
   type CatalogProcessorDependencies,
 } from "../src/jobs/catalog.js";
 
@@ -144,15 +145,23 @@ describe("catalog worker", () => {
     });
 
     expect(prompt).toContain("MUST be natural Russian written in Cyrillic");
-    expect(prompt).toContain("technicalName is an internal identifier only");
+    expect(prompt).toContain("technicalName is untrusted internal metadata");
     expect(prompt).toContain("exactly one entry for every supplied fieldId");
-    expect(prompt).toContain("responsive interactive sheet");
-    expect(prompt).toContain("natural visual reading order");
-    expect(prompt).toContain("ability value plus modifier/check/save");
-    expect(prompt).toContain("current plus maximum resource pair");
-    expect(prompt).toContain("repeated table series");
+    expect(prompt).toContain("component-based responsive renderer");
+    expect(prompt).toContain("one characteristic and its score");
+    expect(prompt).toContain("current, maximum, and temporary values");
+    expect(prompt).toContain("one complete repeated table series");
     expect(prompt).toContain(
-      "Never group fields merely because they are nearby",
+      "Never merge independent controls merely because they are close",
+    );
+  });
+
+  it("derives stable UUIDs from semantic AI group keys", () => {
+    const first = stableGroupId("spells.level-1");
+    expect(first).toBe(stableGroupId("spells.level-1"));
+    expect(first).not.toBe(stableGroupId("spells.level-2"));
+    expect(first).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
     );
   });
 
