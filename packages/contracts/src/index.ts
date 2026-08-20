@@ -27,6 +27,7 @@ export {
   fieldMutationRequestSchema,
   fieldMutationResponseSchema,
   fieldValueSchema,
+  inviteUserRequestSchema,
   updateCharacterRequestSchema,
 } from "./characters.js";
 export type {
@@ -41,6 +42,7 @@ export type {
   FieldMutationResponse,
   FieldValue,
   FieldWidget,
+  InviteUserRequest,
   PublicCharacterSummary,
   UpdateCharacterRequest,
 } from "./characters.js";
@@ -57,6 +59,8 @@ export type {
   TemplateCommentList,
 } from "./community.js";
 export {
+  friendSummarySchema,
+  listFriendsResponseSchema,
   myProfileSchema,
   publicAuthorSchema,
   publicProfileSchema,
@@ -65,6 +69,8 @@ export {
   usernameSchema,
 } from "./profiles.js";
 export type {
+  FriendSummary,
+  ListFriendsResponse,
   MyProfile,
   PublicAuthor,
   PublicProfile,
@@ -90,6 +96,7 @@ export type {
 export {
   characterChangesResponseSchema,
   fieldChangedEventSchema,
+  presenceMemberSchema,
   realtimeClientMessageSchema,
   realtimeServerMessageSchema,
 } from "./realtime.js";
@@ -97,6 +104,7 @@ export type {
   CharacterChangesResponse,
   CatalogProgressEvent,
   FieldChangedEvent,
+  PresenceMember,
   RealtimeClientMessage,
   RealtimeServerMessage,
 } from "./realtime.js";
@@ -269,3 +277,33 @@ export type {
   TemplateReview,
   UpdateTemplateMetadataRequest,
 } from "./template-reviews.js";
+export {
+  listWorkspaceHistoryResponseSchema,
+  pinWorkspaceItemRequestSchema,
+  workspaceItemKindSchema,
+  workspaceItemSchema,
+} from "./workspace.js";
+export type {
+  ListWorkspaceHistoryResponse,
+  PinWorkspaceItemRequest,
+  WorkspaceItem,
+  WorkspaceItemKind,
+} from "./workspace.js";
+export {
+  filePostRequestSchema,
+  listSystemMaterialsResponseSchema,
+  materialFileTypeSchema,
+  systemMaterialSchema,
+  systemWorkspaceResponseSchema,
+  workspaceCharacterSchema,
+  workspacePostSchema,
+} from "./system-workspace.js";
+export type {
+  FilePostRequest,
+  ListSystemMaterialsResponse,
+  MaterialFileType,
+  SystemMaterial,
+  SystemWorkspaceResponse,
+  WorkspaceCharacter,
+  WorkspacePost,
+} from "./system-workspace.js";

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import { Check, FilePlus2, RefreshCw } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -30,8 +30,10 @@ export function CreateCharacterForm({
   );
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const submittingRef = useRef(false);
 
   async function submit(formData: FormData) {
+    if (submittingRef.current || pending) return;
     const name = String(formData.get("name") ?? "").trim();
     if (!name) {
       setError(t("enterName"));
@@ -41,6 +43,7 @@ export function CreateCharacterForm({
       setError(t("selectTemplate"));
       return;
     }
+    submittingRef.current = true;
     setPending(true);
     setError(null);
     try {
@@ -53,6 +56,7 @@ export function CreateCharacterForm({
       });
       router.push(`/characters/${result.id}`);
     } catch (reason) {
+      submittingRef.current = false;
       setError(reason instanceof Error ? reason.message : t("createFailed"));
       setPending(false);
     }

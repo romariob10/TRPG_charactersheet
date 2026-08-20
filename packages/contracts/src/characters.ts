@@ -22,6 +22,16 @@ export const acceptInvitationRequestSchema = z.object({
   token: z.string().min(16).max(512),
 });
 
+export const inviteUserRequestSchema = z
+  .object({
+    username: z.string().trim().min(1).max(80).optional(),
+    userId: z.string().uuid().optional(),
+  })
+  .refine((data) => Boolean(data.username || data.userId), {
+    message: "Either username or userId must be provided.",
+  });
+export type InviteUserRequest = z.infer<typeof inviteUserRequestSchema>;
+
 export const fieldValueSchema = z.union([
   z.string().max(20_000),
   z.boolean(),

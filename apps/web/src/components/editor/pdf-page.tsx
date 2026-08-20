@@ -11,6 +11,7 @@ export function PdfPage({
   zoom,
   multilineFontScale,
   activeFieldId,
+  remoteCollaboratorsByFieldId,
   fields,
   values,
   onFieldChange,
@@ -22,6 +23,7 @@ export function PdfPage({
   zoom: number;
   multilineFontScale: number;
   activeFieldId: string | null;
+  remoteCollaboratorsByFieldId?: Map<string, { username?: string; displayName?: string | null }>;
   fields: CharacterField[];
   values: Map<string, FieldValue>;
   onFieldChange: (fieldId: string, value: FieldValue) => void;
@@ -83,6 +85,7 @@ export function PdfPage({
               zoom={zoom}
               multilineFontScale={multilineFontScale}
               active={activeFieldId === field.id}
+              remoteCollaborator={remoteCollaboratorsByFieldId?.get(field.id)}
               onChange={(value) => onFieldChange(field.id, value)}
               onFocus={() => onFieldFocus(field.id)}
               onBlur={() => onFieldBlur(field.id)}

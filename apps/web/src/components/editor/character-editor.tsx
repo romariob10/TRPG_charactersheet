@@ -13,6 +13,7 @@ import {
   PanelLeft,
   Plus,
   Search,
+  UserPlus,
   Users,
 } from "lucide-react";
 import { useTranslations } from "next-intl";
@@ -22,6 +23,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PdfPage } from "@/components/editor/pdf-page";
 import { AiAssistant } from "@/components/editor/ai-assistant";
+import { InviteEditorModal } from "@/components/editor/invite-editor-modal";
 import {
   readResponseBody,
   toApiClientError,
@@ -55,6 +57,10 @@ export function CharacterEditor({
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activeFieldId, setActiveFieldId] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [inviteModalOpen, setInviteModalOpen] = useState(false);
+  const [remoteCollaborators, setRemoteCollaborators] = useState<
+    Map<string, { username?: string; displayName?: string | null }>
+  >(() => new Map());
   const timers = useRef(new Map<string, number>());
   const dirty = useRef(new Set<string>());
   const saveChains = useRef(new Map<string, Promise<boolean>>());
@@ -287,6 +293,24 @@ export function CharacterEditor({
       characterId: initialCharacter.id,
       initialRevision: initialCharacter.revision,
       onPresence: (count) => setOnlineUsers(count || 1),
+      onPresenceMembers: (members) => {
+        const map = new Map<
+          string,
+          { username?: string; displayName?: string | null }
+        >();
+        for (const member of members) {
+          if (
+            member.userId !== initialCharacter.currentUserId &&
+            member.fieldId
+          ) {
+            map.set(member.fieldId, {
+              username: member.username,
+              displayName: member.displayName,
+            });
+          }
+        }
+        setRemoteCollaborators(map);
+      },
       onSnapshot: (snapshot) => {
         setFields((current) => {
           const currentById = new Map(current.map((field) => [field.id, field]));
@@ -495,8 +519,12 @@ export function CharacterEditor({
               <span className="text-base font-bold">A+</span>
             </Button>
             {initialCharacter.role === "owner" && (
-              <Button variant="secondary" size="sm" onClick={createInvite}>
-                <Link2 className="size-4" />
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setInviteModalOpen(true)}
+              >
+                <UserPlus className="size-4" />
                 {t("invite")}
               </Button>
             )}
@@ -601,6 +629,7 @@ export function CharacterEditor({
                     zoom={zoom}
                     multilineFontScale={multilineFontScale}
                     activeFieldId={activeFieldId}
+                    remoteCollaboratorsByFieldId={remoteCollaborators}
                     fields={fields}
                     values={values}
                     onFieldChange={updateField}
@@ -638,6 +667,12 @@ export function CharacterEditor({
           </main>
         </div>
       </div>
+      <InviteEditorModal
+        characterId={initialCharacter.id}
+        characterName={initialCharacter.name}
+        isOpen={inviteModalOpen}
+        onClose={() => setInviteModalOpen(false)}
+      />
     </AiAssistant>
   );
 }

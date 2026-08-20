@@ -6,9 +6,17 @@ import { Bell, CheckCheck, ExternalLink } from "lucide-react";
 import { useTranslations } from "next-intl";
 import type { ListNotificationsResponse, NotificationItem } from "@mycharacter/contracts";
 import { apiFetch } from "@/lib/api/client";
-import { formatRelativeDate } from "@/lib/utils";
+import { cn, formatRelativeDate } from "@/lib/utils";
 
-export function NotificationBell({ locale }: { locale: string }) {
+export function NotificationBell({
+  locale,
+  dropSide = "down",
+}: {
+  locale: string;
+  // A collapsed sidebar has no room under the bell, so the panel opens
+  // horizontally beside it instead. In full sidebar, "up" opens above footer.
+  dropSide?: "down" | "right" | "up";
+}) {
   const t = useTranslations("Notifications");
   const [open, setOpen] = useState(false);
   const [data, setData] = useState<ListNotificationsResponse>({
@@ -103,7 +111,14 @@ export function NotificationBell({ locale }: { locale: string }) {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full z-50 mt-2 w-80 sm:w-96 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3 shadow-xl">
+        <div
+          className={cn(
+            "absolute z-50 w-80 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3 shadow-xl sm:w-96",
+            dropSide === "right" && "left-full top-1/2 ml-2 -translate-y-1/2",
+            dropSide === "up" && "bottom-full left-0 mb-2",
+            dropSide === "down" && "right-0 top-full mt-2",
+          )}
+        >
           <div className="flex items-center justify-between border-b border-[var(--border)] pb-2.5 px-1">
             <span className="text-xs font-bold uppercase tracking-wider text-[var(--foreground)]">
               {t("title")}

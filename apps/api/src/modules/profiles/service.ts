@@ -1,4 +1,5 @@
 import type {
+  FriendSummary,
   MyProfile,
   PublicCharacterSummary,
   PublicProfile,
@@ -373,6 +374,28 @@ export class ProfileService {
       throw error;
     }
     return this.getMyProfile(actorId);
+  }
+
+  async listFriends(actorId: string): Promise<FriendSummary[]> {
+    const rows = await this.db
+      .selectFrom("profile_follows as f1")
+      .innerJoin("profile_follows as f2", (join) =>
+        join
+          .onRef("f2.follower_id", "=", "f1.following_id")
+          .onRef("f2.following_id", "=", "f1.follower_id"),
+      )
+      .innerJoin("profiles as p", "p.id", "f1.following_id")
+      .innerJoin("users as u", "u.id", "p.id")
+      .select([
+        "p.id",
+        "p.username",
+        "p.display_name as displayName",
+      ])
+      .where("f1.follower_id", "=", actorId)
+      .where("u.status", "=", "active")
+      .orderBy("p.username", "asc")
+      .execute();
+    return rows;
   }
 
   private async requireProfileByUsername(username: string): Promise<{ id: string }> {

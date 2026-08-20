@@ -7,7 +7,7 @@ import { FollowButton } from "@/components/follow-button";
 import { LikeButton } from "@/components/social-like-button";
 import { RemixButton } from "@/components/remix-button";
 import { SendMessageButton } from "@/components/send-message-button";
-import { SiteHeader } from "@/components/site-header";
+import { AppShell } from "@/components/app-shell";
 import { buttonClassName } from "@/components/ui/button";
 import { getSession } from "@/lib/auth";
 import { getPublicProfile } from "@/lib/community";
@@ -40,8 +40,7 @@ export default async function PublicProfilePage({ params }: { params: Promise<Ro
   const joined = new Intl.DateTimeFormat(locale, { month: "long", year: "numeric" }).format(new Date(profile.joinedAt));
 
   return (
-    <>
-      <SiteHeader authenticated={Boolean(session)} />
+    <AppShell>
       <main className="page-shell py-5 sm:py-8">
         <section className="overflow-hidden rounded-[1.25rem] border border-[var(--border)] bg-[var(--surface)]">
           <div className="h-28 bg-[linear-gradient(120deg,var(--brand)_0%,#245e32_55%,var(--sage)_180%)] sm:h-40">
@@ -118,7 +117,7 @@ export default async function PublicProfilePage({ params }: { params: Promise<Ro
           </ProfileSection>
         </div>
       </main>
-    </>
+    </AppShell>
   );
 }
 

@@ -4,7 +4,7 @@ import { FileUser, Globe2 } from "lucide-react";
 import { notFound } from "next/navigation";
 import { LikeButton } from "@/components/social-like-button";
 import { RemixButton } from "@/components/remix-button";
-import { SiteHeader } from "@/components/site-header";
+import { AppShell } from "@/components/app-shell";
 import { getSession } from "@/lib/auth";
 import { getPublicCharacter } from "@/lib/community";
 
@@ -30,8 +30,7 @@ export default async function PublicCharacterPage({ params }: { params: Promise<
   if (!character) notFound();
 
   return (
-    <>
-      <SiteHeader authenticated={Boolean(session)} />
+    <AppShell>
       <main className="page-shell py-5 sm:py-8">
         <Link href={session ? "/dashboard/feed" : `/users/${username}`} className="text-sm font-bold text-[var(--brand)] hover:underline">← Назад в ленту</Link>
         <div className="mt-4 grid gap-6 lg:grid-cols-[minmax(0,720px)_minmax(250px,1fr)]">
@@ -57,7 +56,7 @@ export default async function PublicCharacterPage({ params }: { params: Promise<
           </aside>
         </div>
       </main>
-    </>
+    </AppShell>
   );
 }
 

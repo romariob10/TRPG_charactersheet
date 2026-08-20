@@ -3,11 +3,15 @@ import type {
   CharacterEditorData,
   CharacterSummary,
   CreateCharacterRequest,
+  InviteUserRequest,
   UpdateCharacterRequest,
 } from "@mycharacter/contracts";
 import type { Database } from "@mycharacter/database";
 import type { Kysely } from "kysely";
 import { AppError } from "../../errors.js";
+import { DirectMessageService } from "../messages/service.js";
+import { NotificationService } from "../notifications/service.js";
+import { WorkspaceService } from "../workspace/service.js";
 import {
   findCharacterAccess,
   loadCharacterFields,
@@ -119,6 +123,15 @@ export class CharacterService {
         .execute();
       return created.id;
     });
+
+    const workspace = new WorkspaceService(this.db);
+    await workspace.recordActivity(actorId, "character", characterId, {
+      markSeen: true,
+    });
+    await workspace.recordActivity(actorId, "system", input.templateId, {
+      markSeen: true,
+    });
+
     return this.get(actorId, characterId);
   }
 
@@ -218,6 +231,71 @@ export class CharacterService {
       })
       .execute();
     return { token, expiresAt: expiresAt.toISOString() };
+  }
+
+  async inviteUser(
+    actorId: string,
+    characterId: string,
+    input: InviteUserRequest,
+  ): Promise<{ token: string; expiresAt: string; recipientUsername: string }> {
+    await this.authorizeCharacter(actorId, characterId, "invite");
+    const character = await this.get(actorId, characterId);
+    const inviter = await this.db
+      .selectFrom("profiles")
+      .select(["username", "display_name as displayName"])
+      .where("id", "=", actorId)
+      .executeTakeFirst();
+
+    let targetUser: { id: string; username: string } | undefined;
+    if (input.userId) {
+      targetUser = await this.db
+        .selectFrom("profiles")
+        .select(["id", "username"])
+        .where("id", "=", input.userId)
+        .executeTakeFirst();
+    } else if (input.username) {
+      targetUser = await this.db
+        .selectFrom("profiles")
+        .select(["id", "username"])
+        .where("username", "=", input.username.toLowerCase())
+        .executeTakeFirst();
+    }
+
+    if (!targetUser) {
+      throw new AppError("USER_NOT_FOUND", 404, "User not found.");
+    }
+    if (targetUser.id === actorId) {
+      throw new AppError("INVITE_SELF", 400, "You cannot invite yourself.");
+    }
+
+    const invite = await this.createInvite(actorId, characterId);
+    const inviterName = inviter?.displayName || (inviter?.username ? `@${inviter.username}` : "Пользователь");
+
+    // Send direct message with invite link
+    const directMessageService = new DirectMessageService(this.db);
+    const conversationId = await directMessageService.getOrCreateConversation(actorId, targetUser.id);
+    await directMessageService.sendMessage(
+      actorId,
+      conversationId,
+      `Привет! Приглашаю тебя редактировать лист персонажа «${character.name}»!\nПерейди по ссылке для входа: /invites/${invite.token}`,
+    );
+
+    // Send notification
+    await new NotificationService(this.db).notify({
+      userId: targetUser.id,
+      actorId,
+      type: "character_invite",
+      targetType: "character",
+      targetId: characterId,
+      title: "Приглашение к редактированию",
+      body: `${inviterName} пригласил вас редактировать персонажа «${character.name}».`,
+    });
+
+    return {
+      token: invite.token,
+      expiresAt: invite.expiresAt,
+      recipientUsername: targetUser.username,
+    };
   }
 
   async acceptInvite(actorId: string, token: string): Promise<{ characterId: string }> {

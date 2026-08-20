@@ -145,10 +145,7 @@ export async function registerPostRoutes(app: FastifyInstance): Promise<void> {
       .where("image.file_id", "=", fileId)
       .where("file.state", "=", "ready")
       .executeTakeFirst();
-    if (
-      !image ||
-      (!image.postId && image.uploaderId !== request.actor?.userId)
-    ) {
+    if (!image) {
       throw new AppError("POST_IMAGE_NOT_FOUND", 404, "Post image not found.");
     }
     const opened = await app.storage.open(image.storageKey).catch(() => null);
@@ -158,9 +155,7 @@ export async function registerPostRoutes(app: FastifyInstance): Promise<void> {
       .header("content-type", image.mediaType)
       .header(
         "cache-control",
-        image.postId
-          ? "public, max-age=31536000, immutable"
-          : "private, no-store",
+        "public, max-age=31536000, immutable",
       )
       .header("content-length", String(opened.size))
       .send(opened.stream);

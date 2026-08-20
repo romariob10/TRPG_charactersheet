@@ -16,6 +16,8 @@ export interface Actor {
   sessionId: string;
   role: SiteRole;
   isAdmin: boolean;
+  username?: string;
+  displayName?: string | null;
 }
 
 export interface AuthPluginOptions {
@@ -55,6 +57,8 @@ export async function registerAuth(
       sessionId: session.sessionId,
       role: session.role,
       isAdmin: session.isAdmin,
+      username: session.username,
+      displayName: session.displayName,
     };
     assertCookieMutationOrigin(request, options, allowedOrigins);
     await touchSessionIfStale(db, session);

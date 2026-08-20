@@ -15,6 +15,7 @@ import { AppError } from "../../errors.js";
 import { AuditService } from "../audit/service.js";
 import { UserModerationService } from "../moderation/user-moderation-service.js";
 import { NotificationService } from "../notifications/service.js";
+import { WorkspaceService } from "../workspace/service.js";
 
 const NO_ACTOR_UUID = "00000000-0000-0000-0000-000000000000";
 const REACTIONS = [
@@ -505,6 +506,9 @@ export class PostService {
       .values({ user_id: actorId, post_id: postId })
       .onConflict((conflict) => conflict.doNothing())
       .execute();
+    await new WorkspaceService(this.db).recordActivity(actorId, "post", postId, {
+      markSeen: true,
+    });
     return true;
   }
 
@@ -515,6 +519,7 @@ export class PostService {
       .where("user_id", "=", actorId)
       .where("post_id", "=", postId)
       .execute();
+    await new WorkspaceService(this.db).removeUnpinned(actorId, "post", postId);
     return false;
   }
 

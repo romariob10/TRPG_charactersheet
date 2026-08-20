@@ -14,6 +14,8 @@ export interface ActorSession {
   userId: string;
   role: SiteRole;
   isAdmin: boolean;
+  username?: string;
+  displayName?: string | null;
   lastUsedAt: Date;
 }
 
@@ -62,6 +64,8 @@ export async function findActiveSession(
     .select([
       "sessions.id as sessionId",
       "sessions.user_id as userId",
+      "profiles.username as username",
+      "profiles.display_name as displayName",
       "profiles.site_role as siteRole",
       "profiles.is_admin as isAdmin",
       "sessions.last_used_at as lastUsedAt",
@@ -77,6 +81,8 @@ export async function findActiveSession(
   return {
     sessionId: session.sessionId,
     userId: session.userId,
+    username: session.username ?? undefined,
+    displayName: session.displayName ?? null,
     role: session.isAdmin
       ? "admin"
       : ((session.siteRole as SiteRole | null) ?? "user"),

@@ -8,6 +8,7 @@ import { sql, type Kysely } from "kysely";
 import { AppError } from "../../errors.js";
 import { UserModerationService } from "../moderation/user-moderation-service.js";
 import { NotificationService } from "../notifications/service.js";
+import { WorkspaceService } from "../workspace/service.js";
 
 export class DirectMessageService {
   private readonly db: Kysely<Database>;
@@ -224,6 +225,12 @@ export class DirectMessageService {
       body: body.trim().slice(0, 100),
       metadata: { conversationId },
     });
+
+    const workspace = new WorkspaceService(this.db);
+    await workspace.recordActivity(userId, "conversation", conversationId, {
+      markSeen: true,
+    });
+    await workspace.recordActivity(recipientId, "conversation", conversationId);
 
     return {
       id: String(row.id),
