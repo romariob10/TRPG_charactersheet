@@ -3,6 +3,8 @@ import { sql } from "kysely";
 import { createDatabase } from "../src/db.js";
 import { runMigrations } from "../src/migrate.js";
 import { createTestDatabase, destroyTestDatabase } from "../src/testing.js";
+import { down as removeWorkspaceItems } from "../migrations/202608190004_workspace_items.js";
+import { down as removeSystemProjects } from "../migrations/202608190005_system_projects.js";
 
 const REPAIR_MIGRATION = "202608190001_repair_social_tables";
 
@@ -40,8 +42,19 @@ describe("social table repair migration", () => {
   }
 
   // Kysely refuses to run migrations out of order, so every record from the
-  // repair migration onwards has to go for it to be replayed.
+  // repair migration onwards has to go for it to be replayed. Revert the
+  // objects from those later migrations as well so their normal, intentionally
+  // non-idempotent `up` functions can run again inside this isolated schema.
   async function forgetRepairMigration(): Promise<void> {
+    const db = createDatabase(testDb.databaseUrl, {
+      searchPath: `${testDb.schema},public`,
+    });
+    try {
+      await removeSystemProjects(db);
+      await removeWorkspaceItems(db);
+    } finally {
+      await db.destroy();
+    }
     await sql`
       delete from ${sql.id(testDb.schema, "kysely_migration")}
       where name >= ${REPAIR_MIGRATION}

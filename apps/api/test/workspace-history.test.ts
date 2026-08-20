@@ -29,7 +29,9 @@ describe("workspace history", () => {
   beforeAll(async () => {
     testDb = await createTestDatabase();
     db = testDb.db as unknown as Kysely<Database>;
-    storageRoot = await mkdtemp(join(tmpdir(), "mycharacter-workspace-history-"));
+    storageRoot = await mkdtemp(
+      join(tmpdir(), "mycharacter-workspace-history-"),
+    );
     app = await buildApp({
       database: db,
       databaseUrl: testDb.databaseUrl,
@@ -95,9 +97,12 @@ describe("workspace history", () => {
     expect(body.items[0].pinned).toBe(true);
   });
 
-  it("marks an incoming conversation unread until it is seen", async () => {
+  it("marks an incoming conversation and its notification read when opened", async () => {
     const messages = new DirectMessageService(db);
-    const conversationId = await messages.getOrCreateConversation(bobId, aliceId);
+    const conversationId = await messages.getOrCreateConversation(
+      bobId,
+      aliceId,
+    );
     await messages.sendMessage(bobId, conversationId, "hey alice");
 
     let body = await listHistory(aliceCookie);
@@ -106,15 +111,33 @@ describe("workspace history", () => {
     expect(conversation?.unread).toBe(true);
     expect(conversation?.subtitle).toBe("hey alice");
 
-    await app.inject({
-      method: "PUT",
-      url: `/api/workspace/history/${conversation?.id}/seen`,
+    const opened = await app.inject({
+      method: "GET",
+      url: `/api/messages/conversations/${conversationId}`,
       cookies: { mycharacter_session: aliceCookie },
     });
+    expect(opened.statusCode).toBe(200);
+    expect(opened.json().messages[0].readAt).not.toBeNull();
 
     body = await listHistory(aliceCookie);
     const seen = body.items.find((i) => i.kind === "conversation");
     expect(seen?.unread).toBe(false);
+
+    const conversations = await app.inject({
+      method: "GET",
+      url: "/api/messages/conversations",
+      cookies: { mycharacter_session: aliceCookie },
+    });
+    expect(conversations.statusCode).toBe(200);
+    expect(conversations.json().conversations[0].unreadCount).toBe(0);
+
+    const notifications = await app.inject({
+      method: "GET",
+      url: "/api/notifications",
+      cookies: { mycharacter_session: aliceCookie },
+    });
+    expect(notifications.statusCode).toBe(200);
+    expect(notifications.json().unreadCount).toBe(0);
   });
 
   it("keeps pinned items ahead of unpinned ones", async () => {

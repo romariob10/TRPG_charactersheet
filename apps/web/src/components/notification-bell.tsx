@@ -4,7 +4,10 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Bell, CheckCheck, ExternalLink } from "lucide-react";
 import { useTranslations } from "next-intl";
-import type { ListNotificationsResponse, NotificationItem } from "@mycharacter/contracts";
+import type {
+  ListNotificationsResponse,
+  NotificationItem,
+} from "@mycharacter/contracts";
 import { apiFetch } from "@/lib/api/client";
 import { cn, formatRelativeDate } from "@/lib/utils";
 
@@ -27,7 +30,9 @@ export function NotificationBell({
 
   async function loadNotifications() {
     try {
-      const res = await apiFetch<ListNotificationsResponse>("/api/notifications?limit=8");
+      const res = await apiFetch<ListNotificationsResponse>(
+        "/api/notifications?limit=8",
+      );
       setData(res);
     } catch {}
   }
@@ -42,9 +47,15 @@ export function NotificationBell({
     const interval = setInterval(() => {
       void loadNotifications();
     }, 15000);
+    const handleDirectMessagesRead = () => void loadNotifications();
+    window.addEventListener("direct-messages:read", handleDirectMessagesRead);
     return () => {
       cancelled = true;
       clearInterval(interval);
+      window.removeEventListener(
+        "direct-messages:read",
+        handleDirectMessagesRead,
+      );
     };
   }, []);
 
@@ -56,7 +67,8 @@ export function NotificationBell({
     }
     if (open) {
       document.addEventListener("mousedown", handleClickOutside);
-      return () => document.removeEventListener("mousedown", handleClickOutside);
+      return () =>
+        document.removeEventListener("mousedown", handleClickOutside);
     }
   }, [open]);
 
@@ -82,7 +94,7 @@ export function NotificationBell({
           ...prev,
           unreadCount: Math.max(prev.unreadCount - 1, 0),
           notifications: prev.notifications.map((n) =>
-            n.id === item.id ? { ...n, readAt: new Date().toISOString() } : n
+            n.id === item.id ? { ...n, readAt: new Date().toISOString() } : n,
           ),
         }));
       } catch {}

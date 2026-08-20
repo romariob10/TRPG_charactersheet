@@ -33,6 +33,7 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
         }}
         locale={locale}
         initialCollapsed={cookieStore.get("sidebar_collapsed")?.value === "1"}
+        initialIsDark={cookieStore.get("theme")?.value === "dark"}
       />
       {/* Narrow screens keep the drawer trigger floating, so reserve room for it. */}
       <div className="min-w-0 flex-1 pt-14 lg:pt-0">{children}</div>

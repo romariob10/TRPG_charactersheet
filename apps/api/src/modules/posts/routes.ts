@@ -143,6 +143,7 @@ export async function registerPostRoutes(app: FastifyInstance): Promise<void> {
         "file.media_type as mediaType",
       ])
       .where("image.file_id", "=", fileId)
+      .where("image.post_id", "is not", null)
       .where("file.state", "=", "ready")
       .executeTakeFirst();
     if (!image) {

@@ -40,12 +40,16 @@ const baseProfile: SidebarProfile = {
   siteRole: "user",
 };
 
-function renderSidebar(overrides: Partial<SidebarProfile> = {}, collapsed = false) {
+function renderSidebar(
+  overrides: Partial<SidebarProfile> = {},
+  collapsed = false,
+) {
   return render(
     <AppSidebar
       profile={{ ...baseProfile, ...overrides }}
       locale="ru"
       initialCollapsed={collapsed}
+      initialIsDark={false}
     />,
   );
 }
@@ -92,6 +96,26 @@ describe("AppSidebar", () => {
     fireEvent.click(toggle);
 
     expect(document.cookie).toContain("sidebar_collapsed=1");
+  });
+
+  it("hides dynamic history while keeping stable controls when collapsed", () => {
+    renderSidebar();
+    expect(screen.getByTestId("workspace-history")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "collapse" }));
+
+    expect(screen.queryByTestId("workspace-history")).not.toBeInTheDocument();
+    expect(screen.getByTestId("sidebar-footer")).toHaveClass("mt-auto");
+    expect(
+      screen.getByRole("navigation", { name: "primary" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "themeDark" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "language" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "account" })).toBeInTheDocument();
   });
 
   it("reveals the expand control over the logo when the collapsed header is hovered", () => {

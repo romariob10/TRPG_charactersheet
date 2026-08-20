@@ -24,7 +24,7 @@ export function createMyCharacterMcpServer(options: CreateMcpServerOptions = {})
   const server = new Server(
     {
       name: "mycharacter-mcp",
-      version: "0.0.5",
+      version: "0.0.6",
     },
     {
       capabilities: {

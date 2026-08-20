@@ -21,12 +21,7 @@ import {
 } from "./repository.js";
 
 export type CharacterCapability =
-  | "read"
-  | "edit"
-  | "invite"
-  | "trash"
-  | "restore"
-  | "delete";
+  "read" | "edit" | "invite" | "trash" | "restore" | "delete";
 
 export class CharacterService {
   private readonly db: Kysely<Database>;
@@ -46,7 +41,10 @@ export class CharacterService {
     return this.toSummary(row, actorId);
   }
 
-  async getEditor(actorId: string, characterId: string): Promise<CharacterEditorData> {
+  async getEditor(
+    actorId: string,
+    characterId: string,
+  ): Promise<CharacterEditorData> {
     const row = await this.authorizeCharacter(actorId, characterId, "read");
     return {
       id: row.id,
@@ -61,7 +59,10 @@ export class CharacterService {
     };
   }
 
-  async create(actorId: string, input: CreateCharacterRequest): Promise<CharacterSummary> {
+  async create(
+    actorId: string,
+    input: CreateCharacterRequest,
+  ): Promise<CharacterSummary> {
     const template = await this.db
       .selectFrom("pdf_templates as template")
       .leftJoin("template_subscriptions as subscription", (join) =>
@@ -81,7 +82,8 @@ export class CharacterService {
       ])
       .where("template.id", "=", input.templateId)
       .executeTakeFirst();
-    const ready = template && ["ready", "partial"].includes(template.catalogStatus);
+    const ready =
+      template && ["ready", "partial"].includes(template.catalogStatus);
     const available =
       template &&
       template.deletedAt === null &&
@@ -121,22 +123,29 @@ export class CharacterService {
             .where("is_enabled", "=", true),
         )
         .execute();
+      const workspace = new WorkspaceService(trx);
+      await workspace.recordActivity(actorId, "character", created.id, {
+        markSeen: true,
+      });
+      await workspace.recordActivity(actorId, "system", input.templateId, {
+        markSeen: true,
+      });
       return created.id;
-    });
-
-    const workspace = new WorkspaceService(this.db);
-    await workspace.recordActivity(actorId, "character", characterId, {
-      markSeen: true,
-    });
-    await workspace.recordActivity(actorId, "system", input.templateId, {
-      markSeen: true,
     });
 
     return this.get(actorId, characterId);
   }
 
-  async update(actorId: string, characterId: string, input: UpdateCharacterRequest): Promise<CharacterSummary> {
-    const character = await this.authorizeCharacter(actorId, characterId, "edit");
+  async update(
+    actorId: string,
+    characterId: string,
+    input: UpdateCharacterRequest,
+  ): Promise<CharacterSummary> {
+    const character = await this.authorizeCharacter(
+      actorId,
+      characterId,
+      "edit",
+    );
     if (input.isPublic !== undefined && character.ownerId !== actorId) {
       throw forbidden();
     }
@@ -148,7 +157,9 @@ export class CharacterService {
           ? {}
           : {
               is_public: input.isPublic,
-              published_at: input.isPublic ? character.publishedAt ?? new Date() : null,
+              published_at: input.isPublic
+                ? (character.publishedAt ?? new Date())
+                : null,
             }),
       })
       .where("id", "=", characterId)
@@ -156,9 +167,18 @@ export class CharacterService {
     return this.get(actorId, characterId);
   }
 
-  async clone(actorId: string, characterId: string, requestedName?: string): Promise<CharacterSummary> {
+  async clone(
+    actorId: string,
+    characterId: string,
+    requestedName?: string,
+  ): Promise<CharacterSummary> {
     const id = await this.db.transaction().execute(async (trx) => {
-      const source = await this.authorizeCharacter(actorId, characterId, "read", trx);
+      const source = await this.authorizeCharacter(
+        actorId,
+        characterId,
+        "read",
+        trx,
+      );
       if (source.ownerId !== actorId) {
         throw forbidden();
       }
@@ -196,13 +216,21 @@ export class CharacterService {
     await this.authorizeCharacter(actorId, characterId, "trash");
     await this.db
       .updateTable("characters")
-      .set({ status: "trashed", deleted_at: new Date(), is_public: false, published_at: null })
+      .set({
+        status: "trashed",
+        deleted_at: new Date(),
+        is_public: false,
+        published_at: null,
+      })
       .where("id", "=", characterId)
       .execute();
     return this.get(actorId, characterId);
   }
 
-  async restore(actorId: string, characterId: string): Promise<CharacterSummary> {
+  async restore(
+    actorId: string,
+    characterId: string,
+  ): Promise<CharacterSummary> {
     await this.authorizeCharacter(actorId, characterId, "restore");
     await this.db
       .updateTable("characters")
@@ -214,10 +242,16 @@ export class CharacterService {
 
   async permanentlyDelete(actorId: string, characterId: string): Promise<void> {
     await this.authorizeCharacter(actorId, characterId, "delete");
-    await this.db.deleteFrom("characters").where("id", "=", characterId).execute();
+    await this.db
+      .deleteFrom("characters")
+      .where("id", "=", characterId)
+      .execute();
   }
 
-  async createInvite(actorId: string, characterId: string): Promise<{ token: string; expiresAt: string }> {
+  async createInvite(
+    actorId: string,
+    characterId: string,
+  ): Promise<{ token: string; expiresAt: string }> {
     await this.authorizeCharacter(actorId, characterId, "invite");
     const token = randomBytes(32).toString("base64url");
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
@@ -269,11 +303,16 @@ export class CharacterService {
     }
 
     const invite = await this.createInvite(actorId, characterId);
-    const inviterName = inviter?.displayName || (inviter?.username ? `@${inviter.username}` : "Пользователь");
+    const inviterName =
+      inviter?.displayName ||
+      (inviter?.username ? `@${inviter.username}` : "Пользователь");
 
     // Send direct message with invite link
     const directMessageService = new DirectMessageService(this.db);
-    const conversationId = await directMessageService.getOrCreateConversation(actorId, targetUser.id);
+    const conversationId = await directMessageService.getOrCreateConversation(
+      actorId,
+      targetUser.id,
+    );
     await directMessageService.sendMessage(
       actorId,
       conversationId,
@@ -298,11 +337,18 @@ export class CharacterService {
     };
   }
 
-  async acceptInvite(actorId: string, token: string): Promise<{ characterId: string }> {
+  async acceptInvite(
+    actorId: string,
+    token: string,
+  ): Promise<{ characterId: string }> {
     return this.db.transaction().execute(async (trx) => {
       const invite = await trx
         .selectFrom("character_invites as invite")
-        .innerJoin("characters as character", "character.id", "invite.character_id")
+        .innerJoin(
+          "characters as character",
+          "character.id",
+          "invite.character_id",
+        )
         .select([
           "invite.id",
           "invite.character_id as characterId",
@@ -315,18 +361,35 @@ export class CharacterService {
         .where("invite.token_hash", "=", hashToken(token))
         .forUpdate()
         .executeTakeFirst();
-      if (!invite || invite.revokedAt || invite.acceptedAt || invite.status !== "active") {
+      if (
+        !invite ||
+        invite.revokedAt ||
+        invite.acceptedAt ||
+        invite.status !== "active"
+      ) {
         throw notFound("Invitation is invalid.");
       }
       if (invite.expiresAt.getTime() <= Date.now()) {
-        throw new AppError("INVITATION_EXPIRED", 410, "Invitation has expired.");
+        throw new AppError(
+          "INVITATION_EXPIRED",
+          410,
+          "Invitation has expired.",
+        );
       }
       if (invite.ownerId === actorId) {
-        throw new AppError("INVITATION_OWNER_CONFLICT", 409, "The owner already has access.");
+        throw new AppError(
+          "INVITATION_OWNER_CONFLICT",
+          409,
+          "The owner already has access.",
+        );
       }
       await trx
         .insertInto("character_members")
-        .values({ character_id: invite.characterId, user_id: actorId, role: "editor" })
+        .values({
+          character_id: invite.characterId,
+          user_id: actorId,
+          role: "editor",
+        })
         .onConflict((oc) => oc.columns(["character_id", "user_id"]).doNothing())
         .execute();
       await trx
@@ -373,7 +436,10 @@ export class CharacterService {
     return row;
   }
 
-  private toSummary(row: CharacterAccessRow, actorId: string): CharacterSummary {
+  private toSummary(
+    row: CharacterAccessRow,
+    actorId: string,
+  ): CharacterSummary {
     return {
       id: row.id,
       name: row.name,

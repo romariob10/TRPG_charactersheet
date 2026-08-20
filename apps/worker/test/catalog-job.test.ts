@@ -4,6 +4,7 @@ import { PgBoss } from "pg-boss";
 import {
   buildVisionCatalogPrompt,
   processCatalogJob,
+  selectVisionPages,
   type CatalogProcessorDependencies,
 } from "../src/jobs/catalog.js";
 
@@ -45,7 +46,9 @@ function dependencies(): CatalogProcessorDependencies {
       tokens: [],
     }),
     recognizeWeakPages: vi.fn().mockResolvedValue([]),
-    analyzeWithVision: vi.fn().mockRejectedValue(new Error("provider unavailable")),
+    analyzeWithVision: vi
+      .fn()
+      .mockRejectedValue(new Error("provider unavailable")),
     persist: vi.fn().mockResolvedValue(undefined),
     updateProgress: vi.fn().mockResolvedValue(undefined),
     complete: vi.fn().mockResolvedValue(undefined),
@@ -143,6 +146,55 @@ describe("catalog worker", () => {
     expect(prompt).toContain("MUST be natural Russian written in Cyrillic");
     expect(prompt).toContain("technicalName is an internal identifier only");
     expect(prompt).toContain("exactly one entry for every supplied fieldId");
+    expect(prompt).toContain("responsive interactive sheet");
+    expect(prompt).toContain("natural visual reading order");
+    expect(prompt).toContain("ability value plus modifier/check/save");
+    expect(prompt).toContain("current plus maximum resource pair");
+    expect(prompt).toContain("repeated table series");
+    expect(prompt).toContain(
+      "Never group fields merely because they are nearby",
+    );
+  });
+
+  it("asks vision to structure every page for the adaptive sheet", () => {
+    const first = {
+      id: randomUUID(),
+      pdfName: "hero_name",
+      kind: "text" as const,
+      defaultValue: null,
+      options: [],
+      page: 1,
+      label: "Hero name",
+      aliases: [],
+      section: "Identity",
+      groupId: null,
+      groupOrder: null,
+      confidence: 0.99,
+      source: "pdf" as const,
+      widgets: [
+        {
+          page: 1,
+          rect: [0.1, 0.1, 0.2, 0.2] as [number, number, number, number],
+          pdfRect: [10, 10, 20, 20] as [number, number, number, number],
+          rotation: 0,
+          exportValue: null,
+          widgetIndex: 0,
+        },
+      ],
+    };
+
+    expect(
+      selectVisionPages([
+        first,
+        {
+          ...first,
+          id: randomUUID(),
+          pdfName: "notes",
+          page: 2,
+          widgets: [{ ...first.widgets[0], page: 2 }],
+        },
+      ]),
+    ).toEqual([1, 2]);
   });
 
   it("keeps deterministic catalog data when vision fails", async () => {
@@ -155,7 +207,9 @@ describe("catalog worker", () => {
     expect(result.status).toBe("partial");
     expect(deps.persist).toHaveBeenCalledWith(
       expect.any(String),
-      expect.arrayContaining([expect.objectContaining({ pdfName: "strength" })]),
+      expect.arrayContaining([
+        expect.objectContaining({ pdfName: "strength" }),
+      ]),
       expect.any(String),
     );
     expect(deps.complete).toHaveBeenCalledWith(

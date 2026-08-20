@@ -1,9 +1,20 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Check, Copy, LoaderCircle, Send, UserPlus, Users, X } from "lucide-react";
+import {
+  Check,
+  Copy,
+  LoaderCircle,
+  Send,
+  UserPlus,
+  Users,
+  X,
+} from "lucide-react";
 import { useTranslations } from "next-intl";
-import type { FriendSummary, ListFriendsResponse } from "@mycharacter/contracts";
+import type {
+  FriendSummary,
+  ListFriendsResponse,
+} from "@mycharacter/contracts";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { apiFetch } from "@/lib/api/client";
@@ -21,22 +32,21 @@ export function InviteEditorModal({
 }) {
   const t = useTranslations("Editor");
   const [friends, setFriends] = useState<FriendSummary[]>([]);
-  const [loadingFriends, setLoadingFriends] = useState(false);
+  const [loadingFriends, setLoadingFriends] = useState(true);
   const [usernameInput, setUsernameInput] = useState("");
   const [invitingUsername, setInvitingUsername] = useState(false);
   const [invitedUserIds, setInvitedUserIds] = useState<Set<string>>(new Set());
   const [invitingUserId, setInvitingUserId] = useState<string | null>(null);
   const [copiedLink, setCopiedLink] = useState(false);
   const [copyingLink, setCopyingLink] = useState(false);
-  const [statusMessage, setStatusMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [statusMessage, setStatusMessage] = useState<{
+    type: "success" | "error";
+    text: string;
+  } | null>(null);
 
   useEffect(() => {
-    if (!isOpen) {
-      setStatusMessage(null);
-      return;
-    }
+    if (!isOpen) return;
     let cancelled = false;
-    setLoadingFriends(true);
     apiFetch<ListFriendsResponse>("/api/friends")
       .then((res) => {
         if (!cancelled) setFriends(res.items);
@@ -52,13 +62,22 @@ export function InviteEditorModal({
 
   if (!isOpen) return null;
 
+  function handleClose() {
+    setStatusMessage(null);
+    setLoadingFriends(true);
+    onClose();
+  }
+
   async function handleCopyLink() {
     setCopyingLink(true);
     setStatusMessage(null);
     try {
-      const res = await apiFetch<{ token: string }>(`/api/characters/${characterId}/invites`, {
-        method: "POST",
-      });
+      const res = await apiFetch<{ token: string }>(
+        `/api/characters/${characterId}/invites`,
+        {
+          method: "POST",
+        },
+      );
       const link = `${window.location.origin}/invites/${res.token}`;
       await navigator.clipboard.writeText(link);
       setCopiedLink(true);
@@ -67,7 +86,10 @@ export function InviteEditorModal({
     } catch (error) {
       setStatusMessage({
         type: "error",
-        text: error instanceof Error ? error.message : "Failed to generate invite link.",
+        text:
+          error instanceof Error
+            ? error.message
+            : "Failed to generate invite link.",
       });
     } finally {
       setCopyingLink(false);
@@ -112,7 +134,8 @@ export function InviteEditorModal({
     } catch (error) {
       setStatusMessage({
         type: "error",
-        text: error instanceof Error ? error.message : "Failed to invite friend.",
+        text:
+          error instanceof Error ? error.message : "Failed to invite friend.",
       });
     } finally {
       setInvitingUserId(null);
@@ -137,7 +160,10 @@ export function InviteEditorModal({
               <UserPlus className="size-5" />
             </div>
             <div>
-              <h2 id="invite-modal-title" className="text-base font-bold text-[var(--foreground)]">
+              <h2
+                id="invite-modal-title"
+                className="text-base font-bold text-[var(--foreground)]"
+              >
                 {t("inviteModalTitle")}
               </h2>
               <p className="text-xs text-[var(--muted)] truncate max-w-xs sm:max-w-sm">
@@ -147,7 +173,7 @@ export function InviteEditorModal({
           </div>
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleClose}
             aria-label={t("dismiss") || "Close"}
             className="grid size-8 place-items-center rounded-lg text-[var(--muted)] transition-colors hover:bg-[var(--keylime)] hover:text-[var(--foreground)]"
           >
@@ -272,7 +298,8 @@ export function InviteEditorModal({
                   >
                     <div className="flex items-center gap-2.5 min-w-0">
                       <div className="grid size-8 shrink-0 place-items-center rounded-full bg-[var(--brand-soft)] text-xs font-bold text-[var(--brand)]">
-                        {(friend.displayName || friend.username)[0].toUpperCase()}
+                        {(friend.displayName ||
+                          friend.username)[0].toUpperCase()}
                       </div>
                       <div className="min-w-0">
                         <p className="text-xs font-bold text-[var(--foreground)] truncate">

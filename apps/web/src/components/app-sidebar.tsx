@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -40,30 +40,19 @@ export function AppSidebar({
   profile,
   locale,
   initialCollapsed,
+  initialIsDark,
 }: {
   profile: SidebarProfile;
   locale: string;
   initialCollapsed: boolean;
+  initialIsDark: boolean;
 }) {
   const t = useTranslations("Common");
   const tSidebar = useTranslations("Sidebar");
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(initialCollapsed);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [isDark, setIsDark] = useState(() => {
-    if (typeof document === "undefined") return false;
-    return (
-      document.documentElement.classList.contains("dark") ||
-      document.cookie.includes("theme=dark")
-    );
-  });
-
-  useEffect(() => {
-    const dark =
-      document.documentElement.classList.contains("dark") ||
-      document.cookie.includes("theme=dark");
-    setIsDark(dark);
-  }, []);
+  const [isDark, setIsDark] = useState(initialIsDark);
 
   function toggleTheme() {
     const next = !isDark;
@@ -198,7 +187,10 @@ export function AppSidebar({
           </button>
         </div>
 
-        <nav aria-label={tSidebar("primary")} className="shrink-0 space-y-0.5 p-2">
+        <nav
+          aria-label={tSidebar("primary")}
+          className="shrink-0 space-y-0.5 p-2"
+        >
           <Link
             href="/dashboard/posts/new"
             target="_blank"
@@ -242,9 +234,12 @@ export function AppSidebar({
           })}
         </nav>
 
-        <WorkspaceHistory collapsed={collapsed} />
+        {!collapsed && <WorkspaceHistory collapsed={false} />}
 
-        <div className="shrink-0 border-t border-[var(--border)] p-2">
+        <div
+          data-testid="sidebar-footer"
+          className="mt-auto shrink-0 border-t border-[var(--border)] p-2"
+        >
           <div
             className={cn(
               "flex items-center gap-1",
