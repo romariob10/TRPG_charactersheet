@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -9,12 +9,14 @@ import {
   Languages,
   LogOut,
   MessageSquare,
+  Moon,
   PanelLeftClose,
   PanelLeftOpen,
   Search,
   Settings,
   ShieldCheck,
   SquarePen,
+  Sun,
   Users,
   X,
 } from "lucide-react";
@@ -48,6 +50,34 @@ export function AppSidebar({
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(initialCollapsed);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [isDark, setIsDark] = useState(() => {
+    if (typeof document === "undefined") return false;
+    return (
+      document.documentElement.classList.contains("dark") ||
+      document.cookie.includes("theme=dark")
+    );
+  });
+
+  useEffect(() => {
+    const dark =
+      document.documentElement.classList.contains("dark") ||
+      document.cookie.includes("theme=dark");
+    setIsDark(dark);
+  }, []);
+
+  function toggleTheme() {
+    const next = !isDark;
+    setIsDark(next);
+    document.cookie = `theme=${next ? "dark" : "light"};path=/;max-age=31536000;samesite=lax`;
+    if (next) {
+      document.documentElement.classList.add("dark");
+      document.documentElement.setAttribute("data-theme", "dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+      document.documentElement.setAttribute("data-theme", "light");
+    }
+  }
+
   // Hovering the collapsed header reveals the expand control in the logo's
   // place. Tracked in state so the control is focusable and testable, not a
   // CSS-only trick.
@@ -229,7 +259,7 @@ export function AppSidebar({
             >
               <NotificationBell
                 locale={locale}
-                dropSide={collapsed ? "right" : "down"}
+                dropSide={collapsed ? "right" : "up"}
               />
             </div>
 
@@ -269,6 +299,26 @@ export function AppSidebar({
                 </>
               )}
             </Popover>
+
+            <button
+              type="button"
+              onClick={toggleTheme}
+              title={isDark ? t("themeLight") : t("themeDark")}
+              aria-label={isDark ? t("themeLight") : t("themeDark")}
+              className={cn(
+                "flex h-8 items-center gap-2 rounded-[var(--radius-control)] px-2 text-[11px] font-bold text-[var(--muted)] transition-colors hover:bg-[var(--keylime)] hover:text-[var(--brand)]",
+                collapsed && "lg:justify-center lg:px-0",
+              )}
+            >
+              {isDark ? (
+                <Sun className="size-4 shrink-0" />
+              ) : (
+                <Moon className="size-4 shrink-0" />
+              )}
+              <span className={cn(collapsed && "lg:hidden")}>
+                {isDark ? t("themeLight") : t("themeDark")}
+              </span>
+            </button>
           </div>
 
           <Popover

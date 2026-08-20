@@ -2,6 +2,7 @@ import {
   characterIdSchema,
   cloneCharacterRequestSchema,
   createCharacterRequestSchema,
+  inviteUserRequestSchema,
   updateCharacterRequestSchema,
 } from "@mycharacter/contracts";
 import type { FastifyInstance } from "fastify";
@@ -69,6 +70,14 @@ export async function registerCharacterRoutes(app: FastifyInstance): Promise<voi
     return reply
       .status(201)
       .send(await service.createInvite(actor.userId, parseId(request.params)));
+  });
+
+  app.post("/api/characters/:id/invite-user", async (request, reply) => {
+    const actor = requireActor(request);
+    const input = parse(inviteUserRequestSchema, request.body);
+    return reply
+      .status(201)
+      .send(await service.inviteUser(actor.userId, parseId(request.params), input));
   });
 }
 

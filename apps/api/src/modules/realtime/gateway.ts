@@ -240,6 +240,8 @@ export class RealtimeGateway {
     return {
       connectionId: connection.id,
       userId: connection.actor.userId,
+      username: connection.actor.username,
+      displayName: connection.actor.displayName ?? null,
       fieldId: connection.subscriptions.get(characterId)?.fieldId ?? null,
     };
   }

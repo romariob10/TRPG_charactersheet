@@ -62,3 +62,15 @@ export type PublicProfile = z.infer<typeof publicProfileSchema>;
 export type MyProfile = z.infer<typeof myProfileSchema>;
 export type UpdateMyProfileRequest = z.infer<typeof updateMyProfileRequestSchema>;
 export type UpdateProfilePrivacyRequest = z.infer<typeof updateProfilePrivacyRequestSchema>;
+
+export const friendSummarySchema = z.object({
+  id: z.string().uuid(),
+  username: usernameSchema,
+  displayName: z.string().max(80).nullable(),
+});
+export type FriendSummary = z.infer<typeof friendSummarySchema>;
+
+export const listFriendsResponseSchema = z.object({
+  items: z.array(friendSummarySchema),
+});
+export type ListFriendsResponse = z.infer<typeof listFriendsResponseSchema>;

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono, Literata } from "next/font/google";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages } from "next-intl/server";
+import { cookies } from "next/headers";
 import "./globals.css";
 import "@copilotkit/react-core/v2/styles.css";
 
@@ -34,13 +35,18 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const locale = await getLocale();
-  const messages = await getMessages();
+  const [locale, messages, cookieStore] = await Promise.all([
+    getLocale(),
+    getMessages(),
+    cookies(),
+  ]);
+  const isDark = cookieStore.get("theme")?.value === "dark";
 
   return (
     <html
       lang={locale}
-      className={`${geistSans.variable} ${geistMono.variable} ${literata.variable} h-full antialiased`}
+      data-theme={isDark ? "dark" : "light"}
+      className={`${geistSans.variable} ${geistMono.variable} ${literata.variable} ${isDark ? "dark" : ""} h-full antialiased`}
     >
       <body className="min-h-full">
         <NextIntlClientProvider messages={messages}>{children}</NextIntlClientProvider>

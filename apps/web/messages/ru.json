@@ -22,6 +22,10 @@
     "language": "Язык",
     "languageRu": "Русский",
     "languageEn": "English",
+    "theme": "Тема",
+    "themeLight": "Светлая",
+    "themeDark": "Тёмная",
+    "themeToggle": "Сменить тему",
     "profileSettings": "Профиль",
     "viewPublicProfile": "Публичный профиль",
     "roles": {
@@ -662,7 +666,18 @@
     "remoteUpdate": "Получено параллельное изменение. Ваша следующая запись станет последней.",
     "processingTitle": "Создаём каталог «{name}»",
     "processingText": "Можно закрыть страницу — обработка продолжится в фоне.",
-    "processingStep": "Извлекаем поля и координаты"
+    "processingStep": "Извлекаем поля и координаты",
+    "inviteModalTitle": "Совместное редактирование",
+    "inviteModalSubtitle": "Пригласите друзей или поделитесь ссылкой для одновременного редактирования листа.",
+    "inviteByUsername": "Пригласить по нику",
+    "inviteUsernamePlaceholder": "Введите ник пользователя…",
+    "inviteButton": "Пригласить",
+    "copyInviteLink": "Скопировать ссылку",
+    "friendsList": "Ваши друзья",
+    "noFriends": "У вас пока нет взаимных друзей",
+    "invitedSuccess": "Приглашение отправлено в чат!",
+    "inviting": "Отправка…",
+    "collaboratingNow": "Редактирует: {name}"
   },
   "AI": {
     "changes": "Предлагаемые изменения",
@@ -733,7 +748,17 @@
     "placeholder": "Написать сообщение…",
     "send": "Отправить",
     "sendMessage": "Написать сообщение",
-    "startDialog": "Начать диалог"
+    "startDialog": "Начать диалог",
+    "attachImage": "Прикрепить изображение",
+    "attachSheet": "Прикрепить лист",
+    "attachSystem": "Прикрепить систему",
+    "myCharacters": "Мои листы",
+    "mySystems": "Мои системы",
+    "selectSheet": "Выберите лист персонажа",
+    "selectSystem": "Выберите систему",
+    "sendHint": "Enter — отправить, Shift+Enter — новая строка",
+    "uploadingImage": "Загрузка изображения…",
+    "imageUploadFailed": "Не удалось загрузить изображение"
   },
   "TemplateReviews": {
     "title": "Рейтинг и отзывы",

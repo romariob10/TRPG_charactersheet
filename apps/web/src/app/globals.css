@@ -25,6 +25,29 @@
   --shadow-overlay: 0 18px 52px rgba(15, 47, 24, 0.14);
 }
 
+html.dark,
+[data-theme="dark"] {
+  --background: #111413;
+  --surface: #171c18;
+  --surface-strong: #1e2420;
+  --foreground: #e6ede8;
+  --muted: #95a39b;
+  --border: #28332c;
+  --brand: #62d87e;
+  --brand-strong: #85e89d;
+  --brand-soft: #1b3823;
+  --accent: #233e47;
+  --danger: #e06c75;
+  --warning: #e5c07b;
+  --success: #62d87e;
+  --info: #56b6c2;
+  --sage: #2b4733;
+  --keylime: #1f2d22;
+  --mint-veil: #1b3823;
+  --slate: #233e47;
+  --shadow-overlay: 0 18px 52px rgba(0, 0, 0, 0.5);
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
