@@ -25,8 +25,8 @@ export default async function MessagesPage({
   ]);
 
   return (
-    <main className="page-shell py-6 sm:py-8">
-      <div className="mx-auto max-w-6xl">
+    <main className="h-[calc(100dvh-3.5rem)] w-full overflow-hidden lg:h-screen">
+      <div className="h-full w-full [&>div]:h-full [&>div]:min-h-0 [&>div]:rounded-none">
         <DirectMessagesView
           initialConversations={conversationsRes.data.conversations}
           currentUserId={myProfile.data.id}

@@ -4,7 +4,7 @@ import type {
   WorkspaceItemKind,
 } from "@mycharacter/contracts";
 import type { Database } from "@mycharacter/database";
-import { sql, type Kysely } from "kysely";
+import { sql, type Kysely, type Transaction } from "kysely";
 
 const HISTORY_LIMIT = 30;
 
@@ -15,9 +15,9 @@ interface DisplayInfo {
 }
 
 export class WorkspaceService {
-  private readonly db: Kysely<Database>;
+  private readonly db: Kysely<Database> | Transaction<Database>;
 
-  constructor(database: Kysely<Database>) {
+  constructor(database: Kysely<Database> | Transaction<Database>) {
     this.db = database;
   }
 
@@ -95,7 +95,8 @@ export class WorkspaceService {
 
     const details: Record<string, DisplayInfo | undefined> = {};
     for (const [id, info] of posts) details[`post:${id}`] = info;
-    for (const [id, info] of conversations) details[`conversation:${id}`] = info;
+    for (const [id, info] of conversations)
+      details[`conversation:${id}`] = info;
     for (const [id, info] of characters) details[`character:${id}`] = info;
     for (const [id, info] of systems) details[`system:${id}`] = info;
 
@@ -120,7 +121,11 @@ export class WorkspaceService {
     return { items };
   }
 
-  async setPinned(userId: string, itemId: string, pinned: boolean): Promise<void> {
+  async setPinned(
+    userId: string,
+    itemId: string,
+    pinned: boolean,
+  ): Promise<void> {
     await this.db
       .updateTable("workspace_items")
       .set({ pinned })
@@ -135,6 +140,21 @@ export class WorkspaceService {
       .set({ last_seen_at: new Date() })
       .where("id", "=", itemId)
       .where("user_id", "=", userId)
+      .execute();
+  }
+
+  async markTargetSeen(
+    userId: string,
+    kind: WorkspaceItemKind,
+    targetId: string,
+    seenAt = new Date(),
+  ): Promise<void> {
+    await this.db
+      .updateTable("workspace_items")
+      .set({ last_seen_at: seenAt })
+      .where("user_id", "=", userId)
+      .where("kind", "=", kind)
+      .where("target_id", "=", targetId)
       .execute();
   }
 
@@ -153,9 +173,7 @@ export class WorkspaceService {
       .execute();
   }
 
-  private async postDetails(
-    ids: string[],
-  ): Promise<Map<string, DisplayInfo>> {
+  private async postDetails(ids: string[]): Promise<Map<string, DisplayInfo>> {
     const map = new Map<string, DisplayInfo>();
     if (ids.length === 0) return map;
     const rows = await this.db

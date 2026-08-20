@@ -7,7 +7,8 @@ import {
   Check,
   ChevronDown,
   Download,
-  Link2,
+  FileText,
+  LayoutDashboard,
   LoaderCircle,
   Minus,
   PanelLeft,
@@ -24,10 +25,8 @@ import { Input } from "@/components/ui/input";
 import { PdfPage } from "@/components/editor/pdf-page";
 import { AiAssistant } from "@/components/editor/ai-assistant";
 import { InviteEditorModal } from "@/components/editor/invite-editor-modal";
-import {
-  readResponseBody,
-  toApiClientError,
-} from "@/lib/api/client";
+import { InteractiveCharacterSheet } from "@/components/editor/interactive-character-sheet";
+import { readResponseBody, toApiClientError } from "@/lib/api/client";
 import { LocalRealtimeClient } from "@/lib/realtime/client";
 import type {
   CharacterEditorData,
@@ -37,6 +36,7 @@ import type {
 import { cn } from "@/lib/utils";
 
 type SaveState = "saved" | "saving" | "offline";
+type CharacterViewMode = "adaptive" | "pdf";
 
 export function CharacterEditor({
   initialCharacter,
@@ -58,6 +58,7 @@ export function CharacterEditor({
   const [activeFieldId, setActiveFieldId] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
   const [inviteModalOpen, setInviteModalOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<CharacterViewMode>("adaptive");
   const [remoteCollaborators, setRemoteCollaborators] = useState<
     Map<string, { username?: string; displayName?: string | null }>
   >(() => new Map());
@@ -313,14 +314,19 @@ export function CharacterEditor({
       },
       onSnapshot: (snapshot) => {
         setFields((current) => {
-          const currentById = new Map(current.map((field) => [field.id, field]));
+          const currentById = new Map(
+            current.map((field) => [field.id, field]),
+          );
           const updated = snapshot.fields.map((field) => {
             const local = currentById.get(field.id);
             if (
               local &&
               (dirty.current.has(field.id) || saveChains.current.has(field.id))
             ) {
-              return { ...local, version: Math.max(local.version, field.version) };
+              return {
+                ...local,
+                version: Math.max(local.version, field.version),
+              };
             }
             return field;
           });
@@ -414,24 +420,6 @@ export function CharacterEditor({
     }
   }
 
-  async function createInvite() {
-    const response = await fetch(
-      `/api/characters/${initialCharacter.id}/invites`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ expiresInDays: 7 }),
-      },
-    );
-    const result = (await response.json()) as { token?: string; error?: { message?: string } };
-    if (!response.ok || !result.token)
-      return setNotice(result.error?.message ?? "Could not create invite");
-    await navigator.clipboard.writeText(
-      `${window.location.origin}/invites/${result.token}`,
-    );
-    setNotice(t("inviteCopied"));
-  }
-
   return (
     <AiAssistant
       characterId={initialCharacter.id}
@@ -439,13 +427,19 @@ export function CharacterEditor({
       onBeforeApply={flushAll}
       onFieldsApplied={applyAiChanges}
     >
-      <div className="flex h-screen min-w-[780px] flex-col bg-[var(--slate)]/45">
-        <header className="z-30 flex h-16 items-center gap-3 border-b border-[var(--border)] bg-[var(--surface)] px-4">
+      <div className="flex h-[calc(100dvh-3.5rem)] w-full min-w-0 max-w-full flex-col bg-[var(--slate)]/45 lg:h-dvh">
+        <header
+          data-testid="character-editor-header"
+          className="z-30 flex min-h-16 flex-wrap items-center gap-2 border-b border-[var(--border)] bg-[var(--surface)] px-2 py-2 sm:gap-3 sm:px-4"
+        >
           <Logo compact />
-          <Link href="/dashboard" className="ml-1 max-w-56 truncate font-bold">
+          <Link
+            href="/dashboard"
+            className="ml-1 max-w-32 truncate font-bold sm:max-w-56"
+          >
             {initialCharacter.name}
           </Link>
-          <div className="ml-2 flex items-center gap-1.5 rounded-[var(--radius-control)] bg-[var(--keylime)] px-2.5 py-1.5 text-xs text-[var(--brand)]">
+          <div className="flex items-center gap-1.5 rounded-[var(--radius-control)] bg-[var(--brand-soft)] px-2.5 py-1.5 text-xs text-[var(--brand-strong)] sm:ml-2">
             {saveState === "saving" ? (
               <span className="size-2 rounded-full bg-sky-500" />
             ) : saveState === "saved" ? (
@@ -455,69 +449,118 @@ export function CharacterEditor({
             )}
             {t(saveState)}
           </div>
-          <div className="ml-auto flex items-center gap-1">
-            <div className="mr-1 flex items-center gap-1.5 rounded-[7px] px-2 py-1.5 text-xs text-[var(--muted)]">
+          <div className="ml-auto flex max-w-full items-center gap-1">
+            <div
+              className="mr-1 hidden items-center gap-1.5 rounded-[7px] px-2 py-1.5 text-xs text-[var(--muted)] sm:flex"
+              title={t("onlineEditors", { count: onlineUsers })}
+            >
               <Users className="size-4" />
               {onlineUsers}
             </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setSidebarOpen((value) => !value)}
-              title={t("fields")}
+            <div
+              className="flex items-center rounded-[var(--radius-control)] border border-[var(--border)] bg-[var(--slate)]/45 p-0.5"
+              role="group"
+              aria-label={t("viewMode")}
             >
-              <PanelLeft className="size-5" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              title={t("zoomOut")}
-              onClick={() => setZoom((value) => Math.max(0.65, value - 0.1))}
-            >
-              <Minus className="size-4" />
-            </Button>
-            <span className="w-11 text-center text-xs">
-              {Math.round(zoom * 100)}%
-            </span>
-            <Button
-              variant="ghost"
-              size="icon"
-              title={t("zoomIn")}
-              onClick={() => setZoom((value) => Math.min(2, value + 0.1))}
-            >
-              <Plus className="size-4" />
-            </Button>
-            <div className="mx-1 h-6 w-px bg-black/10" />
-            <Button
-              variant="ghost"
-              size="icon"
-              title={t("textareaFontSmaller")}
-              aria-label={t("textareaFontSmaller")}
-              disabled={multilineFontScale <= 0.7}
-              onClick={() =>
-                setMultilineFontScale((value) => Math.max(0.7, value - 0.1))
-              }
-            >
-              <span className="text-xs font-bold">A−</span>
-            </Button>
-            <span
-              className="w-11 text-center text-xs"
-              title={t("textareaFontSize")}
-            >
-              {Math.round(multilineFontScale * 100)}%
-            </span>
-            <Button
-              variant="ghost"
-              size="icon"
-              title={t("textareaFontLarger")}
-              aria-label={t("textareaFontLarger")}
-              disabled={multilineFontScale >= 1.6}
-              onClick={() =>
-                setMultilineFontScale((value) => Math.min(1.6, value + 0.1))
-              }
-            >
-              <span className="text-base font-bold">A+</span>
-            </Button>
+              <button
+                type="button"
+                className={cn(
+                  "inline-flex h-9 items-center gap-2 rounded-[7px] px-2.5 text-sm font-semibold transition-colors sm:px-3",
+                  viewMode === "adaptive"
+                    ? "bg-[var(--surface)] text-[var(--brand-strong)] shadow-sm"
+                    : "text-[var(--muted)] hover:text-[var(--foreground)]",
+                )}
+                aria-pressed={viewMode === "adaptive"}
+                title={t("adaptiveView")}
+                onClick={() => {
+                  setViewMode("adaptive");
+                  setSidebarOpen(false);
+                  setActiveFieldId(null);
+                }}
+              >
+                <LayoutDashboard className="size-4" />
+                <span className="hidden lg:inline">{t("adaptiveView")}</span>
+              </button>
+              <button
+                type="button"
+                className={cn(
+                  "inline-flex h-9 items-center gap-2 rounded-[7px] px-2.5 text-sm font-semibold transition-colors sm:px-3",
+                  viewMode === "pdf"
+                    ? "bg-[var(--surface)] text-[var(--brand-strong)] shadow-sm"
+                    : "text-[var(--muted)] hover:text-[var(--foreground)]",
+                )}
+                aria-pressed={viewMode === "pdf"}
+                title={t("pdfView")}
+                onClick={() => setViewMode("pdf")}
+              >
+                <FileText className="size-4" />
+                <span className="hidden lg:inline">{t("pdfView")}</span>
+              </button>
+            </div>
+            {viewMode === "pdf" && (
+              <>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setSidebarOpen((value) => !value)}
+                  title={t("fields")}
+                >
+                  <PanelLeft className="size-5" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  title={t("zoomOut")}
+                  onClick={() =>
+                    setZoom((value) => Math.max(0.65, value - 0.1))
+                  }
+                >
+                  <Minus className="size-4" />
+                </Button>
+                <span className="w-11 text-center text-xs">
+                  {Math.round(zoom * 100)}%
+                </span>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  title={t("zoomIn")}
+                  onClick={() => setZoom((value) => Math.min(2, value + 0.1))}
+                >
+                  <Plus className="size-4" />
+                </Button>
+                <div className="mx-1 h-6 w-px bg-black/10" />
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  title={t("textareaFontSmaller")}
+                  aria-label={t("textareaFontSmaller")}
+                  disabled={multilineFontScale <= 0.7}
+                  onClick={() =>
+                    setMultilineFontScale((value) => Math.max(0.7, value - 0.1))
+                  }
+                >
+                  <span className="text-xs font-bold">A−</span>
+                </Button>
+                <span
+                  className="w-11 text-center text-xs"
+                  title={t("textareaFontSize")}
+                >
+                  {Math.round(multilineFontScale * 100)}%
+                </span>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  title={t("textareaFontLarger")}
+                  aria-label={t("textareaFontLarger")}
+                  disabled={multilineFontScale >= 1.6}
+                  onClick={() =>
+                    setMultilineFontScale((value) => Math.min(1.6, value + 0.1))
+                  }
+                >
+                  <span className="text-base font-bold">A+</span>
+                </Button>
+              </>
+            )}
             {initialCharacter.role === "owner" && (
               <Button
                 variant="secondary"
@@ -525,7 +568,7 @@ export function CharacterEditor({
                 onClick={() => setInviteModalOpen(true)}
               >
                 <UserPlus className="size-4" />
-                {t("invite")}
+                <span className="hidden xl:inline">{t("invite")}</span>
               </Button>
             )}
             <details className="relative">
@@ -564,107 +607,127 @@ export function CharacterEditor({
             <button onClick={() => setNotice(null)}>×</button>
           </div>
         )}
-        <div className="flex min-h-0 flex-1">
-          {sidebarOpen && (
-            <aside className="scrollbar-thin z-20 flex w-80 shrink-0 flex-col border-r border-[var(--border)] bg-[var(--surface)]">
-              <div className="border-b p-4">
-                <div className="relative">
-                  <Search className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-[var(--muted)]" />
-                  <Input
-                    className="pl-9"
-                    value={query}
-                    onChange={(event) => setQuery(event.target.value)}
-                    placeholder={t("search")}
-                  />
-                </div>
-                <div className="mt-3 text-xs text-[var(--muted)]">
-                  {t("fieldsCount", {
-                    shown: filtered.length,
-                    total: fields.length,
-                  })}
-                </div>
-              </div>
-              <div className="scrollbar-thin flex-1 overflow-y-auto p-2">
-                {filtered.map((field) => (
-                  <button
-                    key={field.id}
-                    className="w-full rounded-[var(--radius-control)] p-3 text-left transition-colors hover:bg-[var(--keylime)]/70"
-                    onClick={() =>
-                      document
-                        .getElementById(
-                          `character-field-widget-${field.widgets[0]?.id}`,
-                        )
-                        ?.scrollIntoView({
-                          behavior: "auto",
-                          block: "center",
-                          inline: "center",
-                        })
-                    }
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <span className="text-sm font-semibold">
-                        {field.label}
-                      </span>
-                      <span className="rounded bg-black/5 px-1.5 py-0.5 text-[10px]">
-                        {Math.round(field.confidence * 100)}%
-                      </span>
+        <div className="flex min-h-0 min-w-0 flex-1">
+          {viewMode === "adaptive" ? (
+            <main className="scrollbar-thin min-w-0 flex-1 overflow-auto">
+              <InteractiveCharacterSheet
+                fields={fields}
+                activeFieldId={activeFieldId}
+                remoteCollaboratorsByFieldId={remoteCollaborators}
+                onFieldChange={updateField}
+                onFieldFocus={setActiveFieldId}
+                onFieldBlur={(fieldId) => {
+                  setActiveFieldId((current) =>
+                    current === fieldId ? null : current,
+                  );
+                  flushField(fieldId);
+                }}
+              />
+            </main>
+          ) : (
+            <>
+              {sidebarOpen && (
+                <aside className="scrollbar-thin z-20 flex w-80 shrink-0 flex-col border-r border-[var(--border)] bg-[var(--surface)]">
+                  <div className="border-b p-4">
+                    <div className="relative">
+                      <Search className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-[var(--muted)]" />
+                      <Input
+                        className="pl-9"
+                        value={query}
+                        onChange={(event) => setQuery(event.target.value)}
+                        placeholder={t("search")}
+                      />
                     </div>
-                    <div className="mt-1 flex items-center justify-between text-xs text-[var(--muted)]">
-                      <span>{field.section ?? field.pdfName}</span>
-                      <span>{t("page", { page: field.page })}</span>
+                    <div className="mt-3 text-xs text-[var(--muted)]">
+                      {t("fieldsCount", {
+                        shown: filtered.length,
+                        total: fields.length,
+                      })}
                     </div>
-                  </button>
-                ))}
-              </div>
-            </aside>
-          )}
-          <main className="scrollbar-thin flex-1 overflow-auto p-6 lg:p-8">
-            <div className="mx-auto flex w-fit flex-col gap-8">
-              {pdf ? (
-                Array.from({ length: pdf.numPages }, (_, index) => (
-                  <PdfPage
-                    key={index + 1}
-                    document={pdf}
-                    pageNumber={index + 1}
-                    zoom={zoom}
-                    multilineFontScale={multilineFontScale}
-                    activeFieldId={activeFieldId}
-                    remoteCollaboratorsByFieldId={remoteCollaborators}
-                    fields={fields}
-                    values={values}
-                    onFieldChange={updateField}
-                    onFieldFocus={setActiveFieldId}
-                    onFieldBlur={(fieldId) => {
-                      setActiveFieldId((current) =>
-                        current === fieldId ? null : current,
-                      );
-                      flushField(fieldId);
-                    }}
-                  />
-                ))
-              ) : pdfError ? (
-                <div className="grid h-96 w-[612px] place-items-center rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--surface)] p-10 text-center">
-                  <div>
-                    <p className="font-semibold">{t("pdfLoadFailed")}</p>
-                    <p className="mt-2 max-w-md text-sm text-[var(--muted)]">
-                      {pdfError}
-                    </p>
-                    <Button
-                      className="mt-5"
-                      variant="secondary"
-                      onClick={() => window.location.reload()}
-                    >
-                      {t("retry")}
-                    </Button>
                   </div>
-                </div>
-              ) : (
-                <div className="grid h-96 w-[612px] place-items-center rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--surface)]">
-                  <LoaderCircle className="size-7 animate-spin text-[var(--brand)]" />
-                </div>
+                  <div className="scrollbar-thin flex-1 overflow-y-auto p-2">
+                    {filtered.map((field) => (
+                      <button
+                        key={field.id}
+                        className="w-full rounded-[var(--radius-control)] p-3 text-left transition-colors hover:bg-[var(--keylime)]/70"
+                        onClick={() =>
+                          document
+                            .getElementById(
+                              `character-field-widget-${field.widgets[0]?.id}`,
+                            )
+                            ?.scrollIntoView({
+                              behavior: "auto",
+                              block: "center",
+                              inline: "center",
+                            })
+                        }
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <span className="text-sm font-semibold">
+                            {field.label}
+                          </span>
+                          <span className="rounded bg-black/5 px-1.5 py-0.5 text-[10px]">
+                            {Math.round(field.confidence * 100)}%
+                          </span>
+                        </div>
+                        <div className="mt-1 flex items-center justify-between text-xs text-[var(--muted)]">
+                          <span>{field.section ?? field.pdfName}</span>
+                          <span>{t("page", { page: field.page })}</span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </aside>
               )}
-            </div>
-          </main>
+              <main className="scrollbar-thin min-w-0 flex-1 overflow-auto p-6 lg:p-8">
+                <div className="mx-auto flex w-fit flex-col gap-8">
+                  {pdf ? (
+                    Array.from({ length: pdf.numPages }, (_, index) => (
+                      <PdfPage
+                        key={index + 1}
+                        document={pdf}
+                        pageNumber={index + 1}
+                        zoom={zoom}
+                        multilineFontScale={multilineFontScale}
+                        activeFieldId={activeFieldId}
+                        remoteCollaboratorsByFieldId={remoteCollaborators}
+                        fields={fields}
+                        values={values}
+                        onFieldChange={updateField}
+                        onFieldFocus={setActiveFieldId}
+                        onFieldBlur={(fieldId) => {
+                          setActiveFieldId((current) =>
+                            current === fieldId ? null : current,
+                          );
+                          flushField(fieldId);
+                        }}
+                      />
+                    ))
+                  ) : pdfError ? (
+                    <div className="grid h-96 w-[612px] place-items-center rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--surface)] p-10 text-center">
+                      <div>
+                        <p className="font-semibold">{t("pdfLoadFailed")}</p>
+                        <p className="mt-2 max-w-md text-sm text-[var(--muted)]">
+                          {pdfError}
+                        </p>
+                        <Button
+                          className="mt-5"
+                          variant="secondary"
+                          onClick={() => window.location.reload()}
+                        >
+                          {t("retry")}
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="grid h-96 w-[612px] place-items-center rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--surface)]">
+                      <LoaderCircle className="size-7 animate-spin text-[var(--brand)]" />
+                    </div>
+                  )}
+                </div>
+              </main>
+            </>
+          )}
         </div>
       </div>
       <InviteEditorModal

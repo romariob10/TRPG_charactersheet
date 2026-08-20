@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   FileText,
@@ -29,6 +29,19 @@ interface AttachedImage {
   url: string;
 }
 
+const MESSAGE_COMPOSER_MAX_HEIGHT = 144;
+
+function resizeMessageComposer(textarea: HTMLTextAreaElement): void {
+  textarea.style.height = "auto";
+  const nextHeight = Math.min(
+    textarea.scrollHeight,
+    MESSAGE_COMPOSER_MAX_HEIGHT,
+  );
+  textarea.style.height = `${nextHeight}px`;
+  textarea.style.overflowY =
+    textarea.scrollHeight > MESSAGE_COMPOSER_MAX_HEIGHT ? "auto" : "hidden";
+}
+
 export function DirectMessagesView({
   initialConversations,
   currentUserId,
@@ -41,11 +54,10 @@ export function DirectMessagesView({
   initialConversationId?: string | null;
 }) {
   const t = useTranslations("DirectMessages");
-  const [conversations, setConversations] = useState<DirectConversationSummary[]>(
-    initialConversations,
-  );
+  const [conversations, setConversations] =
+    useState<DirectConversationSummary[]>(initialConversations);
   const [selectedId, setSelectedId] = useState<string | null>(
-    initialConversationId ?? (initialConversations[0]?.id ?? null),
+    initialConversationId ?? initialConversations[0]?.id ?? null,
   );
   const [messages, setMessages] = useState<DirectMessage[]>([]);
   const [loadingMessages, setLoadingMessages] = useState(selectedId !== null);
@@ -62,79 +74,174 @@ export function DirectMessagesView({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const selectedIdRef = useRef(selectedId);
+  const messagesRef = useRef(messages);
+  const readConversationIdsRef = useRef(new Set<string>());
+  const messagesRequestIdRef = useRef(0);
+  const conversationsRequestIdRef = useRef(0);
 
   const selectedConversation = conversations.find((c) => c.id === selectedId);
 
-  async function loadConversations() {
+  const loadConversations = useCallback(async (): Promise<
+    DirectConversationSummary[] | null
+  > => {
+    const requestId = ++conversationsRequestIdRef.current;
     try {
-      const res = await apiFetch<ListConversationsResponse>("/api/messages/conversations");
-      setConversations(res.conversations);
-    } catch {}
-  }
+      const res = await apiFetch<ListConversationsResponse>(
+        "/api/messages/conversations",
+      );
+      if (requestId !== conversationsRequestIdRef.current) return null;
+      const openConversationId = selectedIdRef.current;
+      setConversations(
+        res.conversations.map((conversation) =>
+          openConversationId === conversation.id &&
+          readConversationIdsRef.current.has(conversation.id)
+            ? { ...conversation, unreadCount: 0 }
+            : conversation,
+        ),
+      );
+      return res.conversations;
+    } catch {
+      return null;
+    }
+  }, []);
 
-  async function loadMessages(convId: string) {
-    try {
-      const res = await apiFetch<{ messages: DirectMessage[] }>(
+  const loadMessages = useCallback(
+    (convId: string): Promise<boolean> => {
+      const requestId = ++messagesRequestIdRef.current;
+      return apiFetch<{ messages: DirectMessage[] }>(
         `/api/messages/conversations/${convId}`,
-      );
-      setMessages(res.messages);
-      setConversations((prev) =>
-        prev.map((c) => (c.id === convId ? { ...c, unreadCount: 0 } : c)),
-      );
-    } catch {}
-  }
+      )
+        .then((res) => {
+          if (
+            requestId !== messagesRequestIdRef.current ||
+            selectedIdRef.current !== convId
+          ) {
+            return false;
+          }
+          const previousMessageIds = new Set(
+            messagesRef.current.map((message) => message.id),
+          );
+          const receivedIncomingMessage = res.messages.some(
+            (message) =>
+              message.senderId !== currentUserId &&
+              !previousMessageIds.has(message.id),
+          );
+          readConversationIdsRef.current.add(convId);
+          setMessages(res.messages);
+          setConversations((prev) =>
+            prev.map((c) => (c.id === convId ? { ...c, unreadCount: 0 } : c)),
+          );
+          if (receivedIncomingMessage) {
+            window.dispatchEvent(new Event("direct-messages:read"));
+          }
+          return true;
+        })
+        .catch(() => {
+          if (
+            requestId === messagesRequestIdRef.current &&
+            selectedIdRef.current === convId
+          ) {
+            readConversationIdsRef.current.delete(convId);
+          }
+          return false;
+        })
+        .finally(() => {
+          if (
+            requestId === messagesRequestIdRef.current &&
+            selectedIdRef.current === convId
+          ) {
+            setLoadingMessages(false);
+          }
+        });
+    },
+    [currentUserId],
+  );
+
+  useEffect(() => {
+    selectedIdRef.current = selectedId;
+  }, [selectedId]);
+
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
 
   useEffect(() => {
     if (!selectedId) return;
-    let cancelled = false;
-    setLoadingMessages(true);
-
-    void apiFetch<{ messages: DirectMessage[] }>(
-      `/api/messages/conversations/${selectedId}`,
-    )
-      .then((response) => {
-        if (cancelled) return;
-        setMessages(response.messages);
-        setConversations((previous) =>
-          previous.map((conversation) =>
-            conversation.id === selectedId
-              ? { ...conversation, unreadCount: 0 }
-              : conversation,
-          ),
-        );
-      })
-      .catch(() => undefined)
-      .finally(() => {
-        if (!cancelled) setLoadingMessages(false);
-      });
+    void loadMessages(selectedId);
 
     return () => {
-      cancelled = true;
+      messagesRequestIdRef.current += 1;
     };
-  }, [selectedId]);
+  }, [loadMessages, selectedId]);
 
   // Polling for updates
   useEffect(() => {
-    const interval = setInterval(() => {
-      void loadConversations();
-      if (selectedId) {
-        void loadMessages(selectedId);
+    let refreshing = false;
+    const refresh = async () => {
+      if (refreshing) return;
+      refreshing = true;
+      try {
+        const conversationId = selectedIdRef.current;
+        if (conversationId) await loadMessages(conversationId);
+        const refreshedConversations = await loadConversations();
+        const openConversation = refreshedConversations?.find(
+          (conversation) => conversation.id === conversationId,
+        );
+        if (
+          conversationId &&
+          selectedIdRef.current === conversationId &&
+          openConversation &&
+          openConversation.unreadCount > 0
+        ) {
+          const caughtUp = await loadMessages(conversationId);
+          if (!caughtUp) {
+            setConversations((previous) =>
+              previous.map((conversation) =>
+                conversation.id === conversationId
+                  ? {
+                      ...conversation,
+                      unreadCount: openConversation.unreadCount,
+                    }
+                  : conversation,
+              ),
+            );
+          }
+        }
+      } finally {
+        refreshing = false;
       }
-    }, 6000);
-    return () => clearInterval(interval);
-  }, [selectedId]);
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") void refresh();
+    };
+    const interval = window.setInterval(() => void refresh(), 6000);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [loadConversations, loadMessages]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  useEffect(() => {
+    if (textareaRef.current) resizeMessageComposer(textareaRef.current);
+  }, [draft]);
 
   async function loadEmbedOptions() {
     if (myCharacters.length > 0 || mySystems.length > 0) return;
     setLoadingEmbeds(true);
     try {
       const [charsRes, systemsRes] = await Promise.all([
-        apiFetch<{ items: CharacterSummary[] }>("/api/characters").catch(() => ({ items: [] })),
-        apiFetch<{ items: TemplateSummary[] }>("/api/templates").catch(() => ({ items: [] })),
+        apiFetch<{ items: CharacterSummary[] }>("/api/characters").catch(
+          () => ({ items: [] }),
+        ),
+        apiFetch<{ items: TemplateSummary[] }>("/api/templates").catch(() => ({
+          items: [],
+        })),
       ]);
       setMyCharacters(charsRes.items);
       setMySystems(systemsRes.items);
@@ -151,15 +258,18 @@ export function DirectMessagesView({
     try {
       const formData = new FormData();
       formData.append("file", file);
-      const res = await apiFetch<{ success: number; file: { url: string; id: string } }>(
-        "/api/posts/images",
-        {
-          method: "POST",
-          body: formData,
-        },
-      );
+      const res = await apiFetch<{
+        success: number;
+        file: { url: string; id: string };
+      }>("/api/posts/images", {
+        method: "POST",
+        body: formData,
+      });
       if (res.file?.url) {
-        setAttachedImages((prev) => [...prev, { id: res.file.id, url: res.file.url }]);
+        setAttachedImages((prev) => [
+          ...prev,
+          { id: res.file.id, url: res.file.url },
+        ]);
       }
     } catch {
       // ignore upload error
@@ -183,12 +293,21 @@ export function DirectMessagesView({
 
   async function handleSend(e?: React.FormEvent) {
     if (e) e.preventDefault();
-    if ((!draft.trim() && attachedImages.length === 0) || !selectedId || sending) return;
+    if (
+      (!draft.trim() && attachedImages.length === 0) ||
+      !selectedId ||
+      sending
+    )
+      return;
 
     let bodyText = draft.trim();
     if (attachedImages.length > 0) {
-      const imagesMarkdown = attachedImages.map((img) => `\n![image](${img.url})`).join("");
-      bodyText = bodyText ? `${bodyText}${imagesMarkdown}` : imagesMarkdown.trim();
+      const imagesMarkdown = attachedImages
+        .map((img) => `\n![image](${img.url})`)
+        .join("");
+      bodyText = bodyText
+        ? `${bodyText}${imagesMarkdown}`
+        : imagesMarkdown.trim();
     }
 
     setDraft("");
@@ -213,7 +332,7 @@ export function DirectMessagesView({
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    if (e.key === "Enter" && !e.shiftKey) {
+    if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault();
       void handleSend();
     }
@@ -248,6 +367,7 @@ export function DirectMessagesView({
                 <div
                   key={conv.id}
                   onClick={() => {
+                    if (conv.id === selectedId) return;
                     setLoadingMessages(true);
                     setMessages([]);
                     setSelectedId(conv.id);
@@ -268,7 +388,8 @@ export function DirectMessagesView({
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-bold text-[var(--foreground)] truncate">
-                        {conv.participant.displayName || conv.participant.username}
+                        {conv.participant.displayName ||
+                          conv.participant.username}
                       </span>
                       <span className="text-[10px] font-medium text-[var(--muted)] shrink-0">
                         {formatRelativeDate(conv.lastMessageAt, locale)}
@@ -335,7 +456,8 @@ export function DirectMessagesView({
                     <div
                       key={msg.id}
                       className={
-                        "flex flex-col " + (isMine ? "items-end" : "items-start")
+                        "flex flex-col " +
+                        (isMine ? "items-end" : "items-start")
                       }
                     >
                       <div
@@ -376,7 +498,9 @@ export function DirectMessagesView({
                     <button
                       type="button"
                       onClick={() =>
-                        setAttachedImages((prev) => prev.filter((_, i) => i !== index))
+                        setAttachedImages((prev) =>
+                          prev.filter((_, i) => i !== index),
+                        )
                       }
                       className="absolute top-0.5 right-0.5 grid size-5 place-items-center rounded-full bg-black/70 text-white hover:bg-red-600 transition-colors"
                     >
@@ -499,11 +623,12 @@ export function DirectMessagesView({
                             </div>
                           )}
 
-                          {myCharacters.length === 0 && mySystems.length === 0 && (
-                            <p className="p-3 text-center text-[var(--muted)]">
-                              Нет доступных листов или систем
-                            </p>
-                          )}
+                          {myCharacters.length === 0 &&
+                            mySystems.length === 0 && (
+                              <p className="p-3 text-center text-[var(--muted)]">
+                                Нет доступных листов или систем
+                              </p>
+                            )}
                         </>
                       )}
                     </div>
@@ -524,7 +649,9 @@ export function DirectMessagesView({
 
                 <button
                   type="submit"
-                  disabled={(!draft.trim() && attachedImages.length === 0) || sending}
+                  disabled={
+                    (!draft.trim() && attachedImages.length === 0) || sending
+                  }
                   className="grid size-9 shrink-0 place-items-center rounded-xl bg-[var(--brand)] text-white shadow-xs transition-opacity hover:opacity-90 disabled:opacity-50"
                 >
                   {sending ? (
@@ -553,7 +680,55 @@ export function DirectMessagesView({
   );
 }
 
-/** Helper component to parse and render message text with images, markdown links, and cards */
+type MessageTextPart =
+  | { type: "plain"; content: string }
+  | { type: "link"; title: string; url: string };
+
+function safeMessageUrl(value: string): string | null {
+  const url = value.trim();
+  if (/^\/(?!\/)[^\s\\]*$/.test(url)) return url;
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "http:" || parsed.protocol === "https:"
+      ? url
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function appendAutoLinkedText(parts: MessageTextPart[], content: string): void {
+  const autoLinkRegex = /https?:\/\/[^\s<>()]+|\/invites\/[A-Za-z0-9_-]+/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = autoLinkRegex.exec(content)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push({
+        type: "plain",
+        content: content.substring(lastIndex, match.index),
+      });
+    }
+
+    const trailingPunctuation = match[0].match(/[.,!?;:]+$/)?.[0] ?? "";
+    const candidate = trailingPunctuation
+      ? match[0].slice(0, -trailingPunctuation.length)
+      : match[0];
+    const url = safeMessageUrl(candidate);
+    if (url) parts.push({ type: "link", title: candidate, url });
+    else parts.push({ type: "plain", content: candidate });
+    if (trailingPunctuation) {
+      parts.push({ type: "plain", content: trailingPunctuation });
+    }
+    lastIndex = autoLinkRegex.lastIndex;
+  }
+
+  if (lastIndex < content.length) {
+    parts.push({ type: "plain", content: content.substring(lastIndex) });
+  }
+}
+
+/** Helper component to parse and safely render message text and links. */
 function MessageBody({ text, isMine }: { text: string; isMine: boolean }) {
   // Regex to detect markdown images: ![alt](url)
   const imageRegex = /!\[([^\]]*)\]\(([^)]+)\)/g;
@@ -565,18 +740,21 @@ function MessageBody({ text, isMine }: { text: string; isMine: boolean }) {
   let match;
 
   while ((match = imageRegex.exec(text)) !== null) {
-    if (match.index > lastIndex) {
+    const imageUrl = safeMessageUrl(match[2]);
+    if (imageUrl) {
+      if (match.index > lastIndex) {
+        parts.push({
+          type: "text" as const,
+          content: text.substring(lastIndex, match.index),
+        });
+      }
       parts.push({
-        type: "text" as const,
-        content: text.substring(lastIndex, match.index),
+        type: "image" as const,
+        alt: match[1] || "Image",
+        url: imageUrl,
       });
+      lastIndex = imageRegex.lastIndex;
     }
-    parts.push({
-      type: "image" as const,
-      alt: match[1] || "Image",
-      url: match[2],
-    });
-    lastIndex = imageRegex.lastIndex;
   }
 
   if (lastIndex < text.length) {
@@ -604,37 +782,41 @@ function MessageBody({ text, isMine }: { text: string; isMine: boolean }) {
 
         // Parse markdown links inside text part
         const textContent = part.content;
-        const textParts = [];
+        const textParts: MessageTextPart[] = [];
         let tLastIndex = 0;
         let linkMatch;
 
         while ((linkMatch = linkRegex.exec(textContent)) !== null) {
           if (linkMatch.index > tLastIndex) {
-            textParts.push({
-              type: "plain" as const,
-              content: textContent.substring(tLastIndex, linkMatch.index),
-            });
+            appendAutoLinkedText(
+              textParts,
+              textContent.substring(tLastIndex, linkMatch.index),
+            );
           }
-          textParts.push({
-            type: "link" as const,
-            title: linkMatch[1],
-            url: linkMatch[2],
-          });
+          const url = safeMessageUrl(linkMatch[2]);
+          if (url) {
+            textParts.push({
+              type: "link",
+              title: linkMatch[1],
+              url,
+            });
+          } else {
+            textParts.push({ type: "plain", content: linkMatch[0] });
+          }
           tLastIndex = linkRegex.lastIndex;
         }
 
         if (tLastIndex < textContent.length) {
-          textParts.push({
-            type: "plain" as const,
-            content: textContent.substring(tLastIndex),
-          });
+          appendAutoLinkedText(textParts, textContent.substring(tLastIndex));
         }
 
         return (
-          <p key={i} className="whitespace-pre-wrap break-words leading-relaxed">
+          <p
+            key={i}
+            className="whitespace-pre-wrap break-words leading-relaxed"
+          >
             {textParts.map((tp, j) => {
               if (tp.type === "link") {
-                const isInternal = tp.url.startsWith("/") || tp.url.includes(typeof window !== "undefined" ? window.location.host : "");
                 return (
                   <Link
                     key={j}

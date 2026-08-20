@@ -125,4 +125,20 @@ export class NotificationService {
       .where("read_at", "is", null)
       .execute();
   }
+
+  async markConversationRead(
+    userId: string,
+    conversationId: string,
+    readAt = new Date(),
+  ): Promise<void> {
+    await this.db
+      .updateTable("user_notifications")
+      .set({ read_at: readAt })
+      .where("user_id", "=", userId)
+      .where("type", "=", "direct_message")
+      .where("target_type", "=", "conversation")
+      .where("target_id", "=", conversationId)
+      .where("read_at", "is", null)
+      .execute();
+  }
 }

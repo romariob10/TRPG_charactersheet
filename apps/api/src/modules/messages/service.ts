@@ -17,9 +17,16 @@ export class DirectMessageService {
     this.db = database;
   }
 
-  private normalizeParticipants(userA: string, userB: string): [string, string] {
+  private normalizeParticipants(
+    userA: string,
+    userB: string,
+  ): [string, string] {
     if (userA === userB) {
-      throw new AppError("SELF_CONVERSATION", 400, "You cannot send messages to yourself.");
+      throw new AppError(
+        "SELF_CONVERSATION",
+        400,
+        "You cannot send messages to yourself.",
+      );
     }
     return userA < userB ? [userA, userB] : [userB, userA];
   }
@@ -100,7 +107,12 @@ export class DirectMessageService {
 
       const lastMsg = await this.db
         .selectFrom("direct_messages")
-        .select(["body", "sender_id as senderId", "created_at as createdAt", "read_at as readAt"])
+        .select([
+          "body",
+          "sender_id as senderId",
+          "created_at as createdAt",
+          "read_at as readAt",
+        ])
         .where("conversation_id", "=", row.id)
         .orderBy("created_at", "desc")
         .limit(1)
@@ -126,7 +138,9 @@ export class DirectMessageService {
               body: lastMsg.body,
               senderId: String(lastMsg.senderId),
               createdAt: lastMsg.createdAt.toISOString(),
-              readAt: lastMsg.readAt ? new Date(lastMsg.readAt).toISOString() : null,
+              readAt: lastMsg.readAt
+                ? new Date(lastMsg.readAt).toISOString()
+                : null,
             }
           : null,
         unreadCount: unread?.count ?? 0,
@@ -142,42 +156,67 @@ export class DirectMessageService {
     conversationId: string,
     limit = 100,
   ): Promise<DirectMessage[]> {
-    const conv = await this.db
-      .selectFrom("direct_conversations")
-      .select(["id", "participant_one_id as p1", "participant_two_id as p2"])
-      .where("id", "=", conversationId)
-      .executeTakeFirst();
+    return this.db.transaction().execute(async (trx) => {
+      const conv = await trx
+        .selectFrom("direct_conversations")
+        .select(["id", "participant_one_id as p1", "participant_two_id as p2"])
+        .where("id", "=", conversationId)
+        .forUpdate()
+        .executeTakeFirst();
 
-    if (!conv || (conv.p1 !== userId && conv.p2 !== userId)) {
-      throw new AppError("CONVERSATION_NOT_FOUND", 404, "Conversation not found.");
-    }
+      if (!conv || (conv.p1 !== userId && conv.p2 !== userId)) {
+        throw new AppError(
+          "CONVERSATION_NOT_FOUND",
+          404,
+          "Conversation not found.",
+        );
+      }
 
-    // Mark unread messages from the other user as read
-    await this.db
-      .updateTable("direct_messages")
-      .set({ read_at: new Date() })
-      .where("conversation_id", "=", conversationId)
-      .where("sender_id", "!=", userId)
-      .where("read_at", "is", null)
-      .execute();
+      const readAt = new Date();
+      await trx
+        .updateTable("direct_messages")
+        .set({ read_at: readAt })
+        .where("conversation_id", "=", conversationId)
+        .where("sender_id", "!=", userId)
+        .where("read_at", "is", null)
+        .execute();
+      await new NotificationService(trx).markConversationRead(
+        userId,
+        conversationId,
+        readAt,
+      );
+      await new WorkspaceService(trx).markTargetSeen(
+        userId,
+        "conversation",
+        conversationId,
+        readAt,
+      );
 
-    const rows = await this.db
-      .selectFrom("direct_messages")
-      .select(["id", "conversation_id as conversationId", "sender_id as senderId", "body", "read_at as readAt", "created_at as createdAt"])
-      .where("conversation_id", "=", conversationId)
-      .orderBy("created_at", "asc")
-      .limit(Math.min(Math.max(limit, 1), 200))
-      .execute();
+      const rows = await trx
+        .selectFrom("direct_messages")
+        .select([
+          "id",
+          "conversation_id as conversationId",
+          "sender_id as senderId",
+          "body",
+          "read_at as readAt",
+          "created_at as createdAt",
+        ])
+        .where("conversation_id", "=", conversationId)
+        .orderBy("created_at", "asc")
+        .limit(Math.min(Math.max(limit, 1), 200))
+        .execute();
 
-    return rows.map((r) => ({
-      id: String(r.id),
-      conversationId: String(r.conversationId),
-      senderId: String(r.senderId),
-      body: r.body,
-      readAt: r.readAt ? new Date(r.readAt).toISOString() : null,
-      createdAt: r.createdAt.toISOString(),
-      isMine: r.senderId === userId,
-    }));
+      return rows.map((row) => ({
+        id: String(row.id),
+        conversationId: String(row.conversationId),
+        senderId: String(row.senderId),
+        body: row.body,
+        readAt: row.readAt ? new Date(row.readAt).toISOString() : null,
+        createdAt: row.createdAt.toISOString(),
+        isMine: row.senderId === userId,
+      }));
+    });
   }
 
   async sendMessage(
@@ -187,50 +226,72 @@ export class DirectMessageService {
   ): Promise<DirectMessage> {
     await new UserModerationService(this.db).assertCanPost(userId);
 
-    const conv = await this.db
-      .selectFrom("direct_conversations")
-      .select(["id", "participant_one_id as p1", "participant_two_id as p2"])
-      .where("id", "=", conversationId)
-      .executeTakeFirst();
+    const row = await this.db.transaction().execute(async (trx) => {
+      // Reading and sending both lock the conversation row. This makes the
+      // message, its notification, and its workspace activity visible as one
+      // unit and prevents a read request from missing a concurrent send.
+      const conv = await trx
+        .selectFrom("direct_conversations")
+        .select(["id", "participant_one_id as p1", "participant_two_id as p2"])
+        .where("id", "=", conversationId)
+        .forUpdate()
+        .executeTakeFirst();
 
-    if (!conv || (conv.p1 !== userId && conv.p2 !== userId)) {
-      throw new AppError("CONVERSATION_NOT_FOUND", 404, "Conversation not found.");
-    }
+      if (!conv || (conv.p1 !== userId && conv.p2 !== userId)) {
+        throw new AppError(
+          "CONVERSATION_NOT_FOUND",
+          404,
+          "Conversation not found.",
+        );
+      }
 
-    const recipientId = conv.p1 === userId ? conv.p2 : conv.p1;
+      const recipientId = conv.p1 === userId ? conv.p2 : conv.p1;
+      const created = await trx
+        .insertInto("direct_messages")
+        .values({
+          conversation_id: conversationId,
+          sender_id: userId,
+          body: body.trim(),
+        })
+        .returning([
+          "id",
+          "conversation_id as conversationId",
+          "sender_id as senderId",
+          "body",
+          "read_at as readAt",
+          "created_at as createdAt",
+        ])
+        .executeTakeFirstOrThrow();
 
-    const row = await this.db
-      .insertInto("direct_messages")
-      .values({
-        conversation_id: conversationId,
-        sender_id: userId,
-        body: body.trim(),
-      })
-      .returning(["id", "conversation_id as conversationId", "sender_id as senderId", "body", "read_at as readAt", "created_at as createdAt"])
-      .executeTakeFirstOrThrow();
+      await trx
+        .updateTable("direct_conversations")
+        .set({ last_message_at: new Date() })
+        .where("id", "=", conversationId)
+        .execute();
 
-    await this.db
-      .updateTable("direct_conversations")
-      .set({ last_message_at: new Date() })
-      .where("id", "=", conversationId)
-      .execute();
+      await new NotificationService(trx).notify({
+        userId: recipientId,
+        actorId: userId,
+        type: "direct_message",
+        targetType: "conversation",
+        targetId: conversationId,
+        title: "New private message",
+        body: body.trim().slice(0, 100),
+        metadata: { conversationId },
+      });
 
-    await new NotificationService(this.db).notify({
-      userId: recipientId,
-      actorId: userId,
-      type: "direct_message",
-      targetType: "conversation",
-      targetId: conversationId,
-      title: "New private message",
-      body: body.trim().slice(0, 100),
-      metadata: { conversationId },
+      const workspace = new WorkspaceService(trx);
+      await workspace.recordActivity(userId, "conversation", conversationId, {
+        markSeen: true,
+      });
+      await workspace.recordActivity(
+        recipientId,
+        "conversation",
+        conversationId,
+      );
+
+      return created;
     });
-
-    const workspace = new WorkspaceService(this.db);
-    await workspace.recordActivity(userId, "conversation", conversationId, {
-      markSeen: true,
-    });
-    await workspace.recordActivity(recipientId, "conversation", conversationId);
 
     return {
       id: String(row.id),
