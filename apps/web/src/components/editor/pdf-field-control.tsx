@@ -195,6 +195,16 @@ export function PdfFieldControl({
     );
   }
   if (field.kind === "dropdown" || field.kind === "list") {
+    const multiple = field.kind === "list";
+    const selectValue = multiple
+      ? Array.isArray(value)
+        ? value
+        : typeof value === "string" && value
+          ? [value]
+          : []
+      : typeof value === "string"
+        ? value
+        : "";
     return (
       <>
         {collaboratorLabel}
@@ -204,12 +214,21 @@ export function PdfFieldControl({
           aria-label={field.label}
           className={cn(className, "px-1")}
           style={{ ...style, fontSize: `${Math.max(8, 12 * zoom)}px` }}
-          value={typeof value === "string" ? value : ""}
-          onChange={(event) => onChange(event.target.value)}
+          multiple={multiple}
+          value={selectValue}
+          onChange={(event) =>
+            onChange(
+              multiple
+                ? [...event.target.selectedOptions].map(
+                    (option) => option.value,
+                  )
+                : event.target.value,
+            )
+          }
           onFocus={onFocus}
           onBlur={onBlur}
         >
-          <option value="" />
+          {!multiple && <option value="" />}
           {field.options.map((option) => (
             <option key={option} value={option}>
               {option}
