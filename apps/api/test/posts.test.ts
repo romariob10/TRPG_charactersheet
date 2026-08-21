@@ -105,6 +105,34 @@ describe("social posts", () => {
     expect(publicPost.json().post.id).toBe(created.json().id);
   });
 
+  it("ignores legacy empty paragraphs without breaking the feed", async () => {
+    const created = await createTextPost("Legacy post");
+    await testDb.db
+      .updateTable("posts")
+      .set({
+        content: JSON.stringify([
+          { type: "paragraph", data: { text: "Legacy post" } },
+          { type: "paragraph", data: { text: "" } },
+        ]),
+      })
+      .where("id", "=", created.id as string)
+      .execute();
+
+    const feed = await app.inject({
+      method: "GET",
+      url: "/api/posts",
+      cookies: { mycharacter_session: user.cookie },
+    });
+
+    expect(feed.statusCode, feed.body).toBe(200);
+    const post = feed
+      .json()
+      .posts.find((item: { id: string }) => item.id === created.id);
+    expect(post.blocks).toEqual([
+      { type: "paragraph", data: { text: "Legacy post" } },
+    ]);
+  });
+
   it("updates reactions and comments without reloading the post", async () => {
     const created = await createTextPost("Reactions test");
     const postId = created.id as string;

@@ -611,7 +611,7 @@ export class PostService {
     if (!rows.length) return [];
     const parsed = rows.map((row) => ({
       row,
-      blocks: createPostRequestSchema.shape.blocks.parse(row.content),
+      blocks: parseStoredPostBlocks(row.content),
     }));
     const [reactions, embeds, bookmarks] = await Promise.all([
       this.reactionsFor(
@@ -895,6 +895,29 @@ export class PostService {
       .executeTakeFirst();
     if (!post) throw postNotFound();
   }
+}
+
+function parseStoredPostBlocks(content: unknown): PostBlock[] {
+  // Older clients could persist an empty trailing paragraph. Current writes
+  // reject it, but tolerate that legacy shape so one post cannot break a feed.
+  const normalized = Array.isArray(content)
+    ? content.filter(
+        (block) =>
+          !(
+            typeof block === "object" &&
+            block !== null &&
+            "type" in block &&
+            block.type === "paragraph" &&
+            "data" in block &&
+            typeof block.data === "object" &&
+            block.data !== null &&
+            "text" in block.data &&
+            typeof block.data.text === "string" &&
+            block.data.text.trim().length === 0
+          ),
+      )
+    : content;
+  return createPostRequestSchema.shape.blocks.parse(normalized);
 }
 
 function normalizeBlocks(blocks: PostBlock[]): PostBlock[] {
