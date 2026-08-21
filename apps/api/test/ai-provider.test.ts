@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AiSettingsReader } from "@mycharacter/storage";
 import {
   createConfiguredProvider,
+  deepSeekProviderOptions,
   economicalQwenProviderOptions,
 } from "../src/modules/ai/provider.js";
 
@@ -47,5 +48,21 @@ describe("AI provider configuration", () => {
     expect(economicalQwenProviderOptions).toEqual({
       configured: { reasoningEffort: "low" },
     });
+  });
+
+  it("disables DeepSeek thinking for reliable multi-turn tool calls", async () => {
+    const store: AiSettingsReader = {
+      read: async () => ({
+        provider: "custom",
+        apiKey: "deepseek-test-key",
+        baseUrl: "https://api.deepseek.com",
+        chatModel: "deepseek-v4-flash-vision-exp",
+        visionModel: "deepseek-v4-flash-vision-exp",
+        visionSupportsImages: true,
+      }),
+    };
+
+    const configured = await createConfiguredProvider(store, {});
+    expect(configured.providerOptions).toEqual(deepSeekProviderOptions);
   });
 });
