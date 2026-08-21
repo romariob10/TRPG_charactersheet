@@ -20,6 +20,7 @@ interface InteractiveFieldRow {
 interface InteractiveResourceTrack extends InteractiveFieldRow {
   current: CharacterField | null;
   maximum: CharacterField | null;
+  temporary: CharacterField | null;
 }
 
 interface InteractiveTableRow {
@@ -34,11 +35,12 @@ export type InteractiveBlock =
   | {
       kind: "table";
       id: string;
+      title?: string;
       columns: string[];
       rows: InteractiveTableRow[];
     }
   | {
-      kind: "options" | "text" | "fields";
+      kind: "options" | "text" | "fields" | "fallback";
       id: string;
       fields: CharacterField[];
     };
@@ -50,6 +52,7 @@ export interface InteractiveLayoutSection extends InteractiveFieldSection {
 type FieldRole =
   | "current"
   | "maximum"
+  | "temporary"
   | "proficiency"
   | "score"
   | "modifier"
@@ -71,6 +74,7 @@ const sectionPatterns = {
 const rolePatterns: Array<[FieldRole, RegExp]> = [
   ["current", /(?:\bcurrent\b|\bcur\b|текущ|сейчас)/i],
   ["maximum", /(?:\bmaximum\b|\bmax\b|максим|предел)/i],
+  ["temporary", /(?:\btemporary\b|\btemp\b|временн)/i],
   ["proficiency", /(?:proficien|trained|training|владен|обучен)/i],
   ["save", /(?:saving throw|\bsave\b|спасброс|испытан)/i],
   ["check", /(?:\bcheck\b|\btest\b|\broll\b|проверк|бросок)/i],
@@ -184,7 +188,7 @@ function fieldRole(field: CharacterField): FieldRole {
 function semanticLabel(field: CharacterField) {
   const cleaned = field.label
     .replace(
-      /(?:\bcurrent\b|\bcur\b|\bmaximum\b|\bmax\b|proficien\w*|trained|training|saving throw|\bsave\b|\bcheck\b|\btest\b|\broll\b|modifier|\bmod\b|bonus|\bscore\b|\bvalue\b|\bbase\b|\brating\b|текущ\w*|сейчас|максим\w*|предел|владен\w*|обучен\w*|спасброс\w*|испытан\w*|проверк\w*|бросок\w*|бонус\w*|модифик\w*|значен\w*|базов\w*|рейтинг\w*)/giu,
+      /(?:\bcurrent\b|\bcur\b|\bmaximum\b|\bmax\b|\btemporary\b|\btemp\b|proficien\w*|trained|training|saving throw|\bsave\b|\bcheck\b|\btest\b|\broll\b|modifier|\bmod\b|bonus|\bscore\b|\bvalue\b|\bbase\b|\brating\b|текущ\w*|сейчас|максим\w*|предел|временн\w*|владен\w*|обучен\w*|спасброс\w*|испытан\w*|проверк\w*|бросок\w*|бонус\w*|модифик\w*|значен\w*|базов\w*|рейтинг\w*)/giu,
       " ",
     )
     .replace(/(?:^|\s)[#№]?\d+(?=\s|$)/g, " ")
@@ -216,6 +220,7 @@ function roleRank(field: CharacterField) {
     "check",
     "save",
     "maximum",
+    "temporary",
     "other",
   ];
   return order.indexOf(fieldRole(field));
@@ -271,8 +276,20 @@ function buildSemanticRows(fields: CharacterField[]): InteractiveFieldRow[] {
 }
 
 function numberedField(field: CharacterField) {
-  const match = `${field.label} ${field.pdfName}`.match(
-    /(?:^|[^\d])(\d{1,2})(?=[^\d]|$)/,
+  const matches = [
+    ...`${field.label} ${field.pdfName}`.matchAll(
+      /(?:^|[^\d])(\d{1,3})(?=[^\d]|$)/g,
+    ),
+  ];
+  const match = matches.at(-1);
+  return match ? Number(match[1]) : null;
+}
+
+function spellLevel(field: CharacterField): number | null {
+  const text = fieldText(field);
+  if (/(?:\bcantrip\b|заговор)/i.test(text)) return 0;
+  const match = text.match(
+    /(?:spell\s*)?(?:level|lvl|circle|уров(?:ень|ня)?|круг)\s*[-_:№#]?\s*([0-9])/i,
   );
   return match ? Number(match[1]) : null;
 }
@@ -289,6 +306,7 @@ function columnLabel(field: CharacterField) {
 function buildRepeatedTable(
   id: string,
   fields: CharacterField[],
+  title?: string,
 ): Extract<InteractiveBlock, { kind: "table" }> | null {
   const numberedRows = new Map<number, CharacterField[]>();
   const unnumbered: CharacterField[] = [];
@@ -345,7 +363,8 @@ function buildRepeatedTable(
     }
     if (
       geometricRows.length < 2 ||
-      geometricRows.some((row) => row.fields.length < 2)
+      geometricRows.some((row) => row.fields.length < 2) ||
+      !hasConsistentTableGeometry(geometricRows)
     ) {
       return null;
     }
@@ -363,9 +382,65 @@ function buildRepeatedTable(
   return {
     kind: "table",
     id,
+    title,
     columns: exemplar.fields.map(columnLabel),
     rows: tableRows,
   };
+}
+
+function hasConsistentTableGeometry(
+  rows: Array<{ page: number; top: number; fields: CharacterField[] }>,
+) {
+  const expectedColumns = rows[0]!.fields.length;
+  const reference = [...rows[0]!.fields]
+    .sort((left, right) => fieldPosition(left).left - fieldPosition(right).left)
+    .map((field) => fieldPosition(field).left);
+  if (rows.some((row) => row.fields.length !== expectedColumns)) return false;
+  const aligned = rows.every((row) => {
+    const positions = [...row.fields]
+      .sort(
+        (left, right) => fieldPosition(left).left - fieldPosition(right).left,
+      )
+      .map((field) => fieldPosition(field).left);
+    return positions.every(
+      (left, index) => Math.abs(left - reference[index]!) <= 0.035,
+    );
+  });
+  if (!aligned) return false;
+
+  const gaps: number[] = [];
+  for (let index = 1; index < rows.length; index += 1) {
+    if (rows[index]!.page === rows[index - 1]!.page) {
+      gaps.push(rows[index]!.top - rows[index - 1]!.top);
+    }
+  }
+  if (gaps.length < 2) return true;
+  const average = gaps.reduce((sum, gap) => sum + gap, 0) / gaps.length;
+  return gaps.every((gap) => Math.abs(gap - average) <= 0.04);
+}
+
+function buildSpellTables(
+  section: InteractiveFieldSection,
+  fields: CharacterField[],
+) {
+  if (!/(?:spell|заклин)/i.test(section.title ?? "")) return [];
+  const byLevel = new Map<number, CharacterField[]>();
+  for (const field of fields) {
+    const level = spellLevel(field);
+    if (level === null) continue;
+    byLevel.set(level, [...(byLevel.get(level) ?? []), field]);
+  }
+  if (byLevel.size === 0) return [];
+  return [...byLevel.entries()]
+    .sort(([left], [right]) => left - right)
+    .flatMap(([level, levelFields]) => {
+      const table = buildRepeatedTable(
+        `${section.id}-spells-level-${level}`,
+        levelFields,
+        String(level),
+      );
+      return table ? [table] : [];
+    });
 }
 
 function looksLikeResource(fields: CharacterField[], title: string) {
@@ -420,6 +495,8 @@ function buildSectionBlocks(
       family.fields.find((field) => fieldRole(field) === "current") ?? null;
     const maximum =
       family.fields.find((field) => fieldRole(field) === "maximum") ?? null;
+    const temporary =
+      family.fields.find((field) => fieldRole(field) === "temporary") ?? null;
     if (!current && !maximum && family.fields.length < 2) continue;
     resourceTracks.push({
       id: family.id,
@@ -427,6 +504,7 @@ function buildSectionBlocks(
       fields: family.fields,
       current: current ?? family.fields[0] ?? null,
       maximum: maximum ?? family.fields[1] ?? null,
+      temporary,
     });
     consume(family.fields);
   }
@@ -436,6 +514,12 @@ function buildSectionBlocks(
       id: `${section.id}-resources`,
       tracks: resourceTracks,
     });
+  }
+
+  const spellTables = buildSpellTables(section, [...remaining.values()]);
+  for (const table of spellTables) {
+    blocks.push(table);
+    consume(table.rows.flatMap((row) => row.fields));
   }
 
   for (const family of families) {
@@ -521,6 +605,7 @@ function buildSectionBlocks(
   const options = [...remaining.values()].filter(
     (field) =>
       field.kind === "radio" ||
+      field.kind === "checkbox" ||
       field.kind === "dropdown" ||
       field.kind === "list",
   );
@@ -531,6 +616,20 @@ function buildSectionBlocks(
       fields: options,
     });
     consume(options);
+  }
+
+  const fallback = [...remaining.values()].filter(
+    (field) =>
+      field.kind === "unknown" ||
+      (field.source === "pdf" && field.confidence < 0.42),
+  );
+  if (fallback.length) {
+    blocks.push({
+      kind: "fallback",
+      id: `${section.id}-fallback`,
+      fields: fallback,
+    });
+    consume(fallback);
   }
 
   const ordinary = [...remaining.values()];
@@ -915,6 +1014,7 @@ function ResourcesBlock({
   tracks: InteractiveResourceTrack[];
   context: RenderContext;
 }) {
+  const t = useTranslations("Editor");
   return (
     <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
       {tracks.map((track) => {
@@ -956,6 +1056,36 @@ function ResourcesBlock({
                 />
               )}
             </div>
+            {track.current && current !== null && (
+              <div className="mt-3 flex justify-end gap-2">
+                <button
+                  type="button"
+                  className="size-10 rounded-full border border-[var(--border)] bg-[var(--surface)] text-lg font-bold focus:outline-none focus:ring-3 focus:ring-[var(--brand-soft)]"
+                  aria-label={t("decreaseResource", { name: track.label })}
+                  onClick={() =>
+                    context.onFieldChange(
+                      track.current!.id,
+                      String(current - 1),
+                    )
+                  }
+                >
+                  −
+                </button>
+                <button
+                  type="button"
+                  className="size-10 rounded-full border border-[var(--border)] bg-[var(--surface)] text-lg font-bold focus:outline-none focus:ring-3 focus:ring-[var(--brand-soft)]"
+                  aria-label={t("increaseResource", { name: track.label })}
+                  onClick={() =>
+                    context.onFieldChange(
+                      track.current!.id,
+                      String(current + 1),
+                    )
+                  }
+                >
+                  +
+                </button>
+              </div>
+            )}
             <div
               className={cn(
                 "mt-3 grid gap-2",
@@ -987,16 +1117,23 @@ function TableBlock({
   block: Extract<InteractiveBlock, { kind: "table" }>;
   context: RenderContext;
 }) {
+  const t = useTranslations("Editor");
   const columns = Math.max(
     block.columns.length,
     ...block.rows.map((row) => row.fields.length),
   );
   const gridClass = tableGridClass(columns);
   return (
-    <div
-      role="table"
-      className="overflow-hidden rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--surface-strong)]"
-    >
+    <div className="min-w-0">
+      {block.title !== undefined && (
+        <h3 className="mb-2 text-sm font-extrabold tracking-wide uppercase">
+          {t("spellLevel", { level: block.title })}
+        </h3>
+      )}
+      <div
+        role="table"
+        className="w-full min-w-0 overflow-hidden rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--surface-strong)]"
+      >
       <div
         role="row"
         className={cn(
@@ -1014,7 +1151,7 @@ function TableBlock({
           </span>
         ))}
       </div>
-      {block.rows.map((row) => (
+        {block.rows.map((row) => (
         <div
           role="row"
           key={row.id}
@@ -1032,7 +1169,8 @@ function TableBlock({
             </div>
           ))}
         </div>
-      ))}
+        ))}
+      </div>
     </div>
   );
 }
@@ -1051,6 +1189,10 @@ function renderBlock(
     );
   if (block.kind === "table")
     return <TableBlock key={block.id} block={block} context={context} />;
+  if (block.kind === "fallback")
+    return (
+      <FallbackBlock key={block.id} fields={block.fields} context={context} />
+    );
   return (
     <div
       key={block.id}
@@ -1073,6 +1215,31 @@ function renderBlock(
         </div>
       ))}
     </div>
+  );
+}
+
+function FallbackBlock({
+  fields,
+  context,
+}: {
+  fields: CharacterField[];
+  context: RenderContext;
+}) {
+  const t = useTranslations("Editor");
+  return (
+    <section className="rounded-[var(--radius-card)] border border-dashed border-[var(--border)] bg-[var(--slate)]/25 p-3 sm:p-4">
+      <h3 className="text-sm font-bold">{t("otherFields")}</h3>
+      <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
+        {t("fallbackDescription")}
+      </p>
+      <div className="mt-3 grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+        {fields.map((field) => (
+          <div key={field.id} className="min-w-0">
+            {control(field, context)}
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 

@@ -9,9 +9,11 @@ import { apiFetch } from "@/lib/api/client";
 export function CharacterVisibilityButton({
   characterId,
   initialPublic,
+  compact = false,
 }: {
   characterId: string;
   initialPublic: boolean;
+  compact?: boolean;
 }) {
   const router = useRouter();
   const t = useTranslations("Dashboard");
@@ -38,7 +40,11 @@ export function CharacterVisibilityButton({
       type="button"
       onClick={() => void toggle()}
       disabled={pending}
-      className="flex w-full items-center gap-2 rounded-[7px] px-3 py-2 text-left text-sm hover:bg-[var(--keylime)] disabled:opacity-60"
+      className={
+        compact
+          ? "inline-flex h-9 items-center gap-2 rounded-[var(--radius-control)] border border-[var(--border)] bg-[var(--surface)] px-3 text-sm font-semibold hover:bg-[var(--keylime)] disabled:opacity-60"
+          : "flex w-full items-center gap-2 rounded-[7px] px-3 py-2 text-left text-sm hover:bg-[var(--keylime)] disabled:opacity-60"
+      }
     >
       {pending ? (
         <LoaderCircle className="size-4 animate-spin" />
