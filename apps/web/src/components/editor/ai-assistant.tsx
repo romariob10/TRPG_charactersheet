@@ -38,6 +38,7 @@ type AttachmentButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
 
 function DirectAttachmentButton(originalProps: AttachmentButtonProps) {
   const t = useTranslations("AI");
+  const onAddFile = originalProps.onAddFile;
   const buttonProps = { ...originalProps };
   delete buttonProps.toolsMenu;
   delete buttonProps.onAddFile;
@@ -54,8 +55,17 @@ function DirectAttachmentButton(originalProps: AttachmentButtonProps) {
       title={t("attachFile")}
       aria-label={t("attachFile")}
       onClick={(event) => {
+        if (onAddFile) {
+          onAddFile();
+          return;
+        }
         const sidebar = event.currentTarget.closest("[data-copilot-sidebar]");
-        sidebar?.querySelector<HTMLInputElement>('input[type="file"]')?.click();
+        const fileInput =
+          sidebar?.querySelector<HTMLInputElement>('input[type="file"]') ??
+          document.querySelector<HTMLInputElement>(
+            '[data-copilot-sidebar] input[type="file"]',
+          );
+        fileInput?.click();
       }}
       {...props}
     >
