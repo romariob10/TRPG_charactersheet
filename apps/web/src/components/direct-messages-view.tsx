@@ -361,13 +361,6 @@ export function DirectMessagesView({
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    if (
-      (e.key === "PageUp" || e.key === "PageDown") &&
-      scrollMessagesWithKeyboard(e.key)
-    ) {
-      e.preventDefault();
-      return;
-    }
     if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault();
       void handleSend();
@@ -451,7 +444,17 @@ export function DirectMessagesView({
       </div>
 
       {/* Right Pane: Chat Thread */}
-      <div className="flex flex-col md:col-span-8 lg:col-span-8 bg-[var(--surface)]">
+      <div
+        className="flex min-h-0 flex-col overflow-hidden bg-[var(--surface)] md:col-span-8 lg:col-span-8"
+        onKeyDownCapture={(event) => {
+          if (
+            (event.key === "PageUp" || event.key === "PageDown") &&
+            scrollMessagesWithKeyboard(event.key)
+          ) {
+            event.preventDefault();
+          }
+        }}
+      >
         {selectedConversation ? (
           <>
             {/* Chat Header */}
@@ -480,9 +483,12 @@ export function DirectMessagesView({
               data-testid="direct-messages-scroll"
               tabIndex={0}
               aria-label={t("messagesHistory")}
-              className="flex-1 overflow-y-auto p-4 space-y-3 bg-[var(--surface)]"
+              className="min-h-0 flex-1 overscroll-contain overflow-y-auto p-4 space-y-3 bg-[var(--surface)]"
               onKeyDown={(event) => {
-                if (scrollMessagesWithKeyboard(event.key)) {
+                if (
+                  !event.defaultPrevented &&
+                  scrollMessagesWithKeyboard(event.key)
+                ) {
                   event.preventDefault();
                 }
               }}
