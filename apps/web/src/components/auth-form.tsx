@@ -46,13 +46,13 @@ export function AuthForm({
       {mode === "update" && (
         <label className="block space-y-2 text-sm font-semibold">
           <span>{t("currentPassword")}</span>
-          <Input name="currentPassword" type="password" minLength={12} autoComplete="current-password" required />
+          <Input name="currentPassword" type="password" minLength={8} autoComplete="current-password" required />
         </label>
       )}
       {mode !== "reset" && (
         <label className="block space-y-2 text-sm font-semibold">
           <span>{mode === "update" ? t("newPassword") : t("password")}</span>
-          <Input name={mode === "update" ? "newPassword" : "password"} type="password" minLength={12} autoComplete={mode === "sign-in" ? "current-password" : "new-password"} required />
+          <Input name={mode === "update" ? "newPassword" : "password"} type="password" minLength={8} autoComplete={mode === "sign-in" ? "current-password" : "new-password"} required />
         </label>
       )}
       {next && <input type="hidden" name="next" value={next} />}
