@@ -342,7 +342,32 @@ export function DirectMessagesView({
     }
   }
 
+  function scrollMessagesWithKeyboard(key: string): boolean {
+    const scroller = messagesScrollRef.current;
+    if (!scroller) return false;
+    const page = Math.max(120, scroller.clientHeight * 0.8);
+    if (key === "PageUp") scroller.scrollBy({ top: -page, behavior: "auto" });
+    else if (key === "PageDown")
+      scroller.scrollBy({ top: page, behavior: "auto" });
+    else if (key === "Home") scroller.scrollTo({ top: 0, behavior: "auto" });
+    else if (key === "End")
+      scroller.scrollTo({ top: scroller.scrollHeight, behavior: "auto" });
+    else if (key === "ArrowUp")
+      scroller.scrollBy({ top: -48, behavior: "auto" });
+    else if (key === "ArrowDown")
+      scroller.scrollBy({ top: 48, behavior: "auto" });
+    else return false;
+    return true;
+  }
+
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (
+      (e.key === "PageUp" || e.key === "PageDown") &&
+      scrollMessagesWithKeyboard(e.key)
+    ) {
+      e.preventDefault();
+      return;
+    }
     if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault();
       void handleSend();
@@ -453,7 +478,14 @@ export function DirectMessagesView({
             <div
               ref={messagesScrollRef}
               data-testid="direct-messages-scroll"
+              tabIndex={0}
+              aria-label={t("messagesHistory")}
               className="flex-1 overflow-y-auto p-4 space-y-3 bg-[var(--surface)]"
+              onKeyDown={(event) => {
+                if (scrollMessagesWithKeyboard(event.key)) {
+                  event.preventDefault();
+                }
+              }}
               onScroll={(event) => {
                 const element = event.currentTarget;
                 shouldAutoScrollRef.current =

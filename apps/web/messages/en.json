@@ -489,6 +489,7 @@
     "accept": "Accept invitation"
   },
   "DirectMessages": {
+    "messagesHistory": "Message history",
     "title": "Direct messages",
     "subtitle": "Private conversations with players, Game Masters, and system creators.",
     "conversations": "Conversations",

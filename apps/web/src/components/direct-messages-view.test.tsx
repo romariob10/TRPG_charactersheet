@@ -157,6 +157,37 @@ describe("DirectMessagesView", () => {
     expect(textarea).toHaveStyle({ height: "144px", overflowY: "auto" });
   });
 
+  it("navigates the message history with the keyboard", async () => {
+    apiFetch.mockResolvedValue({ messages: [message()] });
+    renderMessages();
+    await screen.findByText("hello");
+
+    const scroller = screen.getByTestId("direct-messages-scroll");
+    const scrollBy = vi.fn();
+    const scrollTo = vi.fn();
+    Object.defineProperties(scroller, {
+      clientHeight: { configurable: true, value: 500 },
+      scrollHeight: { configurable: true, value: 1_500 },
+      scrollBy: { configurable: true, value: scrollBy },
+      scrollTo: { configurable: true, value: scrollTo },
+    });
+
+    fireEvent.keyDown(scroller, { key: "PageUp" });
+    expect(scrollBy).toHaveBeenCalledWith({ top: -400, behavior: "auto" });
+
+    const textarea = screen.getByPlaceholderText("placeholder");
+    fireEvent.keyDown(textarea, { key: "PageDown" });
+    expect(scrollBy).toHaveBeenCalledWith({ top: 400, behavior: "auto" });
+
+    fireEvent.keyDown(scroller, { key: "Home" });
+    expect(scrollTo).toHaveBeenCalledWith({ top: 0, behavior: "auto" });
+    fireEvent.keyDown(scroller, { key: "End" });
+    expect(scrollTo).toHaveBeenCalledWith({
+      top: 1_500,
+      behavior: "auto",
+    });
+  });
+
   it("sends with Enter and keeps Shift+Enter for a new line", async () => {
     apiFetch.mockImplementation(
       async (url: unknown, options?: { method?: string }) => {
