@@ -76,7 +76,7 @@ function errorMessage(error: unknown) {
       return "Слишком много попыток. Пожалуйста, подождите минуту и повторите.";
     }
     if (error.code === "VALIDATION_FAILED" || error.status === 400) {
-      return "Пароль должен содержать не менее 12 символов.";
+      return "Пароль должен содержать не менее 8 символов.";
     }
     return error.message || "Не удалось выполнить запрос авторизации.";
   }
