@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 export const authEmailSchema = z.string().trim().toLowerCase().email().max(320);
-export const authPasswordSchema = z.string().min(12).max(512);
+export const authPasswordSchema = z.string().min(8).max(512);
 
 export const registerRequestSchema = z.object({
   email: authEmailSchema,

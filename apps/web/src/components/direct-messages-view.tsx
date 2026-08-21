@@ -64,6 +64,7 @@ export function DirectMessagesView({
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [imageUploadError, setImageUploadError] = useState(false);
   const [attachedImages, setAttachedImages] = useState<AttachedImage[]>([]);
 
   // Embed items state for attachments popover
@@ -262,8 +263,10 @@ export function DirectMessagesView({
 
   async function handleImageSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
-    if (!file) return;
+    const conversationId = selectedIdRef.current;
+    if (!file || !conversationId) return;
 
+    setImageUploadError(false);
     setUploadingImage(true);
     try {
       const formData = new FormData();
@@ -271,18 +274,18 @@ export function DirectMessagesView({
       const res = await apiFetch<{
         success: number;
         file: { url: string; id: string };
-      }>("/api/posts/images", {
+      }>(`/api/messages/conversations/${conversationId}/images`, {
         method: "POST",
         body: formData,
       });
-      if (res.file?.url) {
+      if (res.file?.url && selectedIdRef.current === conversationId) {
         setAttachedImages((prev) => [
           ...prev,
           { id: res.file.id, url: res.file.url },
         ]);
       }
     } catch {
-      // ignore upload error
+      setImageUploadError(true);
     } finally {
       setUploadingImage(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -342,6 +345,24 @@ export function DirectMessagesView({
     }
   }
 
+  function scrollMessagesWithKeyboard(key: string): boolean {
+    const scroller = messagesScrollRef.current;
+    if (!scroller) return false;
+    const page = Math.max(120, scroller.clientHeight * 0.8);
+    if (key === "PageUp") scroller.scrollBy({ top: -page, behavior: "auto" });
+    else if (key === "PageDown")
+      scroller.scrollBy({ top: page, behavior: "auto" });
+    else if (key === "Home") scroller.scrollTo({ top: 0, behavior: "auto" });
+    else if (key === "End")
+      scroller.scrollTo({ top: scroller.scrollHeight, behavior: "auto" });
+    else if (key === "ArrowUp")
+      scroller.scrollBy({ top: -48, behavior: "auto" });
+    else if (key === "ArrowDown")
+      scroller.scrollBy({ top: 48, behavior: "auto" });
+    else return false;
+    return true;
+  }
+
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault();
@@ -379,6 +400,8 @@ export function DirectMessagesView({
                   key={conv.id}
                   onClick={() => {
                     if (conv.id === selectedId) return;
+                    setImageUploadError(false);
+                    setAttachedImages([]);
                     setLoadingMessages(true);
                     setMessages([]);
                     setSelectedId(conv.id);
@@ -426,7 +449,17 @@ export function DirectMessagesView({
       </div>
 
       {/* Right Pane: Chat Thread */}
-      <div className="flex flex-col md:col-span-8 lg:col-span-8 bg-[var(--surface)]">
+      <div
+        className="flex min-h-0 flex-col overflow-hidden bg-[var(--surface)] md:col-span-8 lg:col-span-8"
+        onKeyDownCapture={(event) => {
+          if (
+            (event.key === "PageUp" || event.key === "PageDown") &&
+            scrollMessagesWithKeyboard(event.key)
+          ) {
+            event.preventDefault();
+          }
+        }}
+      >
         {selectedConversation ? (
           <>
             {/* Chat Header */}
@@ -453,7 +486,17 @@ export function DirectMessagesView({
             <div
               ref={messagesScrollRef}
               data-testid="direct-messages-scroll"
-              className="flex-1 overflow-y-auto p-4 space-y-3 bg-[var(--surface)]"
+              tabIndex={0}
+              aria-label={t("messagesHistory")}
+              className="min-h-0 flex-1 overscroll-contain overflow-y-auto p-4 space-y-3 bg-[var(--surface)]"
+              onKeyDown={(event) => {
+                if (
+                  !event.defaultPrevented &&
+                  scrollMessagesWithKeyboard(event.key)
+                ) {
+                  event.preventDefault();
+                }
+              }}
               onScroll={(event) => {
                 const element = event.currentTarget;
                 shouldAutoScrollRef.current =
@@ -539,6 +582,11 @@ export function DirectMessagesView({
               onSubmit={(e) => void handleSend(e)}
               className="border-t border-[var(--border)] p-3 bg-[var(--surface)] flex flex-col gap-1.5"
             >
+              {imageUploadError && (
+                <p role="alert" className="px-2 text-xs font-medium text-red-600">
+                  {t("imageUploadFailed")}
+                </p>
+              )}
               <div className="flex items-end gap-2">
                 {/* Image upload button */}
                 <input
