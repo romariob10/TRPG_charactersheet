@@ -677,7 +677,7 @@ const AiAssistantSurface = memo(function AiAssistantSurface({
         hasExplicitThreadId={thread.explicit}
       >
         <CopilotSidebar
-          autoScroll="pin-to-send"
+          autoScroll="none"
           position={chatPosition}
           width={`min(${chatWidth}px, 100vw)`}
           header={{
