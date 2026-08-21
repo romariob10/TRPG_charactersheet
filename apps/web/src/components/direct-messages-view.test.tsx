@@ -38,6 +38,7 @@ vi.mock("@/lib/api/client", () => ({
 const currentUserId = "00000000-0000-4000-8000-000000000001";
 const participantId = "00000000-0000-4000-8000-000000000002";
 const conversationId = "00000000-0000-4000-8000-000000000003";
+const scrollIntoView = vi.fn();
 
 function conversation(unreadCount = 0): DirectConversationSummary {
   return {
@@ -79,8 +80,9 @@ function renderMessages(initialUnread = 0) {
 beforeEach(() => {
   Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
     configurable: true,
-    value: vi.fn(),
+    value: scrollIntoView,
   });
+  scrollIntoView.mockReset();
 });
 
 afterEach(() => {
@@ -90,6 +92,47 @@ afterEach(() => {
 });
 
 describe("DirectMessagesView", () => {
+  it("does not pull the reader down when new messages arrive", async () => {
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      value: "visible",
+    });
+    let messageRequests = 0;
+    apiFetch.mockImplementation(async (url: unknown) => {
+      if (url === `/api/messages/conversations/${conversationId}`) {
+        messageRequests += 1;
+        return {
+          messages:
+            messageRequests === 1
+              ? [message()]
+              : [message(), message({ id: crypto.randomUUID(), body: "new" })],
+        };
+      }
+      if (url === "/api/messages/conversations") {
+        return { conversations: [conversation()] };
+      }
+      throw new Error(`Unexpected request: ${String(url)}`);
+    });
+
+    renderMessages();
+    await screen.findByText("hello");
+    const scroller = screen.getByTestId("direct-messages-scroll");
+    Object.defineProperties(scroller, {
+      scrollHeight: { configurable: true, value: 1_000 },
+      clientHeight: { configurable: true, value: 400 },
+      scrollTop: { configurable: true, value: 100, writable: true },
+    });
+    fireEvent.scroll(scroller);
+    scrollIntoView.mockClear();
+
+    await act(async () =>
+      document.dispatchEvent(new Event("visibilitychange")),
+    );
+    await screen.findByText("new");
+
+    expect(scrollIntoView).not.toHaveBeenCalled();
+  });
+
   it("grows the composer with its content and caps it at a scrollable height", async () => {
     apiFetch.mockResolvedValue({ messages: [] });
     renderMessages();

@@ -31,6 +31,96 @@ import { cn } from "@/lib/utils";
 const MIN_CHAT_WIDTH = 360;
 const MAX_CHAT_WIDTH = 720;
 
+function useStableChatScrollPosition(enabled: boolean) {
+  useEffect(() => {
+    if (!enabled) return;
+    let detach: (() => void) | undefined;
+
+    const attach = () => {
+      const content = document.querySelector<HTMLElement>(
+        '[data-copilot-sidebar] [data-testid="copilot-scroll-content"]',
+      );
+      const scroller = content?.parentElement;
+      if (!content || !scroller || scroller.dataset.stableScroll === "true")
+        return;
+
+      scroller.dataset.stableScroll = "true";
+      let readingHistory = false;
+      let userInteracting = false;
+      let desiredScrollTop = scroller.scrollTop;
+      let interactionTimer: number | undefined;
+      let restoring = false;
+
+      const finishInteractionSoon = () => {
+        if (interactionTimer) window.clearTimeout(interactionTimer);
+        interactionTimer = window.setTimeout(() => {
+          userInteracting = false;
+        }, 160);
+      };
+      const startInteraction = () => {
+        userInteracting = true;
+        readingHistory = true;
+        finishInteractionSoon();
+      };
+      const onWheel = (event: WheelEvent) => {
+        if (event.deltaY < 0) readingHistory = true;
+        startInteraction();
+      };
+      const onScroll = () => {
+        const distanceFromBottom =
+          scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight;
+        if (restoring) return;
+        if (userInteracting) {
+          desiredScrollTop = scroller.scrollTop;
+          readingHistory = distanceFromBottom > 24;
+          finishInteractionSoon();
+          return;
+        }
+        if (readingHistory && Math.abs(scroller.scrollTop - desiredScrollTop) > 1) {
+          restoring = true;
+          scroller.scrollTop = desiredScrollTop;
+          restoring = false;
+        }
+      };
+      const preservePosition = () => {
+        if (!readingHistory || userInteracting) return;
+        if (Math.abs(scroller.scrollTop - desiredScrollTop) <= 1) return;
+        restoring = true;
+        scroller.scrollTop = desiredScrollTop;
+        restoring = false;
+      };
+      const mutationObserver = new MutationObserver(preservePosition);
+      mutationObserver.observe(content, { childList: true, subtree: true });
+      scroller.addEventListener("wheel", onWheel, { passive: true });
+      scroller.addEventListener("pointerdown", startInteraction, {
+        passive: true,
+      });
+      scroller.addEventListener("touchstart", startInteraction, {
+        passive: true,
+      });
+      scroller.addEventListener("scroll", onScroll, { passive: true });
+
+      detach = () => {
+        mutationObserver.disconnect();
+        if (interactionTimer) window.clearTimeout(interactionTimer);
+        scroller.removeEventListener("wheel", onWheel);
+        scroller.removeEventListener("pointerdown", startInteraction);
+        scroller.removeEventListener("touchstart", startInteraction);
+        scroller.removeEventListener("scroll", onScroll);
+        delete scroller.dataset.stableScroll;
+      };
+    };
+
+    attach();
+    const observer = new MutationObserver(attach);
+    observer.observe(document.body, { childList: true, subtree: true });
+    return () => {
+      observer.disconnect();
+      detach?.();
+    };
+  }, [enabled]);
+}
+
 type AttachmentButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
   toolsMenu?: unknown;
   onAddFile?: () => void;
@@ -532,6 +622,7 @@ const AiAssistantSurface = memo(function AiAssistantSurface({
   }>({ status: "checking" });
   const [capabilityAttempt, setCapabilityAttempt] = useState(0);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
+  useStableChatScrollPosition(capability.status === "enabled");
 
   const resizeChat = useCallback((nextWidth: number) => {
     const width = Math.min(
@@ -677,7 +768,7 @@ const AiAssistantSurface = memo(function AiAssistantSurface({
         hasExplicitThreadId={thread.explicit}
       >
         <CopilotSidebar
-          autoScroll="pin-to-send"
+          autoScroll="none"
           position={chatPosition}
           width={`min(${chatWidth}px, 100vw)`}
           header={{
