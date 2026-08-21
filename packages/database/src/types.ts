@@ -421,6 +421,13 @@ export interface DirectMessagesTable {
   created_at: Timestamp;
 }
 
+export interface DirectMessageImagesTable {
+  file_id: string;
+  conversation_id: string;
+  uploader_id: string;
+  created_at: Timestamp;
+}
+
 export interface TemplateReviewsTable {
   id: Uuid;
   template_id: string;
@@ -490,6 +497,7 @@ export interface Database {
   user_notifications: UserNotificationsTable;
   direct_conversations: DirectConversationsTable;
   direct_messages: DirectMessagesTable;
+  direct_message_images: DirectMessageImagesTable;
   template_reviews: TemplateReviewsTable;
   workspace_items: WorkspaceItemsTable;
   system_materials: SystemMaterialsTable;

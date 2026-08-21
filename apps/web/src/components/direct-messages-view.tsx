@@ -64,6 +64,7 @@ export function DirectMessagesView({
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [imageUploadError, setImageUploadError] = useState(false);
   const [attachedImages, setAttachedImages] = useState<AttachedImage[]>([]);
 
   // Embed items state for attachments popover
@@ -163,6 +164,8 @@ export function DirectMessagesView({
 
   useEffect(() => {
     selectedIdRef.current = selectedId;
+    setImageUploadError(false);
+    setAttachedImages([]);
     forceAutoScrollRef.current = true;
     shouldAutoScrollRef.current = true;
   }, [selectedId]);
@@ -262,8 +265,10 @@ export function DirectMessagesView({
 
   async function handleImageSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
-    if (!file) return;
+    const conversationId = selectedIdRef.current;
+    if (!file || !conversationId) return;
 
+    setImageUploadError(false);
     setUploadingImage(true);
     try {
       const formData = new FormData();
@@ -271,18 +276,18 @@ export function DirectMessagesView({
       const res = await apiFetch<{
         success: number;
         file: { url: string; id: string };
-      }>("/api/posts/images", {
+      }>(`/api/messages/conversations/${conversationId}/images`, {
         method: "POST",
         body: formData,
       });
-      if (res.file?.url) {
+      if (res.file?.url && selectedIdRef.current === conversationId) {
         setAttachedImages((prev) => [
           ...prev,
           { id: res.file.id, url: res.file.url },
         ]);
       }
     } catch {
-      // ignore upload error
+      setImageUploadError(true);
     } finally {
       setUploadingImage(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -577,6 +582,11 @@ export function DirectMessagesView({
               onSubmit={(e) => void handleSend(e)}
               className="border-t border-[var(--border)] p-3 bg-[var(--surface)] flex flex-col gap-1.5"
             >
+              {imageUploadError && (
+                <p role="alert" className="px-2 text-xs font-medium text-red-600">
+                  {t("imageUploadFailed")}
+                </p>
+              )}
               <div className="flex items-end gap-2">
                 {/* Image upload button */}
                 <input

@@ -25,6 +25,7 @@ describe("workspace history", () => {
   let aliceId: string;
   let bobId: string;
   let aliceCookie: string;
+  let bobCookie: string;
 
   beforeAll(async () => {
     testDb = await createTestDatabase();
@@ -44,6 +45,8 @@ describe("workspace history", () => {
     aliceId = (await auth.register("ws-alice@example.com", password)).id;
     bobId = (await auth.register("ws-bob@example.com", password)).id;
     aliceCookie = (await auth.login("ws-alice@example.com", password)).session
+      .token;
+    bobCookie = (await auth.login("ws-bob@example.com", password)).session
       .token;
   });
 
@@ -148,6 +151,52 @@ describe("workspace history", () => {
     if (firstUnpinned !== -1 && lastPinned !== -1) {
       expect(lastPinned).toBeLessThan(firstUnpinned);
     }
+  });
+
+  it("shares private message images with both conversation participants", async () => {
+    const messages = new DirectMessageService(db);
+    const conversationId = await messages.getOrCreateConversation(
+      aliceId,
+      bobId,
+    );
+    const form = new FormData();
+    form.set(
+      "file",
+      new File(
+        [Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB", "base64")],
+        "map.png",
+        { type: "image/png" },
+      ),
+    );
+    const encoded = new Response(form);
+    const uploaded = await app.inject({
+      method: "POST",
+      url: `/api/messages/conversations/${conversationId}/images`,
+      cookies: { mycharacter_session: aliceCookie },
+      headers: { "content-type": encoded.headers.get("content-type")! },
+      payload: Buffer.from(await encoded.arrayBuffer()),
+    });
+    expect(uploaded.statusCode, uploaded.body).toBe(201);
+    const imageUrl = uploaded.json().file.url as string;
+
+    const senderImage = await app.inject({
+      method: "GET",
+      url: imageUrl,
+      cookies: { mycharacter_session: aliceCookie },
+    });
+    expect(senderImage.statusCode).toBe(200);
+    expect(senderImage.headers["content-type"]).toBe("image/png");
+
+    const recipientImage = await app.inject({
+      method: "GET",
+      url: imageUrl,
+      cookies: { mycharacter_session: bobCookie },
+    });
+    expect(recipientImage.statusCode).toBe(200);
+
+    expect(
+      (await app.inject({ method: "GET", url: imageUrl })).statusCode,
+    ).toBe(401);
   });
 
   it("rejects unauthenticated access", async () => {
