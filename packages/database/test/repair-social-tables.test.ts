@@ -5,6 +5,7 @@ import { runMigrations } from "../src/migrate.js";
 import { createTestDatabase, destroyTestDatabase } from "../src/testing.js";
 import { down as removeWorkspaceItems } from "../migrations/202608190004_workspace_items.js";
 import { down as removeSystemProjects } from "../migrations/202608190005_system_projects.js";
+import { down as removeDirectMessageImages } from "../migrations/202608220001_direct_message_images.js";
 
 const REPAIR_MIGRATION = "202608190001_repair_social_tables";
 
@@ -50,6 +51,7 @@ describe("social table repair migration", () => {
       searchPath: `${testDb.schema},public`,
     });
     try {
+      await removeDirectMessageImages(db);
       await removeSystemProjects(db);
       await removeWorkspaceItems(db);
     } finally {

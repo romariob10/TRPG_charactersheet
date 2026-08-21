@@ -188,6 +188,49 @@ describe("DirectMessagesView", () => {
     });
   });
 
+  it("uploads images to the selected private conversation", async () => {
+    apiFetch.mockImplementation(async (url: unknown) => {
+      if (url === `/api/messages/conversations/${conversationId}`) {
+        return { messages: [] };
+      }
+      if (url === `/api/messages/conversations/${conversationId}/images`) {
+        return {
+          success: 1,
+          file: {
+            id: "00000000-0000-4000-8000-000000000099",
+            url: "/api/message-images/00000000-0000-4000-8000-000000000099",
+          },
+        };
+      }
+      return { conversations: [conversation()] };
+    });
+    const { container } = renderMessages();
+    await waitFor(() =>
+      expect(apiFetch).toHaveBeenCalledWith(
+        `/api/messages/conversations/${conversationId}`,
+      ),
+    );
+
+    const input = container.querySelector('input[type="file"]');
+    expect(input).not.toBeNull();
+    fireEvent.change(input!, {
+      target: {
+        files: [new File(["png"], "map.png", { type: "image/png" })],
+      },
+    });
+
+    await waitFor(() =>
+      expect(apiFetch).toHaveBeenCalledWith(
+        `/api/messages/conversations/${conversationId}/images`,
+        expect.objectContaining({ method: "POST", body: expect.any(FormData) }),
+      ),
+    );
+    expect(await screen.findByAltText("Attachment preview")).toHaveAttribute(
+      "src",
+      "/api/message-images/00000000-0000-4000-8000-000000000099",
+    );
+  });
+
   it("sends with Enter and keeps Shift+Enter for a new line", async () => {
     apiFetch.mockImplementation(
       async (url: unknown, options?: { method?: string }) => {

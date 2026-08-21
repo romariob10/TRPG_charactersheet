@@ -488,29 +488,6 @@
     "invalid": "Invitation is invalid or already consumed.",
     "accept": "Accept invitation"
   },
-  "DirectMessages": {
-    "messagesHistory": "Message history",
-    "title": "Direct messages",
-    "subtitle": "Private conversations with players, Game Masters, and system creators.",
-    "conversations": "Conversations",
-    "noConversations": "No conversations yet",
-    "noConversationsHint": "Send a message from any user profile page to start chatting.",
-    "selectConversation": "Select a conversation to view messages",
-    "placeholder": "Write a message…",
-    "send": "Send",
-    "sendMessage": "Send message",
-    "startDialog": "Start conversation",
-    "attachImage": "Attach image",
-    "attachSheet": "Attach sheet",
-    "attachSystem": "Attach system",
-    "myCharacters": "My character sheets",
-    "mySystems": "My systems",
-    "selectSheet": "Select character sheet",
-    "selectSystem": "Select system",
-    "sendHint": "Enter to send, Shift+Enter for new line",
-    "uploadingImage": "Uploading image…",
-    "imageUploadFailed": "Failed to upload image"
-  },
   "CommunityPage": {
     "back": "Back to the library",
     "publicTemplate": "Public template",
@@ -776,6 +753,7 @@
     "viewAll": "All notifications"
   },
   "DirectMessages": {
+    "messagesHistory": "Message history",
     "title": "Direct Messages",
     "subtitle": "Private conversations with players, game masters, and system creators.",
     "conversations": "Conversations",
@@ -785,7 +763,17 @@
     "placeholder": "Write a message…",
     "send": "Send",
     "sendMessage": "Send message",
-    "startDialog": "Start conversation"
+    "startDialog": "Start conversation",
+    "attachImage": "Attach image",
+    "attachSheet": "Attach sheet",
+    "attachSystem": "Attach system",
+    "myCharacters": "My character sheets",
+    "mySystems": "My systems",
+    "selectSheet": "Select character sheet",
+    "selectSystem": "Select system",
+    "sendHint": "Enter to send, Shift+Enter for new line",
+    "uploadingImage": "Uploading image…",
+    "imageUploadFailed": "Failed to upload image"
   },
   "TemplateReviews": {
     "title": "Ratings & Reviews",
