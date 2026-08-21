@@ -2,6 +2,7 @@
 
 # dependencies
 /node_modules
+/**/node_modules/
 /.pnpm-store/
 /**/dist/
 /.pnp
@@ -56,6 +57,7 @@ next-env.d.ts
 
 # local agent worktrees
 /.worktrees/
+/QWEN_IMPLEMENTATION_README.md
 
 # Supabase CLI local state
 /supabase/.branches/

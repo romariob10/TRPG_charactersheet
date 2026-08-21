@@ -5,7 +5,11 @@ import rateLimit from "@fastify/rate-limit";
 import swagger from "@fastify/swagger";
 import websocket from "@fastify/websocket";
 import type { Database } from "@mycharacter/database";
-import Fastify, { type FastifyInstance, type RawServerDefault } from "fastify";
+import Fastify, {
+  type FastifyInstance,
+  type FastifyServerOptions,
+  type RawServerDefault,
+} from "fastify";
 import {
   hasZodFastifySchemaValidationErrors,
   jsonSchemaTransform,
@@ -15,18 +19,33 @@ import {
 } from "fastify-type-provider-zod";
 import type { Kysely } from "kysely";
 import type { ObjectStorage } from "@mycharacter/storage";
+import {
+  FileAiSettingsStore,
+  type AiSettingsWriter,
+} from "@mycharacter/storage";
 import { AppError } from "./errors.js";
 import { registerHealthRoutes } from "./modules/health/routes.js";
 import { registerAuthRoutes } from "./modules/auth/routes.js";
 import { registerCharacterRoutes } from "./modules/characters/routes.js";
 import { registerInvitationRoutes } from "./modules/invitations/routes.js";
 import { registerTemplateRoutes } from "./modules/templates/routes.js";
+import { registerProfileRoutes } from "./modules/profiles/routes.js";
+import { registerSocialRoutes } from "./modules/social/routes.js";
 import { registerPdfRoutes } from "./modules/pdf/routes.js";
 import { registerFieldRoutes } from "./modules/fields/routes.js";
 import { registerExportRoutes } from "./modules/export/routes.js";
 import { registerRealtimeRoutes } from "./modules/realtime/routes.js";
 import { registerAiRoutes } from "./modules/ai/routes.js";
 import { registerAssetRoutes } from "./modules/assets/routes.js";
+import { registerAdminRoutes } from "./modules/admin/routes.js";
+import { registerAuditRoutes } from "./modules/audit/routes.js";
+import { registerModerationRoutes } from "./modules/moderation/routes.js";
+import { registerDirectMessageRoutes } from "./modules/messages/routes.js";
+import { registerNotificationRoutes } from "./modules/notifications/routes.js";
+import { registerPostRoutes } from "./modules/posts/routes.js";
+import { registerSearchRoutes } from "./modules/search/routes.js";
+import { registerWorkspaceRoutes } from "./modules/workspace/routes.js";
+import { registerSystemWorkspaceRoutes } from "./modules/system-workspace/routes.js";
 import { registerAuth } from "./plugins/auth.js";
 import { registerDatabase } from "./plugins/database.js";
 import { registerStorage } from "./plugins/storage.js";
@@ -39,6 +58,7 @@ import {
 import { CatalogProgressBridge } from "./realtime/catalog-progress-bridge.js";
 
 export interface BuildAppOptions {
+  allowedOrigins?: string[];
   database?: Kysely<Database>;
   databaseUrl: string;
   publicOrigin?: string;
@@ -48,6 +68,8 @@ export interface BuildAppOptions {
   storageRoot?: string;
   jobs?: JobClient;
   enableBackgroundInfrastructure?: boolean;
+  aiSettings?: AiSettingsWriter;
+  logger?: FastifyServerOptions["logger"];
 }
 
 function errorBody(error: AppError, requestId: string) {
@@ -62,10 +84,15 @@ function errorBody(error: AppError, requestId: string) {
 }
 
 export async function buildApp(options: BuildAppOptions): Promise<FastifyInstance> {
+  const publicOrigin = options.publicOrigin ?? "http://localhost:8080";
+  const allowedOrigins = [
+    ...new Set([publicOrigin, ...(options.allowedOrigins ?? [])]),
+  ];
   const app = Fastify<RawServerDefault>({
     requestIdHeader: "x-request-id",
     genReqId: () => randomUUID(),
     trustProxy: 1,
+    logger: options.logger ?? false,
   }).withTypeProvider<ZodTypeProvider>();
 
   app.setValidatorCompiler(validatorCompiler);
@@ -88,11 +115,14 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
   app.decorate("jobs", jobs);
   app.addHook("onClose", async () => jobs.stop());
   await registerAuth(app, {
+    allowedOrigins,
     database: options.database,
-    publicOrigin: options.publicOrigin ?? "http://localhost:8080",
     allowMissingOriginForTests: options.allowMissingOriginForTests,
   });
   const realtime = new LocalRealtimeBus();
+  const aiSettings =
+    options.aiSettings ??
+    new FileAiSettingsStore(options.storageRoot ?? "/var/lib/mycharacter/pdfs");
   const catalogProgressBridge = options.enableBackgroundInfrastructure
     ? new CatalogProgressBridge(options.databaseUrl, realtime)
     : null;
@@ -102,16 +132,27 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
   }
   await registerHealthRoutes(app);
   await registerAssetRoutes(app);
+  await registerAdminRoutes(app, aiSettings);
+  await registerAuditRoutes(app);
+  await registerModerationRoutes(app);
   await registerAuthRoutes(app, { cookieSecure: options.cookieSecure ?? false });
   await registerCharacterRoutes(app);
   await registerTemplateRoutes(app);
+  await registerProfileRoutes(app);
+  await registerSocialRoutes(app);
+  await registerPostRoutes(app);
+  await registerSearchRoutes(app);
+  await registerWorkspaceRoutes(app);
+  await registerSystemWorkspaceRoutes(app);
+  await registerNotificationRoutes(app);
+  await registerDirectMessageRoutes(app);
   await registerInvitationRoutes(app);
   await registerPdfRoutes(app);
   await registerFieldRoutes(app, realtime);
-  await registerAiRoutes(app, realtime);
+  await registerAiRoutes(app, realtime, aiSettings);
   await registerExportRoutes(app);
   await registerRealtimeRoutes(app, realtime, {
-    publicOrigin: options.publicOrigin ?? "http://localhost:8080",
+    allowedOrigins,
     allowMissingOrigin: options.allowMissingOriginForTests ?? false,
   });
 

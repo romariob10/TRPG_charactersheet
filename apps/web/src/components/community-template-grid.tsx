@@ -1,10 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { Check, FileText, RefreshCw, Users } from "lucide-react";
+import Link from "next/link";
+import { Check, FileText, GitFork, MessageCircle, Users } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { apiFetch } from "@/lib/api/client";
+import { LikeButton } from "@/components/social-like-button";
 import { Button } from "@/components/ui/button";
 
 export interface CommunityTemplateCard {
@@ -14,6 +16,12 @@ export interface CommunityTemplateCard {
   pageCount: number;
   updatedAt: string;
   subscribed: boolean;
+  slug?: string;
+  authorUsername?: string;
+  authorDisplayName?: string | null;
+  likeCount: number;
+  commentCount: number;
+  likedByMe: boolean;
 }
 
 export function CommunityTemplateGrid({
@@ -80,6 +88,9 @@ export function CommunityTemplateGrid({
       <section className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {templates.map((template) => {
           const subscribed = subscriptions.has(template.id);
+          const templateHref = template.authorUsername
+            ? `/community/${template.authorUsername}/${template.slug ?? template.id}`
+            : null;
           return (
             <article
               id={`template-${template.id}`}
@@ -98,11 +109,48 @@ export function CommunityTemplateGrid({
                 {template.gameSystem ?? t("unknownSystem")}
               </p>
               <h2 className="mt-1 truncate text-xl font-bold">
-                {template.title}
+                {templateHref ? (
+                  <Link
+                    href={templateHref}
+                    className="hover:text-[var(--brand)] hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
+                  >
+                    {template.title}
+                  </Link>
+                ) : (
+                  template.title
+                )}
               </h2>
-              <div className="mt-4 flex items-center gap-2 text-xs text-[var(--muted)]">
-                <RefreshCw className="size-3.5" />
-                {t("syncedAutomatically")}
+              {template.authorUsername && (
+                <p className="mt-1 text-sm text-[var(--muted)]">
+                  <Link
+                    href={`/users/${template.authorUsername}`}
+                    className="font-semibold text-[var(--brand)] hover:underline"
+                  >
+                    @{template.authorUsername}
+                  </Link>
+                  {template.authorDisplayName
+                    ? ` · ${template.authorDisplayName}`
+                    : ""}
+                </p>
+              )}
+              <div className="mt-4 flex items-center gap-1 text-xs text-[var(--muted)]">
+                <LikeButton
+                  templateId={template.id}
+                  initialLiked={template.likedByMe}
+                  initialCount={template.likeCount}
+                  authenticated
+                  likeLabel={t("likeAria", { name: template.title })}
+                  unlikeLabel={t("unlikeAria", { name: template.title })}
+                  signInLabel={t("likeSignIn")}
+                />
+                <Link
+                  href={templateHref ?? `#template-${template.id}`}
+                  className="inline-flex h-9 items-center gap-1.5 rounded-[var(--radius-control)] px-2.5 text-sm font-semibold text-[var(--muted)] transition-colors hover:bg-[var(--keylime)]/70 hover:text-[var(--brand)]"
+                  aria-label={t("commentsAria", { name: template.title })}
+                >
+                  <MessageCircle className="size-4" />
+                  <span>{template.commentCount}</span>
+                </Link>
               </div>
               <div className="mt-6 border-t pt-4">
                 <Button
@@ -114,13 +162,13 @@ export function CommunityTemplateGrid({
                   {subscribed ? (
                     <Check className="size-4" />
                   ) : (
-                    <Users className="size-4" />
+                    <GitFork className="size-4" />
                   )}
                   {pendingId === template.id
-                    ? t("subscriptionPending")
-                    : subscribed
-                      ? t("removeFromMine")
-                      : t("addToMine")}
+                      ? t("subscriptionPending")
+                      : subscribed
+                        ? t("removeFromMine")
+                      : t("remix")}
                 </Button>
               </div>
             </article>

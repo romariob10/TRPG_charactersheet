@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { Button, buttonClassName } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
-describe("botanical design primitives", () => {
+describe("design primitives", () => {
   it("keeps buttons compact, accessible, and token-driven", () => {
     const html = renderToStaticMarkup(<Button size="sm">Save</Button>);
 

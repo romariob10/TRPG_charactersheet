@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { sql } from "kysely";
 import { createDatabase } from "../src/db.js";
 import { createTestDatabase, destroyTestDatabase } from "../src/testing.js";
+import type { UserStatus } from "../src/types.js";
 
 describe("initial migration", () => {
   let testDb: Awaited<ReturnType<typeof createTestDatabase>>;
@@ -45,7 +46,11 @@ describe("initial migration", () => {
         "pdf_fields",
         "pdf_field_widgets",
         "template_subscriptions",
+        "template_likes",
+        "template_comments",
         "characters",
+        "character_likes",
+        "profile_follows",
         "character_members",
         "character_values",
         "character_mutations",
@@ -55,10 +60,136 @@ describe("initial migration", () => {
         "ai_messages",
         "ai_proposals",
         "ai_proposal_items",
+        "posts",
+        "post_images",
+        "post_reactions",
+        "post_comments",
+        "post_bookmarks",
+        "post_views",
+        "admin_audit_events",
+        "content_reports",
+        "user_restrictions",
+        "user_notifications",
+        "direct_conversations",
+        "direct_messages",
+        "template_reviews",
       ]),
     );
     expect(names).not.toContain("field_catalog_overrides");
     expect(names).not.toContain("template_field_settings");
+  });
+
+  it("creates social post constraints and indexes", async () => {
+    const constraints = await sql<{ constraint_name: string }>`
+      select constraint_name
+      from information_schema.table_constraints
+      where table_schema = ${testDb.schema}
+        and table_name in ('posts', 'post_reactions', 'post_comments')
+    `.execute(testDb.db);
+    const names = constraints.rows.map((row) => row.constraint_name);
+    expect(names).toEqual(
+      expect.arrayContaining([
+        "posts_author_slug_key",
+        "post_reactions_pkey",
+        "post_reactions_kind_check",
+        "post_comments_body_length_check",
+      ]),
+    );
+  });
+
+  it("accepts every moderated account status", async () => {
+    const user = await testDb.db
+      .insertInto("users")
+      .values({ email: "moderated@example.com", password_hash: "hash" })
+      .returning("id")
+      .executeTakeFirstOrThrow();
+    const setStatus = (status: UserStatus) =>
+      testDb.db
+        .updateTable("users")
+        .set({ status })
+        .where("id", "=", user.id)
+        .execute();
+
+    for (const status of ["disabled", "suspended", "banned", "active"] as const) {
+      await expect(setStatus(status)).resolves.toBeDefined();
+    }
+    await expect(
+      sql`update users set status = 'not-a-status' where id = ${user.id}`.execute(
+        testDb.db,
+      ),
+    ).rejects.toMatchObject({ code: "23514" });
+  });
+
+  // Both columns only record who acted. Without a delete rule they made
+  // deleting an account impossible as soon as the person had edited one sheet
+  // or accepted one invite.
+  it("clears attribution instead of blocking account deletion", async () => {
+    const rows = await sql<{ constraint_name: string; delete_rule: string }>`
+      select tc.constraint_name, rc.delete_rule
+      from information_schema.table_constraints tc
+      join information_schema.referential_constraints rc
+        on rc.constraint_name = tc.constraint_name
+       and rc.constraint_schema = tc.constraint_schema
+      where tc.constraint_schema = ${testDb.schema}
+        and tc.constraint_type = 'FOREIGN KEY'
+        and tc.constraint_name in (
+          'character_values_updated_by_fkey',
+          'character_invites_accepted_by_fkey'
+        )
+      order by tc.constraint_name
+    `.execute(testDb.db);
+
+    expect(rows.rows).toEqual([
+      {
+        constraint_name: "character_invites_accepted_by_fkey",
+        delete_rule: "SET NULL",
+      },
+      {
+        constraint_name: "character_values_updated_by_fkey",
+        delete_rule: "SET NULL",
+      },
+    ]);
+  });
+
+  it("leaves no foreign key that would block deleting an account", async () => {
+    const rows = await sql<{ table_name: string; constraint_name: string }>`
+      select tc.table_name, tc.constraint_name
+      from information_schema.table_constraints tc
+      join information_schema.referential_constraints rc
+        on rc.constraint_name = tc.constraint_name
+       and rc.constraint_schema = tc.constraint_schema
+      join information_schema.constraint_column_usage ccu
+        on ccu.constraint_name = tc.constraint_name
+       and ccu.constraint_schema = tc.constraint_schema
+      where tc.constraint_schema = ${testDb.schema}
+        and tc.constraint_type = 'FOREIGN KEY'
+        and ccu.table_name = 'users'
+        and rc.delete_rule = 'NO ACTION'
+    `.execute(testDb.db);
+
+    expect(rows.rows).toEqual([]);
+  });
+
+  it("creates public character and social graph columns", async () => {
+    const rows = await testDb.db
+      .selectFrom("information_schema.columns")
+      .select(["column_name", "is_nullable"])
+      .where("table_schema", "=", testDb.schema)
+      .where("table_name", "=", "characters")
+      .where("column_name", "in", [
+        "slug",
+        "is_public",
+        "published_at",
+        "remix_source_id",
+      ])
+      .execute();
+    const columns = new Map(
+      rows.map((row) => [row.column_name, row.is_nullable]),
+    );
+    expect(columns.get("slug")).toBe("NO");
+    expect(columns.get("is_public")).toBe("NO");
+    expect(columns.get("published_at")).toBe("YES");
+    expect(columns.get("remix_source_id")).toBe("YES");
   });
 
   it("preserves final template, message, and storage columns", async () => {
@@ -68,7 +199,9 @@ describe("initial migration", () => {
       .where("table_schema", "=", testDb.schema)
       .where("table_name", "in", ["pdf_templates", "pdf_fields", "ai_messages"])
       .execute();
-    const columns = new Map(rows.map((row) => [`${row.table_name}.${row.column_name}`, row]));
+    const columns = new Map(
+      rows.map((row) => [`${row.table_name}.${row.column_name}`, row]),
+    );
 
     expect(columns.get("pdf_templates.file_id")?.is_nullable).toBe("NO");
     expect(columns.get("pdf_templates.catalog_approved_at")).toBeDefined();
@@ -86,7 +219,12 @@ describe("initial migration", () => {
       .executeTakeFirstOrThrow();
     const objectFile = await testDb.db
       .insertInto("object_files")
-      .values({ storage_key: "view.pdf", sha256: "a".repeat(64), size_bytes: "1", media_type: "application/pdf" })
+      .values({
+        storage_key: "view.pdf",
+        sha256: "a".repeat(64),
+        size_bytes: "1",
+        media_type: "application/pdf",
+      })
       .returning("id")
       .executeTakeFirstOrThrow();
     const template = await testDb.db
@@ -95,6 +233,7 @@ describe("initial migration", () => {
         file_id: objectFile.id,
         owner_id: user.id,
         title: "View template",
+        slug: "view-template",
         storage_path: "view.pdf",
         sha256: "a".repeat(64),
         page_count: 1,
@@ -150,6 +289,98 @@ describe("initial migration", () => {
     ]);
   });
 
+  it("requires usernames and stable template slugs", async () => {
+    const columns = await testDb.db
+      .selectFrom("information_schema.columns")
+      .select(["table_name", "column_name", "is_nullable"])
+      .where("table_schema", "=", testDb.schema)
+      .where("table_name", "in", ["profiles", "pdf_templates"])
+      .where("column_name", "in", ["username", "bio", "slug"])
+      .execute();
+    const byColumn = new Map(
+      columns.map((row) => [
+        `${row.table_name}.${row.column_name}`,
+        row.is_nullable,
+      ]),
+    );
+    expect(byColumn.get("profiles.username")).toBe("NO");
+    expect(byColumn.get("profiles.bio")).toBe("NO");
+    expect(byColumn.get("pdf_templates.slug")).toBe("NO");
+
+    const indexes = await sql<{ indexname: string; indexdef: string }>`
+      select indexname, indexdef from pg_indexes
+      where schemaname = ${testDb.schema}
+        and indexname in ('profiles_username_idx', 'pdf_templates_owner_slug_idx')
+      order by indexname
+    `.execute(testDb.db);
+    expect(indexes.rows).toHaveLength(2);
+    const byName = new Map(
+      indexes.rows.map((row) => [row.indexname, row.indexdef.toLowerCase()]),
+    );
+    expect(byName.get("profiles_username_idx")).toContain("lower(username)");
+    expect(byName.get("pdf_templates_owner_slug_idx")).toContain(
+      "owner_id, slug",
+    );
+    expect(byName.get("pdf_templates_owner_slug_idx")).toContain(
+      "owner_id is not null",
+    );
+  });
+
+  it("keeps deleted templates out of the private duplicate index", async () => {
+    const rows = await sql<{ indexdef: string }>`
+      select indexdef from pg_indexes
+      where schemaname = ${testDb.schema}
+        and indexname = 'pdf_templates_private_hash_idx'
+    `.execute(testDb.db);
+    expect(rows.rows).toHaveLength(1);
+    const definition = rows.rows[0].indexdef.toLowerCase();
+    expect(definition).toContain("unique");
+    expect(definition).toContain("owner_id, sha256");
+    expect(definition).toContain("deleted_at is null");
+    expect(definition).toContain("visibility = 'private'");
+  });
+
+  it("allows a deleted duplicate but blocks two active duplicates", async () => {
+    const user = await testDb.db
+      .insertInto("users")
+      .values({ email: "duplicate-index@example.com", password_hash: "hash" })
+      .returning("id")
+      .executeTakeFirstOrThrow();
+    const sha256 = "b".repeat(64);
+    const file = await testDb.db
+      .insertInto("object_files")
+      .values({
+        storage_key: "duplicate-index.pdf",
+        sha256,
+        size_bytes: "1",
+        media_type: "application/pdf",
+      })
+      .returning("id")
+      .executeTakeFirstOrThrow();
+    const insertTemplate = (deletedAt: Date | null, suffix: string) =>
+      testDb.db
+        .insertInto("pdf_templates")
+        .values({
+          file_id: file.id,
+          owner_id: user.id,
+          title: `Duplicate ${suffix}`,
+          slug: `duplicate-${suffix}`,
+          storage_path: `duplicate-index-${suffix}.pdf`,
+          sha256,
+          page_count: 1,
+          deleted_at: deletedAt,
+        })
+        .returning("id")
+        .execute();
+
+    await insertTemplate(new Date(), "deleted");
+    const active = await insertTemplate(null, "active");
+    expect(active).toHaveLength(1);
+    await expect(insertTemplate(null, "second-active")).rejects.toMatchObject({
+      code: "23505",
+    });
+  });
+
   it("uses public extensions across sequential isolated schemas", async () => {
     const first = await createTestDatabase();
     await destroyTestDatabase(first);
@@ -198,9 +429,10 @@ describe("initial migration", () => {
       `.execute(rootDb);
       expect(schemas.rows).toEqual([{ schema_name: untouchedSchema }]);
     } finally {
-      await sql`drop schema if exists ${sql.id(untouchedSchema)} cascade`.execute(rootDb);
+      await sql`drop schema if exists ${sql.id(untouchedSchema)} cascade`.execute(
+        rootDb,
+      );
       await rootDb.destroy();
     }
   });
-
 });

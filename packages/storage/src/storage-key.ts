@@ -1,9 +1,12 @@
 const STORAGE_KEY_PATTERN =
-  /^(templates|exports)\/[0-9a-f]{2}\/[0-9a-f-]{36}\/[0-9a-f-]{36}\.pdf$/;
+  /^(?:(templates|exports)\/[0-9a-f]{2}\/[0-9a-f-]{36}\/[0-9a-f-]{36}\.pdf|post-images\/[0-9a-f]{2}\/[0-9a-f-]{36}\/[0-9a-f-]{36}\.(?:png|jpe?g|webp|gif)|materials\/[0-9a-f]{2}\/[0-9a-f-]{36}\/[0-9a-f-]{36}\.(?:pdf|png|jpe?g|webp))$/;
 
 export function assertStorageKey(key: string): void {
   if (!STORAGE_KEY_PATTERN.test(key)) {
-    throw new StorageError("INVALID_STORAGE_KEY", "The storage key is invalid.");
+    throw new StorageError(
+      "INVALID_STORAGE_KEY",
+      "The storage key is invalid.",
+    );
   }
 }
 

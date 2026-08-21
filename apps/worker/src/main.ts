@@ -4,26 +4,26 @@ import {
   type CatalogJobPayload,
 } from "@mycharacter/contracts";
 import { createDatabase } from "@mycharacter/database";
-import { FilesystemStorage } from "@mycharacter/storage";
+import {
+  createConfiguredStorage,
+  FileAiSettingsStore,
+} from "@mycharacter/storage";
 import { PgBoss } from "pg-boss";
 import {
   createCatalogDependencies,
   markCatalogFailed,
   processCatalogJob,
 } from "./jobs/catalog.js";
-import {
-  createPurgeDependencies,
-  purgeTrash,
-} from "./jobs/purge.js";
+import { createPurgeDependencies, purgeTrash } from "./jobs/purge.js";
 import { reconcileStorage } from "./jobs/reconcile-storage.js";
 
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) throw new Error("DATABASE_URL is required.");
 
 const db = createDatabase(databaseUrl);
-const storage = new FilesystemStorage(
-  process.env.STORAGE_ROOT ?? "/var/lib/mycharacter/pdfs",
-);
+const storageRoot = process.env.STORAGE_ROOT ?? "/var/lib/mycharacter/pdfs";
+const storage = createConfiguredStorage(process.env, storageRoot);
+const aiSettings = new FileAiSettingsStore(storageRoot);
 const boss = new PgBoss({
   connectionString: databaseUrl,
   useListenNotify: true,
@@ -74,7 +74,12 @@ await boss.schedule(
   { tz: "UTC", singletonKey: JOB_NAMES.reconcileStorage },
 );
 
-const catalogDependencies = createCatalogDependencies(db, storage);
+const catalogDependencies = createCatalogDependencies(
+  db,
+  storage,
+  process.env,
+  aiSettings,
+);
 const purgeDependencies = createPurgeDependencies(db, storage);
 
 await boss.work<CatalogJobPayload>(

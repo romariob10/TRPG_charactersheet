@@ -9,16 +9,17 @@ import { RealtimeGateway } from "./gateway.js";
 export async function registerRealtimeRoutes(
   app: FastifyInstance,
   bus: RealtimeBus,
-  options: { publicOrigin: string; allowMissingOrigin: boolean },
+  options: { allowedOrigins: readonly string[]; allowMissingOrigin: boolean },
 ): Promise<void> {
   const gateway = new RealtimeGateway(app.db, bus);
   const catchUp = new RealtimeCatchUpService(app.db);
+  const allowedOrigins = new Set(options.allowedOrigins);
   app.addHook("onClose", async () => gateway.close());
 
   app.get("/api/realtime", { websocket: true }, (socket, request) => {
     const origin = request.headers.origin;
     if (
-      origin !== options.publicOrigin &&
+      (origin === undefined || !allowedOrigins.has(origin)) &&
       !(origin === undefined && options.allowMissingOrigin)
     ) {
       socket.close(4403, "Origin forbidden");

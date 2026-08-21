@@ -2,6 +2,7 @@ import type {
   CharacterChangesResponse,
   CharacterEditorData,
   FieldChangedEvent,
+  PresenceMember,
   RealtimeServerMessage,
 } from "@mycharacter/contracts";
 
@@ -11,6 +12,7 @@ interface RealtimeClientOptions {
   onFieldChanged: (event: FieldChangedEvent) => void;
   onSnapshot: (character: CharacterEditorData) => void;
   onPresence: (count: number) => void;
+  onPresenceMembers?: (members: PresenceMember[]) => void;
   onConnectionChange?: (connected: boolean) => void;
 }
 
@@ -24,6 +26,7 @@ export class LocalRealtimeClient {
   private catchingUp = false;
   private buffered: FieldChangedEvent[] = [];
   private readonly presenceIds = new Set<string>();
+  private readonly presenceMembers = new Map<string, PresenceMember>();
 
   constructor(private readonly options: RealtimeClientOptions) {
     this.revision = options.initialRevision;
@@ -120,15 +123,24 @@ export class LocalRealtimeClient {
       if (this.catchingUp) this.buffered.push(message);
       else this.apply(message);
     } else if (message.type === "presence.snapshot") {
+      this.presenceMembers.clear();
       this.presenceIds.clear();
-      for (const member of message.members) this.presenceIds.add(member.connectionId);
+      for (const member of message.members) {
+        this.presenceMembers.set(member.connectionId, member);
+        this.presenceIds.add(member.connectionId);
+      }
       this.options.onPresence(this.presenceIds.size);
+      this.options.onPresenceMembers?.([...this.presenceMembers.values()]);
     } else if (message.type === "presence.joined") {
+      this.presenceMembers.set(message.member.connectionId, message.member);
       this.presenceIds.add(message.member.connectionId);
       this.options.onPresence(this.presenceIds.size);
+      this.options.onPresenceMembers?.([...this.presenceMembers.values()]);
     } else if (message.type === "presence.left") {
+      this.presenceMembers.delete(message.connectionId);
       this.presenceIds.delete(message.connectionId);
       this.options.onPresence(this.presenceIds.size);
+      this.options.onPresenceMembers?.([...this.presenceMembers.values()]);
     }
   }
 
@@ -141,8 +153,10 @@ export class LocalRealtimeClient {
   private reconnect(): void {
     this.socket = null;
     this.stopHeartbeat();
+    this.presenceMembers.clear();
     this.presenceIds.clear();
     this.options.onPresence(1);
+    this.options.onPresenceMembers?.([]);
     this.options.onConnectionChange?.(false);
     if (this.stopped || this.reconnectTimer !== null) return;
     this.reconnectTimer = window.setTimeout(() => {

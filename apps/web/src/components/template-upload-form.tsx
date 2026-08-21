@@ -19,6 +19,7 @@ export function TemplateUploadForm() {
   const router = useRouter();
   const fileInputId = useId();
   const formRef = useRef<HTMLFormElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const forceDuplicateRef = useRef(false);
   const [file, setFile] = useState<File | null>(null);
   const [dragging, setDragging] = useState(false);
@@ -32,6 +33,28 @@ export function TemplateUploadForm() {
     subscribed: boolean;
   } | null>(null);
   const [subscribing, setSubscribing] = useState(false);
+
+  function selectFile(candidate: File | null) {
+    setDuplicate(null);
+    setError(null);
+
+    if (!candidate) {
+      setFile(null);
+      return;
+    }
+
+    const isPdf =
+      candidate.type === "application/pdf" ||
+      candidate.name.toLowerCase().endsWith(".pdf");
+    if (!isPdf) {
+      setFile(null);
+      setError(t("invalidPdf"));
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+
+    setFile(candidate);
+  }
 
   async function submit(formData: FormData) {
     if (!file) {
@@ -51,6 +74,7 @@ export function TemplateUploadForm() {
       });
       const result = (await response.json()) as {
         templateId?: string;
+        restored?: boolean;
         duplicateCommunity?: {
           id: string;
           title: string;
@@ -58,7 +82,7 @@ export function TemplateUploadForm() {
           pageCount: number;
           subscribed: boolean;
         };
-        error?: string | { message?: string };
+        error?: string | { code?: string; message?: string; requestId?: string };
       };
       if (response.status === 409 && result.duplicateCommunity) {
         setDuplicate(result.duplicateCommunity);
@@ -66,17 +90,34 @@ export function TemplateUploadForm() {
         return;
       }
       if (!response.ok || !result.templateId) {
-        throw new Error(
-          typeof result.error === "string"
-            ? result.error
-            : result.error?.message ?? t("uploadFailed"),
-        );
+        throw new Error(uploadErrorMessage(result.error));
       }
       router.push(`/dashboard/systems/${result.templateId}`);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : t("uploadFailed"));
+      setError(
+        reason instanceof Error
+          ? reason.message
+          : uploadErrorMessage(undefined),
+      );
       setPending(false);
     }
+  }
+
+  function uploadErrorMessage(
+    error:
+      | string
+      | { code?: string; message?: string; requestId?: string }
+      | undefined,
+  ): string {
+    if (typeof error === "string") return error || t("uploadFailed");
+    const code = error?.code;
+    if (code && t.has(`uploadErrors.${code}`)) {
+      return t(`uploadErrors.${code}`);
+    }
+    if (error?.requestId) {
+      return t("uploadFailedWithRequestId", { requestId: error.requestId });
+    }
+    return error?.message || t("uploadFailed");
   }
 
   async function subscribeToDuplicate() {
@@ -105,7 +146,14 @@ export function TemplateUploadForm() {
   }
 
   return (
-    <form ref={formRef} action={submit} className="space-y-6">
+    <form
+      ref={formRef}
+      className="space-y-6"
+      onSubmit={(event) => {
+        event.preventDefault();
+        void submit(new FormData(event.currentTarget));
+      }}
+    >
       <label className="block space-y-2 text-sm font-semibold">
         <span>{t("gameSystem")}</span>
         <Input
@@ -128,16 +176,20 @@ export function TemplateUploadForm() {
         <span className="text-sm font-semibold">{t("pdf")}</span>
         <label
           htmlFor={fileInputId}
+          onDragEnter={(event) => {
+            event.preventDefault();
+            setDragging(true);
+          }}
           onDragOver={(event) => {
             event.preventDefault();
+            event.dataTransfer.dropEffect = "copy";
             setDragging(true);
           }}
           onDragLeave={() => setDragging(false)}
           onDrop={(event) => {
             event.preventDefault();
             setDragging(false);
-            setFile(event.dataTransfer.files[0] ?? null);
-            setDuplicate(null);
+            selectFile(event.dataTransfer.files[0] ?? null);
           }}
           className={cn(
             "mt-2 flex w-full cursor-pointer flex-col items-center rounded-[var(--radius-card)] border-2 border-dashed bg-[var(--surface)] px-6 py-10 text-center transition-colors",
@@ -155,13 +207,15 @@ export function TemplateUploadForm() {
           </span>
         </label>
         <input
+          ref={fileInputRef}
           id={fileInputId}
+          name="file"
           className="sr-only"
           type="file"
           accept="application/pdf,.pdf"
+          aria-label={t("pdf")}
           onChange={(event) => {
-            setFile(event.target.files?.[0] ?? null);
-            setDuplicate(null);
+            selectFile(event.currentTarget.files?.[0] ?? null);
           }}
         />
       </div>
@@ -266,7 +320,12 @@ export function TemplateUploadForm() {
           {error}
         </p>
       )}
-      <Button className="w-full" size="lg" disabled={pending || !file}>
+      <Button
+        type="submit"
+        className="w-full"
+        size="lg"
+        disabled={pending || !file}
+      >
         {pending ? t("uploading") : t("upload")}
       </Button>
     </form>

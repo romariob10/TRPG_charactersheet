@@ -3,6 +3,8 @@ import type { RealtimeBus, RealtimeEvent, RealtimeListener } from "./realtime-bu
 export class LocalRealtimeBus implements RealtimeBus {
   private readonly characterListeners = new Map<string, Set<RealtimeListener>>();
   private readonly templateListeners = new Map<string, Set<RealtimeListener>>();
+  /* eslint-disable-next-line no-unused-vars -- Function type parameter documents the topic payload. */
+  private readonly topicListeners = new Map<string, Set<(data: unknown) => void>>();
 
   publish(event: RealtimeEvent): void {
     const listeners =
@@ -25,6 +27,27 @@ export class LocalRealtimeBus implements RealtimeBus {
 
   subscribeTemplate(templateId: string, listener: RealtimeListener): () => void {
     return this.subscribeTo(this.templateListeners, templateId, listener);
+  }
+
+  publishTopic(topic: string, data: unknown): void {
+    const listeners = this.topicListeners.get(topic);
+    for (const listener of listeners ?? []) {
+      try {
+        listener(data);
+      } catch {}
+    }
+  }
+
+  /* eslint-disable-next-line no-unused-vars -- Function type parameter documents the topic payload. */
+  subscribeTopic(topic: string, listener: (data: unknown) => void): () => void {
+    /* eslint-disable-next-line no-unused-vars -- Function type parameter documents the topic payload. */
+    const listeners = this.topicListeners.get(topic) ?? new Set<(data: unknown) => void>();
+    listeners.add(listener);
+    this.topicListeners.set(topic, listeners);
+    return () => {
+      listeners.delete(listener);
+      if (listeners.size === 0) this.topicListeners.delete(topic);
+    };
   }
 
   private subscribeTo(

@@ -345,12 +345,13 @@ describe("local authentication", () => {
     expect(spoofedChain.statusCode).toBe(429);
   });
 
-  it("enforces the configured origin for live cookie-authenticated mutations", async () => {
+  it("enforces the configured origins for live cookie-authenticated mutations", async () => {
     await app.close();
     app = await buildApp({
       database: testDb.db as unknown as Kysely<Database>,
       databaseUrl: testDb.databaseUrl,
       publicOrigin: "https://app.example.test",
+      allowedOrigins: ["https://alias.example.test"],
       cookieSecure: false,
       allowMissingOriginForTests: false,
     });
@@ -374,7 +375,7 @@ describe("local authentication", () => {
     const matchingOrigin = await app.inject({
       method: "POST",
       url: "/api/auth/logout",
-      headers: { origin: "https://app.example.test" },
+      headers: { origin: "https://alias.example.test" },
       cookies: { [cookie.name]: cookie.value },
     });
 

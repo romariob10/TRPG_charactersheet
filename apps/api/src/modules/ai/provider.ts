@@ -2,22 +2,16 @@ import {
   createOpenAICompatible,
   type OpenAICompatibleProvider,
 } from "@ai-sdk/openai-compatible";
-import { z } from "zod";
+import {
+  resolveAiSettings,
+  type AiSettingsReader,
+  type AiProviderName,
+} from "@mycharacter/storage";
 
-const aiEnvironmentSchema = z.object({
-  AI_BASE_URL: z.url(),
-  AI_API_KEY: z.string().min(1),
-  AI_PRIMARY_API_KEY: z.string().min(1).optional(),
-  AI_CHAT_MODEL: z.string().min(1),
-  AI_VISION_MODEL: z.string().min(1).optional(),
-  AI_VISION_SUPPORTS_IMAGES: z
-    .enum(["true", "false"])
-    .default("true")
-    .transform((value) => value === "true"),
-});
-
-export const nonThinkingProviderOptions = {
-  configured: { thinking: { type: "disabled" } },
+export const economicalQwenProviderOptions = {
+  // Qwen3.8-Max-Preview cannot disable reasoning. Use its smallest supported
+  // reasoning budget for concise tool calls and structured field matching.
+  configured: { reasoningEffort: "low" },
 } as const;
 
 interface ConfiguredProvider {
@@ -25,22 +19,31 @@ interface ConfiguredProvider {
   chatModel: ReturnType<OpenAICompatibleProvider>;
   visionModel: ReturnType<OpenAICompatibleProvider>;
   visionSupportsImages: boolean;
+  providerOptions: typeof economicalQwenProviderOptions | undefined;
 }
 
-export function createConfiguredProvider(): ConfiguredProvider {
-  const result = aiEnvironmentSchema.safeParse(process.env);
-  if (!result.success) throw new Error("AI provider is not configured");
+export async function createConfiguredProvider(
+  settingsStore: AiSettingsReader,
+  environment: NodeJS.ProcessEnv = process.env,
+): Promise<ConfiguredProvider> {
+  const settings = await resolveAiSettings(settingsStore, environment);
+  if (!settings) throw new Error("AI provider is not configured");
   const provider = createOpenAICompatible({
     name: "configured",
-    apiKey: result.data.AI_PRIMARY_API_KEY ?? result.data.AI_API_KEY,
-    baseURL: result.data.AI_BASE_URL,
+    apiKey: settings.apiKey,
+    baseURL: settings.baseUrl,
     includeUsage: true,
     supportsStructuredOutputs: false,
   });
   return {
     provider,
-    chatModel: provider(result.data.AI_CHAT_MODEL),
-    visionModel: provider(result.data.AI_VISION_MODEL ?? result.data.AI_CHAT_MODEL),
-    visionSupportsImages: result.data.AI_VISION_SUPPORTS_IMAGES,
+    chatModel: provider(settings.chatModel),
+    visionModel: provider(settings.visionModel),
+    visionSupportsImages: settings.visionSupportsImages,
+    providerOptions: providerOptionsFor(settings.provider),
   };
+}
+
+export function providerOptionsFor(provider: AiProviderName) {
+  return provider === "qwen" ? economicalQwenProviderOptions : undefined;
 }

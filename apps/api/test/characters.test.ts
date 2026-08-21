@@ -5,7 +5,7 @@ import {
   destroyTestDatabase,
   type Database,
 } from "@mycharacter/database";
-import type { Kysely } from "kysely";
+import { sql, type Kysely } from "kysely";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { buildApp } from "../src/app.js";
 
@@ -67,6 +67,7 @@ describe("character authorization and lifecycle", () => {
         owner_id: owner.userId,
         visibility: "private",
         title: "Test system",
+        slug: "test-system",
         storage_path: `tests/${crypto.randomUUID()}.pdf`,
         sha256: "b".repeat(64),
         page_count: 2,
@@ -120,23 +121,40 @@ describe("character authorization and lifecycle", () => {
     ["editor", "invite", 403],
     ["stranger", "read", 404],
     ["owner", "restore", 200],
-  ] as const)("%s performing %s returns %i", async (identity, action, status) => {
-    const actor = { owner, editor, stranger }[identity];
-    const characterId = action === "restore" ? trashedCharacterId : activeCharacterId;
-    const request =
-      action === "edit"
-        ? { method: "PATCH" as const, url: `/api/characters/${characterId}`, payload: { name: "Renamed hero" } }
-        : action === "invite"
-          ? { method: "POST" as const, url: `/api/characters/${characterId}/invites` }
-          : action === "restore"
-            ? { method: "POST" as const, url: `/api/characters/${characterId}/restore` }
-            : { method: "GET" as const, url: `/api/characters/${characterId}` };
-    const response = await app.inject({
-      ...request,
-      cookies: { mycharacter_session: actor.cookie },
-    });
-    expect(response.statusCode).toBe(status);
-  });
+  ] as const)(
+    "%s performing %s returns %i",
+    async (identity, action, status) => {
+      const actor = { owner, editor, stranger }[identity];
+      const characterId =
+        action === "restore" ? trashedCharacterId : activeCharacterId;
+      const request =
+        action === "edit"
+          ? {
+              method: "PATCH" as const,
+              url: `/api/characters/${characterId}`,
+              payload: { name: "Renamed hero" },
+            }
+          : action === "invite"
+            ? {
+                method: "POST" as const,
+                url: `/api/characters/${characterId}/invites`,
+              }
+            : action === "restore"
+              ? {
+                  method: "POST" as const,
+                  url: `/api/characters/${characterId}/restore`,
+                }
+              : {
+                  method: "GET" as const,
+                  url: `/api/characters/${characterId}`,
+                };
+      const response = await app.inject({
+        ...request,
+        cookies: { mycharacter_session: actor.cookie },
+      });
+      expect(response.statusCode).toBe(status);
+    },
+  );
 
   it("shows a trashed character only to its owner", async () => {
     const ownerResponse = await app.inject({
@@ -208,7 +226,9 @@ describe("character authorization and lifecycle", () => {
       .selectFrom("character_invites")
       .select("token_hash")
       .executeTakeFirstOrThrow();
-    expect(stored.token_hash).toBe(createHash("sha256").update(token).digest("hex"));
+    expect(stored.token_hash).toBe(
+      createHash("sha256").update(token).digest("hex"),
+    );
     expect(stored.token_hash).not.toBe(token);
   });
 
@@ -255,14 +275,71 @@ describe("character authorization and lifecycle", () => {
       id: activeCharacterId,
       currentUserId: owner.userId,
       pdfUrl: `/api/characters/${activeCharacterId}/pdf`,
-      fields: [{
-        id: field.id,
-        label: "Character name",
-        value: "Arven",
-        version: 3,
-        widgets: [{ rect: [0.1, 0.2, 0.3, 0.4] }],
-      }],
+      fields: [
+        {
+          id: field.id,
+          label: "Character name",
+          value: "Arven",
+          version: 3,
+          widgets: [{ rect: [0.1, 0.2, 0.3, 0.4] }],
+        },
+      ],
     });
+  });
+
+  it("rolls back character creation when workspace activity cannot be recorded", async () => {
+    await sql
+      .raw(
+        `
+      create function reject_character_workspace_activity()
+      returns trigger language plpgsql as $$
+      begin
+        if new.kind = 'character' then
+          raise exception 'forced workspace activity failure';
+        end if;
+        return new;
+      end;
+      $$
+    `,
+      )
+      .execute(testDb.db);
+    await sql
+      .raw(
+        `
+      create trigger reject_character_workspace_activity
+      before insert on workspace_items
+      for each row execute function reject_character_workspace_activity()
+    `,
+      )
+      .execute(testDb.db);
+
+    try {
+      const response = await app.inject({
+        method: "POST",
+        url: "/api/characters",
+        cookies: { mycharacter_session: owner.cookie },
+        payload: { name: "Atomic hero", templateId },
+      });
+
+      expect(response.statusCode).toBe(500);
+      const created = await testDb.db
+        .selectFrom("characters")
+        .select("id")
+        .where("owner_id", "=", owner.userId)
+        .where("template_id", "=", templateId)
+        .where("name", "=", "Atomic hero")
+        .execute();
+      expect(created).toEqual([]);
+    } finally {
+      await sql
+        .raw(
+          "drop trigger if exists reject_character_workspace_activity on workspace_items",
+        )
+        .execute(testDb.db);
+      await sql
+        .raw("drop function if exists reject_character_workspace_activity()")
+        .execute(testDb.db);
+    }
   });
 
   async function register(email: string): Promise<Identity> {
@@ -271,7 +348,9 @@ describe("character authorization and lifecycle", () => {
       url: "/api/auth/register",
       payload: { email, password },
     });
-    const cookie = response.cookies.find((item) => item.name === "mycharacter_session");
+    const cookie = response.cookies.find(
+      (item) => item.name === "mycharacter_session",
+    );
     return { userId: response.json().user.id, cookie: cookie!.value };
   }
 });

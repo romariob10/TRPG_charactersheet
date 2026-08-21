@@ -2,7 +2,10 @@ import { randomUUID } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import { PgBoss } from "pg-boss";
 import {
+  buildVisionCatalogPrompt,
   processCatalogJob,
+  selectVisionPages,
+  stableGroupId,
   type CatalogProcessorDependencies,
 } from "../src/jobs/catalog.js";
 
@@ -44,7 +47,9 @@ function dependencies(): CatalogProcessorDependencies {
       tokens: [],
     }),
     recognizeWeakPages: vi.fn().mockResolvedValue([]),
-    analyzeWithVision: vi.fn().mockRejectedValue(new Error("provider unavailable")),
+    analyzeWithVision: vi
+      .fn()
+      .mockRejectedValue(new Error("provider unavailable")),
     persist: vi.fn().mockResolvedValue(undefined),
     updateProgress: vi.fn().mockResolvedValue(undefined),
     complete: vi.fn().mockResolvedValue(undefined),
@@ -52,6 +57,155 @@ function dependencies(): CatalogProcessorDependencies {
 }
 
 describe("catalog worker", () => {
+  it("uses the visible document language for every persisted field label", async () => {
+    const deps = dependencies();
+    const baseField = {
+      id: randomUUID(),
+      pdfName: "strength",
+      kind: "text" as const,
+      defaultValue: null,
+      options: [],
+      page: 1,
+      label: "strength",
+      aliases: [],
+      section: "Attributes",
+      groupId: null,
+      groupOrder: null,
+      confidence: 0,
+      source: "pdf" as const,
+      widgets: [
+        {
+          page: 1,
+          rect: [0.1, 0.1, 0.2, 0.2] as [number, number, number, number],
+          pdfRect: [10, 10, 20, 20] as [number, number, number, number],
+          rotation: 0,
+          exportValue: null,
+          widgetIndex: 0,
+        },
+      ],
+    };
+    vi.mocked(deps.extract).mockResolvedValue({
+      fields: [
+        baseField,
+        {
+          ...baseField,
+          id: randomUUID(),
+          pdfName: "unknownMetadataName",
+          label: "unknownMetadataName",
+        },
+      ],
+      tokens: [
+        {
+          text: "Имя персонажа Сила Ловкость Телосложение",
+          page: 1,
+          rect: [0.75, 0.75, 0.95, 0.8],
+          fontSize: 12,
+          source: "pdf",
+        },
+      ],
+    });
+    vi.mocked(deps.analyzeWithVision).mockImplementation(
+      async (_bytes, fields) => fields,
+    );
+
+    await processCatalogJob(
+      { templateId: randomUUID(), catalogJobId: randomUUID() },
+      deps,
+    );
+
+    expect(deps.analyzeWithVision).toHaveBeenCalledWith(
+      expect.any(Uint8Array),
+      expect.any(Array),
+      expect.any(Array),
+      "ru",
+    );
+    const persisted = vi.mocked(deps.persist).mock.calls[0][1];
+    expect(persisted.map((field) => field.label)).toEqual([
+      "Сила",
+      "Текстовое поле 1",
+    ]);
+    expect(persisted.every((field) => field.section === "Общее")).toBe(true);
+  });
+
+  it("instructs vision to translate hidden metadata into the sheet language", () => {
+    const prompt = buildVisionCatalogPrompt({
+      page: 1,
+      context: [
+        {
+          fieldId: randomUUID(),
+          technicalName: "strength",
+          currentLabel: "strength",
+          currentSection: null,
+          kind: "text",
+          rect: [0.1, 0.1, 0.2, 0.2],
+        },
+      ],
+      visibleText: [{ text: "Сила", rect: [0.01, 0.1, 0.09, 0.2] }],
+      documentLanguage: "ru",
+    });
+
+    expect(prompt).toContain("MUST be natural Russian written in Cyrillic");
+    expect(prompt).toContain("technicalName is untrusted internal metadata");
+    expect(prompt).toContain("exactly one entry for every supplied fieldId");
+    expect(prompt).toContain("component-based responsive renderer");
+    expect(prompt).toContain("one characteristic and its score");
+    expect(prompt).toContain("current, maximum, and temporary values");
+    expect(prompt).toContain("one complete repeated table series");
+    expect(prompt).toContain(
+      "Never merge independent controls merely because they are close",
+    );
+  });
+
+  it("derives stable UUIDs from semantic AI group keys", () => {
+    const first = stableGroupId("spells.level-1");
+    expect(first).toBe(stableGroupId("spells.level-1"));
+    expect(first).not.toBe(stableGroupId("spells.level-2"));
+    expect(first).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+    );
+  });
+
+  it("asks vision to structure every page for the adaptive sheet", () => {
+    const first = {
+      id: randomUUID(),
+      pdfName: "hero_name",
+      kind: "text" as const,
+      defaultValue: null,
+      options: [],
+      page: 1,
+      label: "Hero name",
+      aliases: [],
+      section: "Identity",
+      groupId: null,
+      groupOrder: null,
+      confidence: 0.99,
+      source: "pdf" as const,
+      widgets: [
+        {
+          page: 1,
+          rect: [0.1, 0.1, 0.2, 0.2] as [number, number, number, number],
+          pdfRect: [10, 10, 20, 20] as [number, number, number, number],
+          rotation: 0,
+          exportValue: null,
+          widgetIndex: 0,
+        },
+      ],
+    };
+
+    expect(
+      selectVisionPages([
+        first,
+        {
+          ...first,
+          id: randomUUID(),
+          pdfName: "notes",
+          page: 2,
+          widgets: [{ ...first.widgets[0], page: 2 }],
+        },
+      ]),
+    ).toEqual([1, 2]);
+  });
+
   it("keeps deterministic catalog data when vision fails", async () => {
     const deps = dependencies();
     const result = await processCatalogJob(
@@ -62,14 +216,16 @@ describe("catalog worker", () => {
     expect(result.status).toBe("partial");
     expect(deps.persist).toHaveBeenCalledWith(
       expect.any(String),
-      expect.arrayContaining([expect.objectContaining({ pdfName: "strength" })]),
+      expect.arrayContaining([
+        expect.objectContaining({ pdfName: "strength" }),
+      ]),
       expect.any(String),
     );
     expect(deps.complete).toHaveBeenCalledWith(
       expect.any(String),
       expect.any(String),
       "partial",
-      "Vision analysis was incomplete",
+      "Vision analysis was incomplete: provider unavailable",
     );
   });
 

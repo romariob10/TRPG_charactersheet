@@ -47,6 +47,14 @@ const storage = new FilesystemStorage(storageRoot);
 const jobs = await createJobClient(databaseUrl);
 const templateId = randomUUID();
 const fileId = randomUUID();
+const slug =
+  title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/-{2,}/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 72)
+    .replace(/-+$/g, "") || "template";
 const systemOwner = "00000000-0000-0000-0000-000000000000";
 const storageKey = `templates/${templateId.slice(0, 2)}/${systemOwner}/${templateId}.pdf`;
 const sha256 = createHash("sha256").update(bytes).digest("hex");
@@ -73,6 +81,7 @@ try {
         owner_id: null,
         visibility: "curated",
         title,
+        slug,
         game_system: gameSystem,
         storage_path: storageKey,
         sha256,

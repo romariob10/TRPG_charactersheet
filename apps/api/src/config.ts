@@ -1,4 +1,5 @@
 export interface ApiConfig {
+  allowedOrigins: string[];
   cookieSecure: boolean;
   databaseUrl: string;
   host: string;
@@ -19,12 +20,17 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): ApiCon
   }
 
   const publicOrigin = parsePublicOrigin(environment.PUBLIC_ORIGIN);
+  const allowedOrigins = parseAllowedOrigins(
+    environment.ALLOWED_ORIGINS,
+    publicOrigin,
+  );
   const cookieSecure = parseBoolean(environment.COOKIE_SECURE, "COOKIE_SECURE");
   if (cookieSecure && new URL(publicOrigin).protocol !== "https:") {
     throw new Error("COOKIE_SECURE=true requires an HTTPS PUBLIC_ORIGIN.");
   }
 
   return {
+    allowedOrigins,
     databaseUrl,
     host: environment.HOST ?? "0.0.0.0",
     port,
@@ -32,6 +38,18 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): ApiCon
     cookieSecure,
     storageRoot: environment.STORAGE_ROOT ?? "/var/lib/mycharacter/pdfs",
   };
+}
+
+function parseAllowedOrigins(
+  value: string | undefined,
+  publicOrigin: string,
+): string[] {
+  const configured = (value ?? "")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean)
+    .map(parsePublicOrigin);
+  return [...new Set([publicOrigin, ...configured])];
 }
 
 function parsePublicOrigin(value: string | undefined): string {

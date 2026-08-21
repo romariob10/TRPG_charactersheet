@@ -12,5 +12,7 @@ export interface RealtimeBus {
   publish(event: RealtimeEvent): void;
   subscribe(characterId: string, listener: RealtimeListener): () => void;
   subscribeTemplate(templateId: string, listener: RealtimeListener): () => void;
+  publishTopic(topic: string, data: unknown): void;
+  subscribeTopic(topic: string, listener: (data: unknown) => void): () => void;
 }
 /* eslint-enable no-unused-vars */

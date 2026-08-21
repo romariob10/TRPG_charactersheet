@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { publicAuthorSchema } from "./profiles.js";
 
 export const characterIdSchema = z.string().uuid();
 export const characterNameSchema = z.string().trim().min(1).max(120);
@@ -9,8 +10,9 @@ export const createCharacterRequestSchema = z.object({
 });
 
 export const updateCharacterRequestSchema = z.object({
-  name: characterNameSchema,
-});
+  name: characterNameSchema.optional(),
+  isPublic: z.boolean().optional(),
+}).refine((value) => Object.keys(value).length > 0);
 
 export const cloneCharacterRequestSchema = z.object({
   name: characterNameSchema.optional(),
@@ -19,6 +21,16 @@ export const cloneCharacterRequestSchema = z.object({
 export const acceptInvitationRequestSchema = z.object({
   token: z.string().min(16).max(512),
 });
+
+export const inviteUserRequestSchema = z
+  .object({
+    username: z.string().trim().min(1).max(80).optional(),
+    userId: z.string().uuid().optional(),
+  })
+  .refine((data) => Boolean(data.username || data.userId), {
+    message: "Either username or userId must be provided.",
+  });
+export type InviteUserRequest = z.infer<typeof inviteUserRequestSchema>;
 
 export const fieldValueSchema = z.union([
   z.string().max(20_000),
@@ -45,6 +57,13 @@ export const fieldMutationResponseSchema = z.object({
 export const characterSummarySchema = z.object({
   id: characterIdSchema,
   name: characterNameSchema,
+  slug: z.string().optional(),
+  isPublic: z.boolean().optional(),
+  publishedAt: z.string().nullable().optional(),
+  author: publicAuthorSchema.optional(),
+  gameSystem: z.string().nullable().optional(),
+  likeCount: z.number().int().nonnegative().optional(),
+  likedByMe: z.boolean().optional(),
   role: z.enum(["owner", "editor"]),
   revision: z.number().int().nonnegative(),
   status: z.enum(["active", "trashed"]),
@@ -59,6 +78,19 @@ export type CreateCharacterRequest = z.infer<typeof createCharacterRequestSchema
 export type UpdateCharacterRequest = z.infer<typeof updateCharacterRequestSchema>;
 export type FieldMutationRequest = z.infer<typeof fieldMutationRequestSchema>;
 export type FieldMutationResponse = z.infer<typeof fieldMutationResponseSchema>;
+
+export interface PublicCharacterSummary {
+  id: string;
+  name: string;
+  slug: string;
+  gameSystem: string | null;
+  pageCount: number;
+  updatedAt: string;
+  publishedAt: string;
+  author: z.infer<typeof publicAuthorSchema>;
+  likeCount: number;
+  likedByMe: boolean;
+}
 
 export type FieldValue = string | boolean | string[] | null;
 export type FieldKind =

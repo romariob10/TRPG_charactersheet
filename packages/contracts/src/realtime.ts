@@ -28,11 +28,14 @@ export const realtimeClientMessageSchema = z.discriminatedUnion("type", [
   }),
 ]);
 
-const presenceMemberSchema = z.object({
+export const presenceMemberSchema = z.object({
   connectionId: connectionIdSchema,
   userId: z.string().uuid(),
+  username: z.string().optional(),
+  displayName: z.string().nullable().optional(),
   fieldId: z.string().uuid().nullable(),
 });
+export type PresenceMember = z.infer<typeof presenceMemberSchema>;
 
 export const fieldChangedEventSchema = z.object({
   protocolVersion,

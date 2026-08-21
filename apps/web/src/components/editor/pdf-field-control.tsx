@@ -97,6 +97,7 @@ export function PdfFieldControl({
   zoom,
   multilineFontScale,
   active,
+  remoteCollaborator,
   onChange,
   onFocus,
   onBlur,
@@ -107,6 +108,7 @@ export function PdfFieldControl({
   zoom: number;
   multilineFontScale: number;
   active: boolean;
+  remoteCollaborator?: { username?: string; displayName?: string | null };
   onChange: (value: FieldValue) => void;
   onFocus: () => void;
   onBlur: () => void;
@@ -118,8 +120,11 @@ export function PdfFieldControl({
     width: `${(right - left) * 100}%`,
     height: `${(bottom - top) * 100}%`,
   };
-  const className =
-    "absolute z-10 border border-[var(--brand)]/35 bg-white/78 backdrop-blur-[1px] hover:bg-white/92 focus:bg-white focus:ring-2 focus:ring-[var(--brand)]/30";
+  const className = cn(
+    "absolute z-10 border border-[var(--brand)]/35 bg-white/78 backdrop-blur-[1px] hover:bg-white/92 focus:bg-white focus:ring-2 focus:ring-[var(--brand)]/30",
+    remoteCollaborator &&
+      "ring-2 ring-amber-500 border-amber-500 bg-amber-50/40 shadow-sm",
+  );
   const activeLabel = active ? (
     <div
       role="status"
@@ -130,9 +135,25 @@ export function PdfFieldControl({
     </div>
   ) : null;
 
+  const collaboratorLabel = remoteCollaborator ? (
+    <div
+      role="status"
+      className="pointer-events-none absolute z-35 -mt-1.5 flex items-center gap-1.5 -translate-y-full truncate rounded-md bg-amber-600 px-2 py-0.5 text-[11px] font-bold text-white shadow-lg"
+      style={{ left: `${left * 100}%`, top: `${top * 100}%` }}
+    >
+      <span className="size-1.5 rounded-full bg-white animate-pulse" />
+      <span>
+        {remoteCollaborator.displayName ||
+          remoteCollaborator.username ||
+          "Редактор"}
+      </span>
+    </div>
+  ) : null;
+
   if (field.kind === "checkbox") {
     return (
       <>
+        {collaboratorLabel}
         {activeLabel}
         <input
           id={`character-field-widget-${widget.id}`}
@@ -157,6 +178,7 @@ export function PdfFieldControl({
       "";
     return (
       <>
+        {collaboratorLabel}
         {activeLabel}
         <input
           id={`character-field-widget-${widget.id}`}
@@ -175,6 +197,7 @@ export function PdfFieldControl({
   if (field.kind === "dropdown" || field.kind === "list") {
     return (
       <>
+        {collaboratorLabel}
         {activeLabel}
         <select
           id={`character-field-widget-${widget.id}`}
@@ -213,6 +236,7 @@ export function PdfFieldControl({
   if (field.kind === "multiline") {
     return (
       <>
+        {collaboratorLabel}
         {activeLabel}
         <textarea
           id={`character-field-widget-${widget.id}`}
@@ -229,6 +253,7 @@ export function PdfFieldControl({
   }
   return (
     <>
+      {collaboratorLabel}
       {activeLabel}
       <AutoFitTextInput
         field={field}
