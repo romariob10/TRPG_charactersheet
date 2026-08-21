@@ -109,7 +109,7 @@ export async function registerAiRoutes(
         // tools but reject a forced named tool choice. The prompt still asks
         // for an exact probe call, while the default automatic choice keeps
         // the capability check compatible with those providers.
-        providerOptions: nonThinkingProviderOptions,
+        providerOptions,
         maxOutputTokens: 32,
         timeout: 12_000,
       });
