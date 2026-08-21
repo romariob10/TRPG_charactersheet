@@ -121,7 +121,7 @@ export function PdfFieldControl({
     height: `${(bottom - top) * 100}%`,
   };
   const className = cn(
-    "absolute z-10 border border-[var(--brand)]/35 bg-white/78 backdrop-blur-[1px] hover:bg-white/92 focus:bg-white focus:ring-2 focus:ring-[var(--brand)]/30",
+    "absolute z-10 border border-[var(--brand)]/35 bg-white/78 font-medium text-[#111827] caret-[#111827] [color-scheme:light] backdrop-blur-[1px] placeholder:text-slate-400 hover:bg-white/92 focus:bg-white focus:ring-2 focus:ring-[var(--brand)]/30",
     remoteCollaborator &&
       "ring-2 ring-amber-500 border-amber-500 bg-amber-50/40 shadow-sm",
   );
