@@ -145,17 +145,25 @@ export function CharacterCard({
           {t("pages", { count: character.pageCount })}
         </span>
       </div>
-      <div className="pointer-events-none relative z-10 mt-6 flex items-center justify-between border-t pt-4">
+      <div className="pointer-events-none relative z-10 mt-6 flex items-center justify-between gap-3 border-t pt-4">
         <span className="text-xs text-[var(--muted)]">
           {formatRelativeDate(character.updatedAt, locale)}
         </span>
-        {active && (
+        {active && character.role === "owner" ? (
+          <div className="pointer-events-auto relative z-20">
+            <CharacterVisibilityButton
+              characterId={character.id}
+              initialPublic={Boolean(character.isPublic)}
+              compact
+            />
+          </div>
+        ) : active ? (
           <span
             className={buttonClassName({ variant: "secondary", size: "sm" })}
           >
             {t("open")}
           </span>
-        )}
+        ) : null}
       </div>
     </article>
   );
