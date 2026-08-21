@@ -164,8 +164,6 @@ export function DirectMessagesView({
 
   useEffect(() => {
     selectedIdRef.current = selectedId;
-    setImageUploadError(false);
-    setAttachedImages([]);
     forceAutoScrollRef.current = true;
     shouldAutoScrollRef.current = true;
   }, [selectedId]);
@@ -402,6 +400,8 @@ export function DirectMessagesView({
                   key={conv.id}
                   onClick={() => {
                     if (conv.id === selectedId) return;
+                    setImageUploadError(false);
+                    setAttachedImages([]);
                     setLoadingMessages(true);
                     setMessages([]);
                     setSelectedId(conv.id);
