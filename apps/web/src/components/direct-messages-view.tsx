@@ -73,7 +73,10 @@ export function DirectMessagesView({
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const messagesScrollRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const shouldAutoScrollRef = useRef(true);
+  const forceAutoScrollRef = useRef(true);
   const selectedIdRef = useRef(selectedId);
   const messagesRef = useRef(messages);
   const readConversationIdsRef = useRef(new Set<string>());
@@ -160,6 +163,8 @@ export function DirectMessagesView({
 
   useEffect(() => {
     selectedIdRef.current = selectedId;
+    forceAutoScrollRef.current = true;
+    shouldAutoScrollRef.current = true;
   }, [selectedId]);
 
   useEffect(() => {
@@ -224,7 +229,12 @@ export function DirectMessagesView({
   }, [loadConversations, loadMessages]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (!forceAutoScrollRef.current && !shouldAutoScrollRef.current) return;
+    messagesEndRef.current?.scrollIntoView({
+      behavior: forceAutoScrollRef.current ? "auto" : "smooth",
+    });
+    forceAutoScrollRef.current = false;
+    shouldAutoScrollRef.current = true;
   }, [messages]);
 
   useEffect(() => {
@@ -313,6 +323,7 @@ export function DirectMessagesView({
     setDraft("");
     setAttachedImages([]);
     setSending(true);
+    forceAutoScrollRef.current = true;
 
     try {
       const newMsg = await apiFetch<DirectMessage>(
@@ -439,7 +450,19 @@ export function DirectMessagesView({
             </div>
 
             {/* Messages Scroll Area */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-[var(--surface)]">
+            <div
+              ref={messagesScrollRef}
+              data-testid="direct-messages-scroll"
+              className="flex-1 overflow-y-auto p-4 space-y-3 bg-[var(--surface)]"
+              onScroll={(event) => {
+                const element = event.currentTarget;
+                shouldAutoScrollRef.current =
+                  element.scrollHeight -
+                    element.scrollTop -
+                    element.clientHeight <=
+                  48;
+              }}
+            >
               {loadingMessages && messages.length === 0 ? (
                 <div className="py-12 text-center text-xs text-[var(--muted)]">
                   <LoaderCircle className="inline size-4 animate-spin mr-1.5" />
