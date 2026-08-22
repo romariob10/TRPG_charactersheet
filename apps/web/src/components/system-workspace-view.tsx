@@ -4,9 +4,11 @@ import { useRef, useState } from "react";
 import Link from "next/link";
 import {
   BookOpen,
+  FileSpreadsheet,
   FileText,
   Image as ImageIcon,
   Newspaper,
+  Plus,
   Trash2,
   Upload,
   Users,
@@ -58,12 +60,12 @@ export function SystemWorkspaceView({
           result?.error?.message ?? t("uploadFailed"),
         );
       }
-      setMaterials((previous) => [result as SystemMaterial, ...previous]);
+      setMaterials((prev) => [result.material, ...prev]);
       setTitle("");
       if (fileInputRef.current) fileInputRef.current.value = "";
-    } catch (reason) {
+    } catch (err: unknown) {
       setError(
-        reason instanceof Error ? reason.message : t("uploadFailed"),
+        err instanceof Error ? err.message : t("uploadFailed"),
       );
     } finally {
       setUploading(false);
@@ -71,18 +73,88 @@ export function SystemWorkspaceView({
   }
 
   async function handleDelete(material: SystemMaterial) {
-    setMaterials((previous) =>
-      previous.filter((entry) => entry.id !== material.id),
-    );
+    if (!confirm(t("confirmDeleteMaterial", { title: material.title }))) return;
     try {
       await apiFetch(`/api/systems/${systemId}/materials/${material.id}`, {
         method: "DELETE",
       });
-    } catch {}
+      setMaterials((prev) => prev.filter((m) => m.id !== material.id));
+    } catch (err) {
+      console.error(err);
+    }
   }
 
   return (
     <div className="space-y-8">
+      {/* Sheet Definitions / Builder */}
+      <section aria-labelledby="ws-sheets">
+        <div className="flex items-center justify-between">
+          <h2
+            id="ws-sheets"
+            className="flex items-center gap-2 text-lg font-bold text-[var(--brand)]"
+          >
+            <FileSpreadsheet className="size-4" /> Character Sheets & Layouts
+          </h2>
+          <Link
+            href={`/dashboard/systems/${systemId}/sheets/new`}
+            className="inline-flex items-center gap-1.5 rounded-[var(--radius-control)] bg-[var(--brand)] px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-[var(--brand-strong)]"
+          >
+            <Plus className="size-3.5" /> New Sheet
+          </Link>
+        </div>
+
+        {workspace.sheets && workspace.sheets.length > 0 ? (
+          <ul className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {workspace.sheets.map((sheet) => (
+              <li key={sheet.id}>
+                <Link
+                  href={`/dashboard/systems/${systemId}/sheets/${sheet.id}/builder`}
+                  className="flex flex-col justify-between p-3.5 rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--surface)] hover:border-[var(--brand)]/50 transition-all shadow-sm group"
+                >
+                  <div>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-sm font-bold text-foreground group-hover:text-[var(--brand)] transition-colors truncate">
+                        {sheet.title}
+                      </span>
+                      <span className="text-[10px] uppercase font-semibold px-1.5 py-0.5 rounded bg-muted text-muted-foreground capitalize">
+                        {sheet.kind}
+                      </span>
+                    </div>
+                    {sheet.description && (
+                      <p className="text-xs text-[var(--muted)] mt-1 line-clamp-2">
+                        {sheet.description}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex items-center justify-between mt-3 pt-2 border-t border-[var(--border)]/60 text-[11px] text-[var(--muted)]">
+                    <span>
+                      {sheet.currentVersionNumber
+                        ? `v${sheet.currentVersionNumber}`
+                        : "Draft"}
+                    </span>
+                    <span className="text-[var(--brand)] font-semibold group-hover:underline">
+                      Open Builder →
+                    </span>
+                  </div>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <div className="mt-3 rounded-[var(--radius-card)] border border-dashed border-[var(--border)] bg-[var(--surface)] p-6 text-center">
+            <p className="text-sm text-[var(--muted)]">
+              No character sheet layouts created for this system yet.
+            </p>
+            <Link
+              href={`/dashboard/systems/${systemId}/sheets/new`}
+              className="mt-3 inline-flex items-center gap-1.5 rounded-[var(--radius-control)] bg-[var(--brand)] px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-[var(--brand-strong)]"
+            >
+              <Plus className="size-4" /> Create First Character Sheet
+            </Link>
+          </div>
+        )}
+      </section>
+
       <section aria-labelledby="ws-characters">
         <h2
           id="ws-characters"

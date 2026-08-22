@@ -1,4 +1,4 @@
-export type FieldValue = string | boolean | string[] | null;
+export type FieldValue = string | number | boolean | string[] | null;
 
 export type FieldKind =
   | "text"

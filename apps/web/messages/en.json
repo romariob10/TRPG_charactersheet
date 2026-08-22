@@ -789,5 +789,42 @@
     "submitting": "Posting…",
     "signInToReview": "Sign in to leave a review",
     "delete": "Delete"
+  },
+  "SheetBuilder": {
+    "title": "Character Sheet Builder",
+    "palette": "Palette",
+    "layers": "Layers Tree",
+    "inspector": "Properties",
+    "targetMobile": "Mobile",
+    "targetTablet": "Tablet",
+    "targetDesktop": "Desktop",
+    "targetPrint": "Print A4",
+    "publish": "Publish Version",
+    "publishing": "Publishing…",
+    "saved": "Saved",
+    "saving": "Saving…",
+    "conflict": "Revision Conflict",
+    "error": "Autosave Error",
+    "saveAsComponent": "Save as Component",
+    "adaptTargets": "Adapt All Targets",
+    "emptyFrame": "Empty Frame (Add elements here)"
+  },
+  "ComponentLibrary": {
+    "title": "Component Library",
+    "subtitle": "Modular, reusable stat blocks, resource trackers, and character sheet components.",
+    "all": "All",
+    "myComponents": "My Components",
+    "system": "System Library",
+    "community": "Community",
+    "curated": "Curated",
+    "searchPlaceholder": "Search components…",
+    "insert": "Insert",
+    "fork": "Fork",
+    "empty": "No components found",
+    "saveTitle": "Save as Reusable Component",
+    "name": "Component Name",
+    "description": "Description",
+    "scope": "Scope",
+    "tags": "Tags"
   }
 }
