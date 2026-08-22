@@ -48,13 +48,19 @@ export const gameSystemSummarySchema = z.object({
 });
 export type GameSystemSummary = z.infer<typeof gameSystemSummarySchema>;
 
+export const sheetKindSchema = z.enum(["character", "npc", "vehicle", "organization", "custom"]);
+export type SheetKind = z.infer<typeof sheetKindSchema>;
+
 export const workspaceSheetSummarySchema = z.object({
   id: z.string().uuid(),
-  systemId: z.string().uuid(),
+  systemId: z.string().uuid().optional(),
   title: z.string(),
-  slug: z.string(),
-  kind: z.enum(["character", "npc", "vehicle", "organization", "custom"]).default("character"),
+  slug: z.string().optional(),
+  description: z.string().optional().default(""),
+  kind: sheetKindSchema.default("character"),
+  currentVersionId: z.string().uuid().nullable().optional(),
   currentVersionNumber: z.number().int().positive().nullable().optional(),
+  createdAt: z.string().optional(),
   updatedAt: z.string(),
 });
 export type WorkspaceSheetSummary = z.infer<

@@ -34,6 +34,7 @@ export type InviteUserRequest = z.infer<typeof inviteUserRequestSchema>;
 
 export const fieldValueSchema = z.union([
   z.string().max(20_000),
+  z.number(),
   z.boolean(),
   z.array(z.string().max(2_000)).max(200),
   z.null(),
@@ -92,7 +93,7 @@ export interface PublicCharacterSummary {
   likedByMe: boolean;
 }
 
-export type FieldValue = string | boolean | string[] | null;
+export type FieldValue = string | number | boolean | string[] | null;
 export type FieldKind =
   | "text"
   | "multiline"

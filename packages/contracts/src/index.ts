@@ -446,6 +446,7 @@ export {
   gameSystemIdSchema,
   gameSystemSlugSchema,
   gameSystemSummarySchema,
+  sheetKindSchema,
   unifiedGameSystemWorkspaceSchema,
   updateGameSystemRequestSchema,
   workspaceSheetSummarySchema,
@@ -453,6 +454,7 @@ export {
 export type {
   CreateGameSystemRequest,
   GameSystemSummary,
+  SheetKind,
   UnifiedGameSystemWorkspace,
   UpdateGameSystemRequest,
   WorkspaceSheetSummary,
@@ -474,6 +476,7 @@ export {
   publishSheetVersionRequestSchema,
   publishSheetVersionResponseSchema,
   sheetEditorDataResponseSchema,
+  sheetVersionDetailsSchema,
   sheetVersionSummarySchema,
   updateSheetDefinitionRequestSchema,
 } from "./sheet-builder-api.js";
@@ -494,6 +497,7 @@ export type {
   PublishSheetVersionRequest,
   PublishSheetVersionResponse,
   SheetEditorDataResponse,
+  SheetVersionDetails,
   SheetVersionSummary,
   UpdateSheetDefinitionRequest,
 } from "./sheet-builder-api.js";

@@ -57,6 +57,21 @@ export type PublishSheetVersionRequest = z.infer<
   typeof publishSheetVersionRequestSchema
 >;
 
+export const sheetVersionDetailsSchema = z.object({
+  id: z.string().uuid(),
+  sheetId: z.string().uuid(),
+  versionNumber: z.number().int().positive(),
+  schemaVersion: z.number().int().positive(),
+  layouts: targetLayoutMapSchema,
+  fields: z.array(sheetFieldDefinitionSchema),
+  changelog: z.string().nullable().optional(),
+  authorId: z.string().uuid(),
+  createdAt: z.string(),
+});
+export type SheetVersionDetails = z.infer<
+  typeof sheetVersionDetailsSchema
+>;
+
 export const publishSheetVersionResponseSchema = z.object({
   versionId: z.string().uuid(),
   versionNumber: z.number().int().positive(),

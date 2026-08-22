@@ -39,6 +39,8 @@ export const workspacePostSchema = z.object({
 });
 export type WorkspacePost = z.infer<typeof workspacePostSchema>;
 
+import { workspaceSheetSummarySchema } from "./game-systems.js";
+
 export const systemWorkspaceResponseSchema = z.object({
   system: z.object({
     id: z.string().uuid(),
@@ -49,6 +51,7 @@ export const systemWorkspaceResponseSchema = z.object({
   characters: z.array(workspaceCharacterSchema),
   posts: z.array(workspacePostSchema),
   materials: z.array(systemMaterialSchema),
+  sheets: z.array(workspaceSheetSummarySchema).default([]),
 });
 export type SystemWorkspaceResponse = z.infer<
   typeof systemWorkspaceResponseSchema
