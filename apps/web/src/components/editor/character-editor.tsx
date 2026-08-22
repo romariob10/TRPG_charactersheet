@@ -222,6 +222,21 @@ export function CharacterEditor({
     [saveField],
   );
 
+  const switchViewMode = useCallback(
+    (nextMode: CharacterViewMode) => {
+      if (nextMode === viewMode) return;
+
+      // Both views render the same local field state. Flush the field that is
+      // currently being edited before unmounting its control so the PDF,
+      // adaptive view and subsequent exports stay on the same persisted value.
+      if (activeFieldId) flushField(activeFieldId);
+      setActiveFieldId(null);
+      if (nextMode === "adaptive") setSidebarOpen(false);
+      setViewMode(nextMode);
+    },
+    [activeFieldId, flushField, viewMode],
+  );
+
   const flushAll = useCallback(async () => {
     for (let attempt = 0; attempt < 3; attempt += 1) {
       for (const timer of timers.current.values()) window.clearTimeout(timer);
@@ -472,11 +487,7 @@ export function CharacterEditor({
                 )}
                 aria-pressed={viewMode === "adaptive"}
                 title={t("adaptiveView")}
-                onClick={() => {
-                  setViewMode("adaptive");
-                  setSidebarOpen(false);
-                  setActiveFieldId(null);
-                }}
+                onClick={() => switchViewMode("adaptive")}
               >
                 <LayoutDashboard className="size-4" />
                 <span className="hidden lg:inline">{t("adaptiveView")}</span>
@@ -491,7 +502,7 @@ export function CharacterEditor({
                 )}
                 aria-pressed={viewMode === "pdf"}
                 title={t("pdfView")}
-                onClick={() => setViewMode("pdf")}
+                onClick={() => switchViewMode("pdf")}
               >
                 <FileText className="size-4" />
                 <span className="hidden lg:inline">{t("pdfView")}</span>
