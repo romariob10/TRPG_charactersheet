@@ -8,6 +8,7 @@ export async function up(db: Kysely<Database>): Promise<void> {
   // 1. Game Systems
   await db.schema
     .createTable("game_systems")
+    .ifNotExists()
     .addColumn("id", "uuid", (col) => col.primaryKey().defaultTo(uuid()))
     .addColumn("owner_id", "uuid", (col) =>
       col.references("users.id").onDelete("set null"),
@@ -28,12 +29,14 @@ export async function up(db: Kysely<Database>): Promise<void> {
 
   await db.schema
     .createIndex("game_systems_slug_idx")
+    .ifNotExists()
     .on("game_systems")
     .column("slug")
     .execute();
 
   await db.schema
     .createIndex("game_systems_owner_idx")
+    .ifNotExists()
     .on("game_systems")
     .column("owner_id")
     .execute();
@@ -41,6 +44,7 @@ export async function up(db: Kysely<Database>): Promise<void> {
   // 2. Sheet Definitions
   await db.schema
     .createTable("sheet_definitions")
+    .ifNotExists()
     .addColumn("id", "uuid", (col) => col.primaryKey().defaultTo(uuid()))
     .addColumn("system_id", "uuid", (col) =>
       col.notNull().references("game_systems.id").onDelete("cascade"),
@@ -60,6 +64,7 @@ export async function up(db: Kysely<Database>): Promise<void> {
 
   await db.schema
     .createIndex("sheet_definitions_system_idx")
+    .ifNotExists()
     .on("sheet_definitions")
     .column("system_id")
     .execute();
@@ -67,6 +72,7 @@ export async function up(db: Kysely<Database>): Promise<void> {
   // 3. Sheet Fields (stable semantic definitions)
   await db.schema
     .createTable("sheet_fields")
+    .ifNotExists()
     .addColumn("id", "uuid", (col) => col.primaryKey().defaultTo(uuid()))
     .addColumn("sheet_definition_id", "uuid", (col) =>
       col.notNull().references("sheet_definitions.id").onDelete("cascade"),
@@ -86,6 +92,7 @@ export async function up(db: Kysely<Database>): Promise<void> {
 
   await db.schema
     .createIndex("sheet_fields_def_key_idx")
+    .ifNotExists()
     .on("sheet_fields")
     .columns(["sheet_definition_id", "key"])
     .unique()
@@ -94,6 +101,7 @@ export async function up(db: Kysely<Database>): Promise<void> {
   // 4. Sheet Drafts
   await db.schema
     .createTable("sheet_drafts")
+    .ifNotExists()
     .addColumn("id", "uuid", (col) => col.primaryKey().defaultTo(uuid()))
     .addColumn("sheet_definition_id", "uuid", (col) =>
       col.notNull().unique().references("sheet_definitions.id").onDelete("cascade"),
@@ -111,6 +119,7 @@ export async function up(db: Kysely<Database>): Promise<void> {
   // 5. Sheet Versions (immutable snapshots)
   await db.schema
     .createTable("sheet_versions")
+    .ifNotExists()
     .addColumn("id", "uuid", (col) => col.primaryKey().defaultTo(uuid()))
     .addColumn("sheet_definition_id", "uuid", (col) =>
       col.notNull().references("sheet_definitions.id").onDelete("cascade"),
@@ -128,6 +137,7 @@ export async function up(db: Kysely<Database>): Promise<void> {
 
   await db.schema
     .createIndex("sheet_versions_def_ver_idx")
+    .ifNotExists()
     .on("sheet_versions")
     .columns(["sheet_definition_id", "version_number"])
     .unique()
@@ -136,6 +146,7 @@ export async function up(db: Kysely<Database>): Promise<void> {
   // 6. Component Definitions
   await db.schema
     .createTable("component_definitions")
+    .ifNotExists()
     .addColumn("id", "uuid", (col) => col.primaryKey().defaultTo(uuid()))
     .addColumn("author_id", "uuid", (col) =>
       col.notNull().references("users.id").onDelete("cascade"),
@@ -159,18 +170,21 @@ export async function up(db: Kysely<Database>): Promise<void> {
 
   await db.schema
     .createIndex("component_definitions_author_idx")
+    .ifNotExists()
     .on("component_definitions")
     .column("author_id")
     .execute();
 
   await db.schema
     .createIndex("component_definitions_scope_idx")
+    .ifNotExists()
     .on("component_definitions")
     .column("scope")
     .execute();
 
   await db.schema
     .createIndex("component_definitions_system_idx")
+    .ifNotExists()
     .on("component_definitions")
     .column("system_id")
     .execute();
@@ -178,6 +192,7 @@ export async function up(db: Kysely<Database>): Promise<void> {
   // 7. Component Drafts
   await db.schema
     .createTable("component_drafts")
+    .ifNotExists()
     .addColumn("id", "uuid", (col) => col.primaryKey().defaultTo(uuid()))
     .addColumn("component_id", "uuid", (col) =>
       col.notNull().unique().references("component_definitions.id").onDelete("cascade"),
@@ -200,6 +215,7 @@ export async function up(db: Kysely<Database>): Promise<void> {
   // 8. Component Versions (immutable)
   await db.schema
     .createTable("component_versions")
+    .ifNotExists()
     .addColumn("id", "uuid", (col) => col.primaryKey().defaultTo(uuid()))
     .addColumn("component_id", "uuid", (col) =>
       col.notNull().references("component_definitions.id").onDelete("cascade"),
@@ -222,6 +238,7 @@ export async function up(db: Kysely<Database>): Promise<void> {
 
   await db.schema
     .createIndex("component_versions_comp_ver_idx")
+    .ifNotExists()
     .on("component_versions")
     .columns(["component_id", "version_number"])
     .unique()
@@ -230,6 +247,7 @@ export async function up(db: Kysely<Database>): Promise<void> {
   // 9. Component Dependencies (for fast graph cycle/resolution queries)
   await db.schema
     .createTable("component_dependencies")
+    .ifNotExists()
     .addColumn("parent_version_id", "uuid", (col) =>
       col.notNull().references("component_versions.id").onDelete("cascade"),
     )
@@ -245,6 +263,7 @@ export async function up(db: Kysely<Database>): Promise<void> {
   // 10. Character Repeater Rows
   await db.schema
     .createTable("character_repeater_rows")
+    .ifNotExists()
     .addColumn("id", "uuid", (col) => col.primaryKey().defaultTo(uuid()))
     .addColumn("character_id", "uuid", (col) =>
       col.notNull().references("characters.id").onDelete("cascade"),
@@ -261,6 +280,7 @@ export async function up(db: Kysely<Database>): Promise<void> {
 
   await db.schema
     .createIndex("character_repeater_rows_char_key_pos_idx")
+    .ifNotExists()
     .on("character_repeater_rows")
     .columns(["character_id", "repeater_key", "position"])
     .execute();
@@ -268,6 +288,7 @@ export async function up(db: Kysely<Database>): Promise<void> {
   // 11. Character Repeater Values
   await db.schema
     .createTable("character_repeater_values")
+    .ifNotExists()
     .addColumn("row_id", "uuid", (col) =>
       col.notNull().references("character_repeater_rows.id").onDelete("cascade"),
     )
@@ -280,6 +301,7 @@ export async function up(db: Kysely<Database>): Promise<void> {
   // 12. Character Repeater Mutations (Idempotency and audit)
   await db.schema
     .createTable("character_repeater_mutations")
+    .ifNotExists()
     .addColumn("id", "uuid", (col) => col.primaryKey().defaultTo(uuid()))
     .addColumn("character_id", "uuid", (col) =>
       col.notNull().references("characters.id").onDelete("cascade"),
@@ -295,28 +317,23 @@ export async function up(db: Kysely<Database>): Promise<void> {
 
   await db.schema
     .createIndex("character_repeater_mutations_uniq_idx")
+    .ifNotExists()
     .on("character_repeater_mutations")
     .columns(["character_id", "client_mutation_id"])
     .unique()
     .execute();
 
   // 13. Additive columns for existing tables
-  await db.schema
-    .alterTable("characters")
-    .addColumn("sheet_version_id", "uuid", (col) =>
-      col.references("sheet_versions.id").onDelete("set null"),
-    )
-    .addColumn("system_id", "uuid", (col) =>
-      col.references("game_systems.id").onDelete("set null"),
-    )
-    .execute();
+  await sql`
+    ALTER TABLE characters
+    ADD COLUMN IF NOT EXISTS sheet_version_id uuid REFERENCES sheet_versions(id) ON DELETE SET NULL,
+    ADD COLUMN IF NOT EXISTS system_id uuid REFERENCES game_systems(id) ON DELETE SET NULL;
+  `.execute(db);
 
-  await db.schema
-    .alterTable("system_materials")
-    .addColumn("system_id", "uuid", (col) =>
-      col.references("game_systems.id").onDelete("cascade"),
-    )
-    .execute();
+  await sql`
+    ALTER TABLE system_materials
+    ADD COLUMN IF NOT EXISTS system_id uuid REFERENCES game_systems(id) ON DELETE CASCADE;
+  `.execute(db);
 
   // 14. Safe Backfill: create game_systems for existing pdf_templates and link characters/materials
   await sql`
@@ -351,22 +368,67 @@ export async function up(db: Kysely<Database>): Promise<void> {
 }
 
 export async function down(db: Kysely<Database>): Promise<void> {
-  await db.schema.alterTable("system_materials").dropColumn("system_id").execute();
-  await db.schema.alterTable("characters").dropColumn("system_id").execute();
-  await db.schema.alterTable("characters").dropColumn("sheet_version_id").execute();
-
-  await db.schema.dropTable("character_repeater_mutations").ifExists().execute();
-  await db.schema.dropTable("character_repeater_values").ifExists().execute();
-  await db.schema.dropTable("character_repeater_rows").ifExists().execute();
-
-  await db.schema.dropTable("component_dependencies").ifExists().execute();
-  await db.schema.dropTable("component_versions").ifExists().execute();
-  await db.schema.dropTable("component_drafts").ifExists().execute();
-  await db.schema.dropTable("component_definitions").ifExists().execute();
-
-  await db.schema.dropTable("sheet_versions").ifExists().execute();
-  await db.schema.dropTable("sheet_drafts").ifExists().execute();
-  await db.schema.dropTable("sheet_fields").ifExists().execute();
-  await db.schema.dropTable("sheet_definitions").ifExists().execute();
-  await db.schema.dropTable("game_systems").ifExists().execute();
+  try {
+    await sql`ALTER TABLE characters DROP COLUMN IF EXISTS sheet_version_id, DROP COLUMN IF EXISTS system_id;`.execute(db);
+  } catch {}
+  try {
+    await sql`ALTER TABLE system_materials DROP COLUMN IF EXISTS system_id;`.execute(db);
+  } catch {}
+  try {
+    await db.schema.dropIndex("character_repeater_mutations_uniq_idx").ifExists().execute();
+  } catch {}
+  try {
+    await db.schema.dropTable("character_repeater_mutations").ifExists().cascade().execute();
+  } catch {}
+  try {
+    await db.schema.dropTable("character_repeater_values").ifExists().cascade().execute();
+  } catch {}
+  try {
+    await db.schema.dropIndex("character_repeater_rows_char_key_pos_idx").ifExists().execute();
+  } catch {}
+  try {
+    await db.schema.dropTable("character_repeater_rows").ifExists().cascade().execute();
+  } catch {}
+  try {
+    await db.schema.dropTable("component_dependencies").ifExists().cascade().execute();
+  } catch {}
+  try {
+    await db.schema.dropIndex("component_versions_comp_ver_idx").ifExists().execute();
+  } catch {}
+  try {
+    await db.schema.dropTable("component_versions").ifExists().cascade().execute();
+  } catch {}
+  try {
+    await db.schema.dropTable("component_drafts").ifExists().cascade().execute();
+  } catch {}
+  try {
+    await db.schema.dropIndex("component_definitions_system_idx").ifExists().execute();
+    await db.schema.dropIndex("component_definitions_scope_idx").ifExists().execute();
+    await db.schema.dropIndex("component_definitions_author_idx").ifExists().execute();
+  } catch {}
+  try {
+    await db.schema.dropTable("component_definitions").ifExists().cascade().execute();
+  } catch {}
+  try {
+    await db.schema.dropIndex("sheet_versions_def_ver_idx").ifExists().execute();
+    await db.schema.dropTable("sheet_versions").ifExists().cascade().execute();
+  } catch {}
+  try {
+    await db.schema.dropTable("sheet_drafts").ifExists().cascade().execute();
+  } catch {}
+  try {
+    await db.schema.dropIndex("sheet_fields_def_key_idx").ifExists().execute();
+    await db.schema.dropTable("sheet_fields").ifExists().cascade().execute();
+  } catch {}
+  try {
+    await db.schema.dropIndex("sheet_definitions_system_idx").ifExists().execute();
+    await db.schema.dropTable("sheet_definitions").ifExists().cascade().execute();
+  } catch {}
+  try {
+    await db.schema.dropIndex("game_systems_owner_idx").ifExists().execute();
+    await db.schema.dropIndex("game_systems_slug_idx").ifExists().execute();
+  } catch {}
+  try {
+    await db.schema.dropTable("game_systems").ifExists().cascade().execute();
+  } catch {}
 }

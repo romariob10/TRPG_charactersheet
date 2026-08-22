@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { publicAuthorSchema } from "./profiles.js";
-import { systemMaterialSchema, workspaceCharacterSchema, workspacePostSchema } from "./system-workspace.js";
 
 export const gameSystemIdSchema = z.string().uuid();
 export const gameSystemSlugSchema = z.string().trim().min(1).max(160);
@@ -65,16 +64,4 @@ export const workspaceSheetSummarySchema = z.object({
 });
 export type WorkspaceSheetSummary = z.infer<
   typeof workspaceSheetSummarySchema
->;
-
-export const unifiedGameSystemWorkspaceSchema = z.object({
-  system: gameSystemSummarySchema,
-  sheets: z.array(workspaceSheetSummarySchema).default([]),
-  characters: z.array(workspaceCharacterSchema).default([]),
-  materials: z.array(systemMaterialSchema).default([]),
-  posts: z.array(workspacePostSchema).default([]),
-  isOwner: z.boolean(),
-});
-export type UnifiedGameSystemWorkspace = z.infer<
-  typeof unifiedGameSystemWorkspaceSchema
 >;

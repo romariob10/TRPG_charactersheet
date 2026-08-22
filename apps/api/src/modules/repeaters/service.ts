@@ -9,6 +9,15 @@ import type { Kysely } from "kysely";
 import { sql } from "kysely";
 import { AppError } from "../../errors.js";
 
+function parseJsonValue(v: unknown): unknown {
+  if (typeof v !== "string") return v;
+  try {
+    return JSON.parse(v);
+  } catch {
+    return v;
+  }
+}
+
 export class RepeaterService {
   private readonly db: Kysely<Database>;
 
@@ -46,9 +55,7 @@ export class RepeaterService {
       if (!valueMap.has(v.row_id)) {
         valueMap.set(v.row_id, {});
       }
-      const rawVal =
-        typeof v.value === "string" ? JSON.parse(v.value) : v.value;
-      valueMap.get(v.row_id)![v.slot_id] = rawVal;
+      valueMap.get(v.row_id)![v.slot_id] = parseJsonValue(v.value);
     }
 
     return rows.map((r) => ({
@@ -342,8 +349,7 @@ export class RepeaterService {
 
     const valObj: Record<string, any> = {};
     for (const v of values) {
-      valObj[v.slot_id] =
-        typeof v.value === "string" ? JSON.parse(v.value) : v.value;
+      valObj[v.slot_id] = parseJsonValue(v.value);
     }
 
     return {

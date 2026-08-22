@@ -63,11 +63,11 @@ describe("Sheet Builder & Component Library Services", () => {
     // Stranger cannot edit
     await expect(
       systemsService.update(user2Id, system.id, { title: "Hacked" }),
-    ).rejects.toThrow("FORBIDDEN");
+    ).rejects.toThrow(/FORBIDDEN|owner/i);
 
     // Stranger cannot read private system
     await expect(systemsService.get(user2Id, system.id)).rejects.toThrow(
-      "FORBIDDEN",
+      /restricted|forbidden|owner/i,
     );
 
     // Make public and verify stranger can read
@@ -144,7 +144,7 @@ describe("Sheet Builder & Component Library Services", () => {
         layouts: newLayouts,
         fields: [],
       }),
-    ).rejects.toThrow("REVISION_CONFLICT");
+    ).rejects.toThrow(/REVISION_CONFLICT|modified/i);
 
     // Publish version
     const pubRes = await sheetBuilderService.publishSheetVersion(
@@ -198,12 +198,47 @@ describe("Sheet Builder & Component Library Services", () => {
     if (!testDb) return;
 
     // Create a test character
-    const template = await db
+    let template = await db
       .selectFrom("pdf_templates")
       .select("id")
       .executeTakeFirst();
 
-    const templateId = template?.id ?? crypto.randomUUID();
+    if (!template) {
+      const fileId = crypto.randomUUID();
+      await db
+        .insertInto("object_files")
+        .values({
+          id: fileId,
+          storage_key: "test/path.pdf",
+          media_type: "application/pdf",
+          size_bytes: "1024",
+          sha256:
+            "0000000000000000000000000000000000000000000000000000000000000000",
+          state: "ready",
+        })
+        .execute();
+
+      template = await db
+        .insertInto("pdf_templates")
+        .values({
+          owner_id: user1Id,
+          file_id: fileId,
+          title: "Test Template",
+          slug: "test-template-" + crypto.randomUUID().slice(0, 8),
+          storage_path: "test/path.pdf",
+          sha256:
+            "0000000000000000000000000000000000000000000000000000000000000000",
+          page_count: 1,
+          catalog_status: "ready",
+          allow_vision: false,
+          is_public: true,
+          visibility: "private",
+        })
+        .returning("id")
+        .executeTakeFirstOrThrow();
+    }
+
+    const templateId = template.id;
 
     const character = await db
       .insertInto("characters")

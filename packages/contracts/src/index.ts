@@ -295,6 +295,7 @@ export {
   materialFileTypeSchema,
   systemMaterialSchema,
   systemWorkspaceResponseSchema,
+  unifiedGameSystemWorkspaceSchema,
   workspaceCharacterSchema,
   workspacePostSchema,
 } from "./system-workspace.js";
@@ -304,6 +305,7 @@ export type {
   MaterialFileType,
   SystemMaterial,
   SystemWorkspaceResponse,
+  UnifiedGameSystemWorkspace,
   WorkspaceCharacter,
   WorkspacePost,
 } from "./system-workspace.js";
@@ -447,7 +449,6 @@ export {
   gameSystemSlugSchema,
   gameSystemSummarySchema,
   sheetKindSchema,
-  unifiedGameSystemWorkspaceSchema,
   updateGameSystemRequestSchema,
   workspaceSheetSummarySchema,
 } from "./game-systems.js";
@@ -455,7 +456,6 @@ export type {
   CreateGameSystemRequest,
   GameSystemSummary,
   SheetKind,
-  UnifiedGameSystemWorkspace,
   UpdateGameSystemRequest,
   WorkspaceSheetSummary,
 } from "./game-systems.js";
