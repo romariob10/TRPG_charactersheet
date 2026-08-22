@@ -88,7 +88,7 @@ export class SystemWorkspaceService {
       .where("id", "=", templateId)
       .executeTakeFirstOrThrow();
 
-    const [characterRows, postRows, materials] = await Promise.all([
+    const [characterRows, postRows, materials, sheetRows] = await Promise.all([
       this.db
         .selectFrom("characters")
         .select(["id", "name", "slug", "is_public as isPublic"])
@@ -113,6 +113,23 @@ export class SystemWorkspaceService {
         .orderBy("p.created_at", "desc")
         .execute(),
       this.listMaterials(userId, templateId),
+      this.db
+        .selectFrom("sheet_definitions as sd")
+        .leftJoin("sheet_versions as sv", "sv.id", "sd.current_version_id")
+        .select([
+          "sd.id",
+          "sd.title",
+          "sd.kind",
+          "sd.description",
+          "sd.current_version_id as currentVersionId",
+          "sd.created_at as createdAt",
+          "sd.updated_at as updatedAt",
+          "sv.version_number as currentVersionNumber",
+        ])
+        .where("sd.system_id", "=", templateId)
+        .where("sd.deleted_at", "is", null)
+        .orderBy("sd.updated_at", "desc")
+        .execute(),
     ]);
 
     return {
@@ -137,6 +154,22 @@ export class SystemWorkspaceService {
         createdAt: row.createdAt.toISOString(),
       })),
       materials: materials.materials,
+      sheets: sheetRows.map((row) => ({
+        id: row.id,
+        title: row.title,
+        kind: row.kind as any,
+        description: row.description,
+        currentVersionId: row.currentVersionId,
+        currentVersionNumber: row.currentVersionNumber,
+        createdAt:
+          row.createdAt instanceof Date
+            ? row.createdAt.toISOString()
+            : String(row.createdAt),
+        updatedAt:
+          row.updatedAt instanceof Date
+            ? row.updatedAt.toISOString()
+            : String(row.updatedAt),
+      })),
     };
   }
 

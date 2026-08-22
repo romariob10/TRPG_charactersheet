@@ -198,6 +198,7 @@ export class GameSystemsService {
         "sd.id",
         "sd.system_id as systemId",
         "sd.title",
+        "sd.description",
         "sd.slug",
         "sd.kind",
         "sd.updated_at as updatedAt",

@@ -103,6 +103,7 @@ export class SheetBuilderService {
       id: inserted.id,
       systemId: inserted.system_id,
       title: inserted.title,
+      description: inserted.description ?? "",
       slug: inserted.slug,
       kind: inserted.kind,
       updatedAt:
@@ -217,6 +218,7 @@ export class SheetBuilderService {
         id: sheet.id,
         systemId: sheet.systemId,
         title: sheet.title,
+        description: sheet.description ?? "",
         slug: sheet.slug,
         kind: sheet.kind,
         updatedAt:
