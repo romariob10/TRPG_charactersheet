@@ -121,24 +121,24 @@ export type ListComponentsResponse = z.infer<
 
 export const createComponentRequestSchema = z.object({
   name: z.string().trim().min(1).max(120),
-  description: z.string().trim().max(2000).default(""),
-  scope: componentScopeSchema.default("personal"),
+  description: z.string().trim().max(2000).optional().default(""),
+  scope: componentScopeSchema.optional().default("personal"),
   systemId: z.string().uuid().nullable().optional(),
-  tags: z.array(z.string().trim().max(40)).max(20).default([]),
+  tags: z.array(z.string().trim().max(40)).max(20).optional().default([]),
   layouts: targetLayoutMapSchema.optional(),
-  exposedProperties: z.array(exposedPropertyDefinitionSchema).default([]),
+  exposedProperties: z.array(exposedPropertyDefinitionSchema).optional().default([]),
 });
-export type CreateComponentRequest = z.infer<
+export type CreateComponentRequest = z.input<
   typeof createComponentRequestSchema
 >;
 
 export const autosaveComponentDraftRequestSchema = z.object({
   expectedRevision: z.number().int().nonnegative(),
   layouts: targetLayoutMapSchema,
-  exposedProperties: z.array(exposedPropertyDefinitionSchema).default([]),
-  dependencies: z.array(z.string().uuid()).default([]),
+  exposedProperties: z.array(exposedPropertyDefinitionSchema).optional().default([]),
+  dependencies: z.array(z.string().uuid()).optional().default([]),
 });
-export type AutosaveComponentDraftRequest = z.infer<
+export type AutosaveComponentDraftRequest = z.input<
   typeof autosaveComponentDraftRequestSchema
 >;
 
