@@ -2,7 +2,7 @@
 
 import React from "react";
 import type { LayoutNode } from "@mycharacter/contracts";
-import { FrameDecorator } from "../decorators/frame-decorators.js";
+import { FrameDecorator } from "../decorators/frame-decorators";
 import {
   RenderCheckbox,
   RenderDivider,
@@ -13,9 +13,9 @@ import {
   RenderSpacer,
   RenderText,
   RenderTextarea,
-} from "./primitive-renderers.js";
-import { RepeaterRenderer } from "./repeater-renderer.js";
-import { useSheetRender } from "./sheet-render-context.js";
+} from "./primitive-renderers";
+import { RepeaterRenderer } from "./repeater-renderer";
+import { useSheetRender } from "./sheet-render-context";
 
 const ALIGN_MAP = {
   start: "items-start",

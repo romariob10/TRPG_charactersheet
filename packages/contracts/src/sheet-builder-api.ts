@@ -94,6 +94,22 @@ export type SheetVersionSummary = z.infer<
   typeof sheetVersionSummarySchema
 >;
 
+export const componentVersionDetailsSchema = z.object({
+  id: z.string().uuid(),
+  componentId: z.string().uuid(),
+  versionNumber: z.number().int().positive(),
+  schemaVersion: z.number().int().positive(),
+  layouts: targetLayoutMapSchema,
+  exposedProperties: z.array(exposedPropertyDefinitionSchema),
+  dependencies: z.array(z.string().uuid()),
+  changelog: z.string(),
+  authorId: z.string().uuid(),
+  createdAt: z.string(),
+});
+export type ComponentVersionDetails = z.infer<
+  typeof componentVersionDetailsSchema
+>;
+
 export const sheetEditorDataResponseSchema = z.object({
   sheetDefinition: workspaceSheetSummarySchema,
   system: gameSystemSummarySchema,
@@ -106,6 +122,7 @@ export const sheetEditorDataResponseSchema = z.object({
     updatedAt: z.string(),
   }),
   versions: z.array(sheetVersionSummarySchema),
+  resolvedComponents: z.record(z.string(), componentVersionDetailsSchema).optional().default({}),
   isOwner: z.boolean(),
 });
 export type SheetEditorDataResponse = z.infer<
@@ -190,22 +207,6 @@ export const forkComponentRequestSchema = z.object({
 });
 export type ForkComponentRequest = z.infer<
   typeof forkComponentRequestSchema
->;
-
-export const componentVersionDetailsSchema = z.object({
-  id: z.string().uuid(),
-  componentId: z.string().uuid(),
-  versionNumber: z.number().int().positive(),
-  schemaVersion: z.number().int().positive(),
-  layouts: targetLayoutMapSchema,
-  exposedProperties: z.array(exposedPropertyDefinitionSchema),
-  dependencies: z.array(z.string().uuid()),
-  changelog: z.string(),
-  authorId: z.string().uuid(),
-  createdAt: z.string(),
-});
-export type ComponentVersionDetails = z.infer<
-  typeof componentVersionDetailsSchema
 >;
 
 export const generatePdfExportRequestSchema = z.object({

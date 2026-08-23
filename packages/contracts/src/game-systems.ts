@@ -6,13 +6,23 @@ export const gameSystemSlugSchema = z.string().trim().min(1).max(160);
 
 export const createGameSystemRequestSchema = z.object({
   title: z.string().trim().min(1).max(160),
-  description: z.string().trim().max(5000).default(""),
+  description: z.string().trim().max(5000).optional().default(""),
   family: z.string().trim().max(120).optional(),
   edition: z.string().trim().max(120).optional(),
-  visibility: z.enum(["private", "public"]).default("private"),
+  visibility: z.enum(["private", "public"]).optional().default("private"),
 });
 export type CreateGameSystemRequest = z.infer<
   typeof createGameSystemRequestSchema
+>;
+
+export const createGameSystemResponseSchema = z.object({
+  id: gameSystemIdSchema,
+  title: z.string(),
+  slug: gameSystemSlugSchema,
+  defaultSheetId: z.string().uuid(),
+});
+export type CreateGameSystemResponse = z.infer<
+  typeof createGameSystemResponseSchema
 >;
 
 export const updateGameSystemRequestSchema = z
@@ -36,6 +46,7 @@ export const gameSystemSummarySchema = z.object({
   family: z.string().nullable().optional(),
   edition: z.string().nullable().optional(),
   visibility: z.enum(["private", "public"]),
+  legacyTemplateId: z.string().nullable().optional(),
   owner: publicAuthorSchema.optional(),
   isOwner: z.boolean().optional(),
   sheetCount: z.number().int().nonnegative().default(0),

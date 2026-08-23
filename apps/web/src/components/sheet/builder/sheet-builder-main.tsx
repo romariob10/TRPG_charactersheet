@@ -1,26 +1,31 @@
 "use client";
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import {
+  FileText,
+  Monitor,
+  Redo2,
+  Smartphone,
+  Tablet,
+  Undo2,
+} from "lucide-react";
 import type {
   ComponentSummary,
   ComponentVersionDetails,
   LayoutNode,
   SheetEditorDataResponse,
+  SheetFieldDefinition,
   TargetLayoutKind,
   TargetLayoutMap,
 } from "@mycharacter/contracts";
-import {
-  defaultBoxProps,
-  TARGET_LAYOUT_KINDS,
-  validateLayoutNodeConstraints,
-} from "@mycharacter/contracts";
-import { InspectorView } from "./inspector-view.js";
-import { PaletteView } from "./palette-view.js";
-import { TreeView } from "./tree-view.js";
-import { SheetNodeRenderer } from "../renderer/sheet-node-renderer.js";
-import { SheetRenderProvider } from "../renderer/sheet-render-context.js";
-import { ComponentLibraryBrowser } from "../library/component-library-browser.js";
-import { SaveComponentModal } from "../library/save-component-modal.js";
+import { defaultBoxProps } from "@mycharacter/contracts";
+import { InspectorView } from "./inspector-view";
+import { PaletteView } from "./palette-view";
+import { TreeView } from "./tree-view";
+import { SheetNodeRenderer } from "../renderer/sheet-node-renderer";
+import { SheetRenderProvider } from "../renderer/sheet-render-context";
+import { ComponentLibraryBrowser } from "../library/component-library-browser";
+import { SaveComponentModal } from "../library/save-component-modal";
 
 interface SheetBuilderMainProps {
   initialData: SheetEditorDataResponse;
@@ -76,6 +81,9 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
   const [layouts, setLayouts] = useState<TargetLayoutMap>(
     initialData.draft.layouts,
   );
+  const [draftFields, setDraftFields] = useState<SheetFieldDefinition[]>(
+    initialData.draft.fields ?? [],
+  );
   const [activeTarget, setActiveTarget] = useState<TargetLayoutKind>("desktop");
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [revision, setRevision] = useState(initialData.draft.revision);
@@ -84,6 +92,10 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
   >("saved");
   const [zoom, setZoom] = useState(1);
   const [activeTab, setActiveTab] = useState<"layers" | "palette">("palette");
+
+  // Undo / Redo history
+  const [history, setHistory] = useState<TargetLayoutMap[]>([]);
+  const [future, setFuture] = useState<TargetLayoutMap[]>([]);
 
   // Modals
   const [showLibrary, setShowLibrary] = useState(false);
@@ -95,24 +107,69 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
   const [publishing, setPublishing] = useState(false);
   const [publishError, setPublishError] = useState<string | null>(null);
 
-  // Resolved component versions for rendering
-  const [resolvedComponents] = useState<
+  // Resolved component versions initialized from server response
+  const [resolvedComponents, setResolvedComponents] = useState<
     Map<string, ComponentVersionDetails>
-  >(new Map());
+  >(() => {
+    const map = new Map<string, ComponentVersionDetails>();
+    if (initialData.resolvedComponents) {
+      for (const [id, details] of Object.entries(initialData.resolvedComponents)) {
+        map.set(id, details);
+      }
+    }
+    return map;
+  });
 
   const currentRoot = layouts[activeTarget];
 
-  // Mutate layout state with history
+  // Record history and update layout
   const setTargetLayout = useCallback(
     (newRoot: LayoutNode) => {
       setLayouts((prev) => {
-        const next = { ...prev, [activeTarget]: newRoot };
-        return next;
+        setHistory((h) => [...h.slice(-20), prev]);
+        setFuture([]);
+        return { ...prev, [activeTarget]: newRoot };
       });
       setSaveStatus("idle");
     },
     [activeTarget],
   );
+
+  const undo = useCallback(() => {
+    if (history.length === 0) return;
+    const prevLayouts = history[history.length - 1];
+    setHistory((h) => h.slice(0, -1));
+    setFuture((f) => [layouts, ...f]);
+    setLayouts(prevLayouts);
+    setSaveStatus("idle");
+  }, [history, layouts]);
+
+  const redo = useCallback(() => {
+    if (future.length === 0) return;
+    const nextLayouts = future[0];
+    setFuture((f) => f.slice(1));
+    setHistory((h) => [...h, layouts]);
+    setLayouts(nextLayouts);
+    setSaveStatus("idle");
+  }, [future, layouts]);
+
+  // Keyboard shortcuts (Cmd+Z, Cmd+Shift+Z, Ctrl+Z, Ctrl+Y)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "z" && !e.shiftKey) {
+        e.preventDefault();
+        undo();
+      } else if (
+        ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "z") ||
+        ((e.metaKey || e.ctrlKey) && e.key === "y")
+      ) {
+        e.preventDefault();
+        redo();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [undo, redo]);
 
   // Handle node selection
   const selectedNode = selectedNodeId
@@ -207,7 +264,6 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
       const clone = JSON.parse(JSON.stringify(node)) as LayoutNode;
       const transform = (n: LayoutNode) => {
         if (n.kind === "frame") {
-          // Flatten wide horizontal root containers on mobile
           if (n.direction === "horizontal" && n.children.length > 2) {
             n.direction = "vertical";
           }
@@ -228,55 +284,26 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
     setSaveStatus("idle");
   };
 
-  // Insert from Component Library
-  const handleInsertComponent = (
-    comp: ComponentSummary,
-    version: ComponentVersionDetails,
-  ) => {
-    resolvedComponents.set(version.id, version);
+  // Autosave mechanism
+  const autosaveTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-    const instanceNode: LayoutNode = {
-      id: crypto.randomUUID(),
-      kind: "component-instance",
-      name: comp.name,
-      componentId: comp.id,
-      componentVersionId: version.id,
-      propertyOverrides: {},
-      box: {
-        ...defaultBoxProps,
-        width: { mode: "fill" },
-        height: { mode: "hug" },
-        fill: "transparent",
-        strokeWidth: { top: 0, right: 0, bottom: 0, left: 0 },
-        strokeColor: "none",
-        cornerRadius: { topLeft: 0, topRight: 0, bottomRight: 0, bottomLeft: 0 },
-        padding: { top: 0, right: 0, bottom: 0, left: 0 },
-        overflow: "visible",
-      },
-    };
-
-    handleInsertNode(instanceNode);
-  };
-
-  // Autosave debounce effect
-  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   useEffect(() => {
-    if (saveStatus === "saved") return;
+    if (saveStatus !== "idle") return;
 
-    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
 
-    saveTimeoutRef.current = setTimeout(async () => {
+    autosaveTimerRef.current = setTimeout(async () => {
       setSaveStatus("saving");
       try {
         const res = await fetch(
-          `/api/sheet-definitions/${initialData.sheetDefinition.id}/draft`,
+          `/api/sheets/${initialData.sheetDefinition.id}/draft`,
           {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               expectedRevision: revision,
               layouts,
-              fields: initialData.draft.fields,
+              fields: draftFields,
             }),
           },
         );
@@ -297,51 +324,65 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
       } catch {
         setSaveStatus("error");
       }
-    }, 1200);
+    }, 1500);
 
     return () => {
-      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+      if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
     };
-  }, [layouts, revision, saveStatus, initialData.sheetDefinition.id, initialData.draft.fields]);
+  }, [layouts, draftFields, revision, saveStatus, initialData.sheetDefinition.id]);
 
-  // Publish Sheet Version
+  // Insert component instance from library
+  const handleInsertComponent = (
+    summary: ComponentSummary,
+    version: ComponentVersionDetails,
+  ) => {
+    setResolvedComponents((prev) => {
+      const next = new Map(prev);
+      next.set(version.id, version);
+      return next;
+    });
+
+    const instanceNode: LayoutNode = {
+      id: crypto.randomUUID(),
+      kind: "component-instance",
+      name: summary.name,
+      componentId: summary.id,
+      componentVersionId: version.id,
+      propertyOverrides: {},
+      box: { ...defaultBoxProps },
+    };
+
+    handleInsertNode(instanceNode);
+    setShowLibrary(false);
+  };
+
+  // Publish sheet version
   const handlePublish = async () => {
     setPublishing(true);
     setPublishError(null);
-
-    // Validate all 4 targets
-    for (const target of TARGET_LAYOUT_KINDS) {
-      const check = validateLayoutNodeConstraints(layouts[target]);
-      if (!check.valid) {
-        setPublishError(
-          `Target [${target}] validation failed: ${check.errors.join(", ")}`,
-        );
-        setPublishing(false);
-        return;
-      }
-    }
-
     try {
       const res = await fetch(
-        `/api/sheet-definitions/${initialData.sheetDefinition.id}/publish`,
+        `/api/sheets/${initialData.sheetDefinition.id}/publish`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ changelog: publishChangelog }),
+          body: JSON.stringify({
+            changelog: publishChangelog || "Published version",
+          }),
         },
       );
 
       if (!res.ok) {
         const err = await res.json();
-        throw new Error(err.message || "Failed to publish sheet version.");
+        throw new Error(err.message || "Publication failed");
       }
 
-      const published = await res.json();
-      alert(`Published version ${published.versionNumber} successfully!`);
       setShowPublishModal(false);
+      alert("Sheet version published successfully!");
+      window.location.reload();
     } catch (err: unknown) {
       setPublishError(
-        err instanceof Error ? err.message : "Publishing failed.",
+        err instanceof Error ? err.message : "Failed to publish version",
       );
     } finally {
       setPublishing(false);
@@ -364,7 +405,7 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
             href={`/dashboard/systems/${systemId}/workspace`}
             className="text-xs font-semibold text-muted-foreground hover:text-foreground flex items-center gap-1"
           >
-            <span>←</span> System Workspace
+            <span>←</span> Workspace
           </a>
           <span className="text-muted-foreground">/</span>
           <h2 className="text-sm font-bold text-foreground">
@@ -377,33 +418,80 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
 
         {/* Target Switcher */}
         <div className="flex items-center gap-1 bg-muted p-1 rounded-lg">
-          {TARGET_LAYOUT_KINDS.map((t) => (
-            <button
-              key={t}
-              type="button"
-              onClick={() => setActiveTarget(t)}
-              className={`px-3 py-1 text-xs font-semibold rounded-md capitalize transition-colors flex items-center gap-1.5 ${
-                activeTarget === t
-                  ? "bg-background text-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <span>
-                {t === "mobile"
-                  ? "📱"
-                  : t === "tablet"
-                  ? "📟"
-                  : t === "desktop"
-                  ? "💻"
-                  : "📄"}
-              </span>
-              <span>{t}</span>
-            </button>
-          ))}
+          <button
+            type="button"
+            onClick={() => setActiveTarget("mobile")}
+            className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors flex items-center gap-1.5 ${
+              activeTarget === "mobile"
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <Smartphone className="size-3.5" />
+            <span>Mobile</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTarget("tablet")}
+            className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors flex items-center gap-1.5 ${
+              activeTarget === "tablet"
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <Tablet className="size-3.5" />
+            <span>Tablet</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTarget("desktop")}
+            className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors flex items-center gap-1.5 ${
+              activeTarget === "desktop"
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <Monitor className="size-3.5" />
+            <span>Desktop</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTarget("print")}
+            className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors flex items-center gap-1.5 ${
+              activeTarget === "print"
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <FileText className="size-3.5" />
+            <span>A4 Print</span>
+          </button>
         </div>
 
         {/* Actions & Status */}
         <div className="flex items-center gap-3">
+          {/* Undo / Redo */}
+          <div className="flex items-center gap-0.5 border border-border rounded p-0.5">
+            <button
+              type="button"
+              onClick={undo}
+              disabled={history.length === 0}
+              className="p-1 text-muted-foreground hover:text-foreground disabled:opacity-30 rounded"
+              title="Undo (Cmd+Z)"
+            >
+              <Undo2 className="size-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={redo}
+              disabled={future.length === 0}
+              className="p-1 text-muted-foreground hover:text-foreground disabled:opacity-30 rounded"
+              title="Redo (Cmd+Shift+Z)"
+            >
+              <Redo2 className="size-3.5" />
+            </button>
+          </div>
+
           {/* Zoom */}
           <div className="flex items-center gap-1 text-xs text-muted-foreground">
             <button
@@ -502,30 +590,34 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
               <TreeView
                 rootNode={currentRoot}
                 selectedNodeId={selectedNodeId}
-                onSelectNode={setSelectedNodeId}
+                onSelectNode={(id) => setSelectedNodeId(id)}
                 onDeleteNode={handleDeleteNode}
-                onMoveNode={handleMoveNode}
                 onDuplicateNode={handleDuplicateNode}
+                onMoveNode={handleMoveNode}
               />
             )}
           </div>
         </aside>
 
-        {/* Center Interactive Canvas */}
+        {/* Central Visual Canvas */}
         <main
+          className="flex-1 bg-muted/30 p-8 overflow-auto flex items-start justify-center relative"
           onClick={() => setSelectedNodeId(null)}
-          className="flex-1 overflow-auto bg-muted/30 p-8 flex items-start justify-center"
         >
           <div
-            style={{ transform: `scale(${zoom})`, transformOrigin: "top center" }}
+            style={{
+              transform: `scale(${zoom})`,
+              transformOrigin: "top center",
+              transition: "transform 0.1s ease-out",
+            }}
             className={`w-full ${canvasWidthClass} transition-all duration-200`}
           >
             <SheetRenderProvider
               value={{
-                target: activeTarget,
                 mode: "builder",
+                target: activeTarget,
                 selectedNodeId,
-                onSelectNode: setSelectedNodeId,
+                onSelectNode: (id: string | null) => setSelectedNodeId(id),
                 resolvedComponents,
               }}
             >
@@ -534,19 +626,29 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
           </div>
         </main>
 
-        {/* Right Sidebar (Properties Inspector) */}
-        <aside className="w-80 border-l border-border bg-card shrink-0">
+        {/* Right Sidebar (Property Inspector) */}
+        <aside className="w-80 border-l border-border bg-card flex flex-col shrink-0">
+          <header className="p-3 border-b border-border">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+              Properties
+            </h3>
+          </header>
           <InspectorView
             selectedNode={selectedNode}
-            onUpdateNode={(updated) =>
-              setTargetLayout(updateNodeInTree(currentRoot, updated))
-            }
+            onUpdateNode={(updated) => {
+              setTargetLayout(updateNodeInTree(currentRoot, updated));
+            }}
             onSaveAsComponent={(node) => setSaveComponentNode(node)}
+            draftFields={draftFields}
+            onUpdateDraftFields={(fields) => {
+              setDraftFields(fields);
+              setSaveStatus("idle");
+            }}
           />
         </aside>
       </div>
 
-      {/* Component Library Browser Dialog */}
+      {/* Component Library Modal */}
       {showLibrary && (
         <ComponentLibraryBrowser
           systemId={systemId}
@@ -555,89 +657,63 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
         />
       )}
 
-      {/* Save Selection as Component Modal */}
+      {/* Save as Component Modal */}
       {saveComponentNode && (
         <SaveComponentModal
-          node={saveComponentNode}
           systemId={systemId}
-          onSaved={() => alert("Component saved to library!")}
+          node={saveComponentNode}
           onClose={() => setSaveComponentNode(null)}
+          onSaved={() => setSaveComponentNode(null)}
         />
       )}
 
       {/* Publish Version Modal */}
       {showPublishModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-background border border-border rounded-xl shadow-2xl w-full max-w-md overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-              <h3 className="text-base font-bold text-foreground">
-                Publish Sheet Version
-              </h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-[var(--radius-card)] border border-border bg-card p-6 shadow-xl">
+            <h3 className="text-lg font-bold text-foreground">
+              Publish Sheet Version
+            </h3>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Create an immutable snapshot of all responsive layouts and semantic fields for character creation and PDF export.
+            </p>
+
+            {publishError && (
+              <div className="mt-3 p-3 bg-destructive/10 border border-destructive text-destructive text-xs rounded">
+                {publishError}
+              </div>
+            )}
+
+            <div className="mt-4">
+              <label className="text-xs font-semibold text-foreground">
+                Changelog / Version Notes
+              </label>
+              <textarea
+                rows={3}
+                value={publishChangelog}
+                onChange={(e) => setPublishChangelog(e.target.value)}
+                placeholder="What changed in this version?"
+                className="w-full mt-1.5 p-2 bg-background border border-border rounded text-xs"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-3 mt-6">
               <button
                 type="button"
                 onClick={() => setShowPublishModal(false)}
-                className="text-muted-foreground hover:text-foreground text-sm"
+                disabled={publishing}
+                className="px-4 py-2 text-xs font-semibold rounded border border-border hover:bg-muted"
               >
-                ✕
+                Cancel
               </button>
-            </div>
-
-            <div className="p-5 flex flex-col gap-4 text-xs">
-              {publishError && (
-                <div className="p-2.5 rounded bg-destructive/10 border border-destructive/30 text-destructive">
-                  {publishError}
-                </div>
-              )}
-
-              <div className="p-3 bg-muted/40 rounded-lg border border-border flex flex-col gap-2">
-                <span className="font-semibold text-foreground">
-                  Pre-publication Checklist:
-                </span>
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <span>✓</span> Mobile layout defined
-                </div>
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <span>✓</span> Tablet layout defined
-                </div>
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <span>✓</span> Desktop layout defined
-                </div>
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <span>✓</span> Print A4 layout validated
-                </div>
-              </div>
-
-              <div>
-                <label className="font-semibold text-foreground">
-                  Changelog / Release Notes
-                </label>
-                <textarea
-                  rows={3}
-                  value={publishChangelog}
-                  onChange={(e) => setPublishChangelog(e.target.value)}
-                  placeholder="What's new in this version…"
-                  className="w-full mt-1 px-3 py-2 bg-background border border-border rounded-md focus:ring-1 focus:ring-primary focus:outline-none"
-                />
-              </div>
-
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-border">
-                <button
-                  type="button"
-                  onClick={() => setShowPublishModal(false)}
-                  disabled={publishing}
-                  className="px-4 py-2 border border-border rounded-md text-muted-foreground hover:text-foreground"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={handlePublish}
-                  disabled={publishing}
-                  className="px-4 py-2 bg-primary text-primary-foreground font-semibold rounded-md hover:bg-primary/90 shadow-sm"
-                >
-                  {publishing ? "Publishing…" : "Confirm & Publish"}
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={handlePublish}
+                disabled={publishing}
+                className="px-4 py-2 text-xs font-semibold rounded bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm"
+              >
+                {publishing ? "Publishing…" : "Confirm & Publish"}
+              </button>
             </div>
           </div>
         </div>

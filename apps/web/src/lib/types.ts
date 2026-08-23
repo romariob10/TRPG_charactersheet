@@ -171,12 +171,17 @@ export interface TemplateEditorData extends TemplateSummary {
   pdfUrl: string;
 }
 
+import type { SheetVersionDetails } from "@mycharacter/contracts";
+
 export interface CharacterEditorData {
   id: string;
   name: string;
   role: "owner" | "editor";
   revision: number;
-  templateId: string;
+  templateId?: string;
+  sheetVersionId?: string;
+  sheetVersion?: SheetVersionDetails;
+  sheetFieldValues?: Record<string, FieldValue>;
   catalogStatus: CharacterSummary["catalogStatus"];
   fields: CharacterField[];
   pdfUrl: string;

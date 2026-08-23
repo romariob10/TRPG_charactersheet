@@ -9,6 +9,7 @@ import type {
   LayoutJustify,
   LayoutNode,
   OrnamentStyle,
+  SheetFieldDefinition,
   SizingMode,
   StrokeToken,
   TargetLayoutKind,
@@ -21,21 +22,31 @@ import {
   TARGET_LAYOUT_KINDS,
   TITLE_DOCK_VARIANTS,
 } from "@mycharacter/contracts";
+import { Plus } from "lucide-react";
 
 interface InspectorViewProps {
   selectedNode: LayoutNode | null;
   onUpdateNode: (updated: LayoutNode) => void;
   onSaveAsComponent: (node: LayoutNode) => void;
+  draftFields?: SheetFieldDefinition[];
+  onUpdateDraftFields?: (fields: SheetFieldDefinition[]) => void;
 }
 
 export const InspectorView: React.FC<InspectorViewProps> = ({
   selectedNode,
   onUpdateNode,
   onSaveAsComponent,
+  draftFields = [],
+  onUpdateDraftFields,
 }) => {
   const [linkPadding, setLinkPadding] = useState(true);
   const [linkStroke, setLinkStroke] = useState(true);
   const [linkRadius, setLinkRadius] = useState(true);
+  const [showNewFieldModal, setShowNewFieldModal] = useState(false);
+  const [newFieldKey, setNewFieldKey] = useState("");
+  const [newFieldLabel, setNewFieldLabel] = useState("");
+  const [newFieldKind, setNewFieldKind] = useState<SheetFieldDefinition["kind"]>("text");
+  const [newFieldDefault, setNewFieldDefault] = useState("");
 
   if (!selectedNode) {
     return (
@@ -61,6 +72,44 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
       ? current.filter((t) => t !== target)
       : [...current, target];
     updateBox({ hiddenOnTargets: next });
+  };
+
+  const handleCreateField = (e: React.FormEvent) => {
+    e.preventDefault();
+    const key = newFieldKey.trim();
+    if (!key || !onUpdateDraftFields) return;
+
+    const newField: SheetFieldDefinition = {
+      id: crypto.randomUUID(),
+      key,
+      label: newFieldLabel.trim() || key,
+      kind: newFieldKind,
+      options: [],
+      readOnly: false,
+      defaultValue:
+        newFieldKind === "number"
+          ? Number(newFieldDefault) || 0
+          : newFieldKind === "checkbox"
+            ? newFieldDefault === "true"
+            : newFieldDefault,
+    };
+
+    const updated = [...draftFields.filter((f) => f.key !== key), newField];
+    onUpdateDraftFields(updated);
+
+    // Bind current node to this key
+    if ("fieldBinding" in selectedNode) {
+      onUpdateNode({
+        ...selectedNode,
+        fieldBinding: key,
+        label: selectedNode.label || newField.label,
+      } as LayoutNode);
+    }
+
+    setNewFieldKey("");
+    setNewFieldLabel("");
+    setNewFieldDefault("");
+    setShowNewFieldModal(false);
   };
 
   return (
@@ -90,6 +139,172 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
           />
         </div>
       </div>
+
+      {/* Typography Controls for Text Node */}
+      {selectedNode.kind === "text" && (
+        <div className="flex flex-col gap-3 pb-3 border-b border-border">
+          <h4 className="font-bold text-[11px] text-muted-foreground uppercase tracking-wider">
+            Typography & Font
+          </h4>
+
+          <div>
+            <label className="text-[10px] font-medium text-muted-foreground">Text Content</label>
+            <input
+              type="text"
+              value={selectedNode.text}
+              onChange={(e) => onUpdateNode({ ...selectedNode, text: e.target.value })}
+              className="w-full mt-0.5 px-2 py-1 bg-background border border-border rounded"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-[10px] font-medium text-muted-foreground">Font Family</label>
+              <select
+                value={selectedNode.fontFamily || "Noto Sans"}
+                onChange={(e) =>
+                  onUpdateNode({
+                    ...selectedNode,
+                    fontFamily: e.target.value as "Noto Sans" | "Montserrat Alternates",
+                  })
+                }
+                className="w-full mt-0.5 px-2 py-1 bg-background border border-border rounded"
+              >
+                <option value="Noto Sans">Noto Sans</option>
+                <option value="Montserrat Alternates">Montserrat Alternates</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="text-[10px] font-medium text-muted-foreground">Weight</label>
+              <select
+                value={selectedNode.fontWeight || (selectedNode.weight === "bold" ? "700" : selectedNode.weight === "medium" ? "500" : "400")}
+                onChange={(e) => {
+                  const val = e.target.value as "400" | "500" | "600" | "700";
+                  onUpdateNode({
+                    ...selectedNode,
+                    fontWeight: val,
+                    weight: val === "700" ? "bold" : val === "500" || val === "600" ? "medium" : "normal",
+                  });
+                }}
+                className="w-full mt-0.5 px-2 py-1 bg-background border border-border rounded"
+              >
+                <option value="400">400 (Regular)</option>
+                <option value="500">500 (Medium)</option>
+                <option value="600">600 (SemiBold)</option>
+                <option value="700">700 (Bold)</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Font Size & Presets */}
+          <div>
+            <div className="flex items-center justify-between">
+              <label className="text-[10px] font-medium text-muted-foreground">Font Size (px)</label>
+              <span className="text-[10px] text-muted-foreground">{selectedNode.fontSize || 14}px</span>
+            </div>
+            <input
+              type="number"
+              min="6"
+              max="120"
+              value={selectedNode.fontSize || 14}
+              onChange={(e) =>
+                onUpdateNode({
+                  ...selectedNode,
+                  fontSize: Math.max(6, Math.min(120, Number(e.target.value) || 14)),
+                })
+              }
+              className="w-full mt-0.5 px-2 py-1 bg-background border border-border rounded"
+            />
+            <div className="flex items-center gap-1 mt-1.5 flex-wrap">
+              {[8, 10, 12, 14, 16, 18, 24, 32].map((sz) => (
+                <button
+                  key={sz}
+                  type="button"
+                  onClick={() => onUpdateNode({ ...selectedNode, fontSize: sz })}
+                  className={`px-1.5 py-0.5 rounded text-[10px] border ${
+                    (selectedNode.fontSize || 14) === sz
+                      ? "border-primary bg-primary/10 text-primary font-bold"
+                      : "border-border hover:bg-muted"
+                  }`}
+                >
+                  {sz}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Letter Spacing & Line Height */}
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <div className="flex items-center justify-between">
+                <label className="text-[10px] font-medium text-muted-foreground">Tracking (em)</label>
+                <span className="text-[10px] text-muted-foreground">{selectedNode.letterSpacing ?? 0}em</span>
+              </div>
+              <input
+                type="number"
+                step="0.01"
+                min="-0.20"
+                max="0.20"
+                value={selectedNode.letterSpacing ?? 0}
+                onChange={(e) => {
+                  const val = parseFloat(e.target.value) || 0;
+                  const bounded = Math.max(-0.2, Math.min(0.2, val));
+                  onUpdateNode({ ...selectedNode, letterSpacing: bounded });
+                }}
+                className="w-full mt-0.5 px-2 py-1 bg-background border border-border rounded"
+              />
+              <div className="flex items-center gap-1 mt-1">
+                {[-0.09, 0, 0.05].map((ls) => (
+                  <button
+                    key={ls}
+                    type="button"
+                    onClick={() => onUpdateNode({ ...selectedNode, letterSpacing: ls })}
+                    className="px-1 py-0.5 rounded text-[9px] border border-border hover:bg-muted"
+                  >
+                    {ls}em
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between">
+                <label className="text-[10px] font-medium text-muted-foreground">Line Height</label>
+                <span className="text-[10px] text-muted-foreground">{selectedNode.lineHeight ?? 1.2}</span>
+              </div>
+              <input
+                type="number"
+                step="0.1"
+                min="0.8"
+                max="3"
+                value={selectedNode.lineHeight ?? 1.2}
+                onChange={(e) =>
+                  onUpdateNode({
+                    ...selectedNode,
+                    lineHeight: Math.max(0.8, Math.min(3, parseFloat(e.target.value) || 1.2)),
+                  })
+                }
+                className="w-full mt-0.5 px-2 py-1 bg-background border border-border rounded"
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center gap-4 pt-1">
+            <label className="flex items-center gap-1.5 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={selectedNode.uppercase ?? false}
+                onChange={(e) =>
+                  onUpdateNode({ ...selectedNode, uppercase: e.target.checked })
+                }
+                className="rounded"
+              />
+              <span className="text-[11px]">Uppercase</span>
+            </label>
+          </div>
+        </div>
+      )}
 
       {/* Frame Auto Layout Controls */}
       {selectedNode.kind === "frame" && (
@@ -284,29 +499,61 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
         selectedNode.kind === "checkbox" ||
         selectedNode.kind === "select") && (
         <div className="flex flex-col gap-3 pb-3 border-b border-border">
-          <h4 className="font-bold text-[11px] text-muted-foreground uppercase tracking-wider">
-            Field Binding
-          </h4>
+          <div className="flex items-center justify-between">
+            <h4 className="font-bold text-[11px] text-muted-foreground uppercase tracking-wider">
+              Semantic Field Binding
+            </h4>
+            <button
+              type="button"
+              onClick={() => setShowNewFieldModal(true)}
+              className="inline-flex items-center gap-1 text-[10px] font-semibold text-primary hover:underline"
+            >
+              <Plus className="size-3" /> New Field
+            </button>
+          </div>
 
           <div>
-            <label className="text-[10px] font-medium text-muted-foreground">Field Binding Key</label>
+            <label className="text-[10px] font-medium text-muted-foreground">Bound Field Key</label>
+            <div className="flex items-center gap-1 mt-0.5">
+              <select
+                value={selectedNode.fieldBinding || ""}
+                onChange={(e) => {
+                  const key = e.target.value;
+                  const fieldDef = draftFields.find((f) => f.key === key);
+                  onUpdateNode({
+                    ...selectedNode,
+                    fieldBinding: key,
+                    label: selectedNode.label || fieldDef?.label,
+                  } as LayoutNode);
+                }}
+                className="w-full px-2 py-1 bg-background border border-border rounded font-mono"
+              >
+                <option value="">-- Choose Field --</option>
+                {draftFields.map((f) => (
+                  <option key={f.key} value={f.key}>
+                    {f.label} ({f.key}) [{f.kind}]
+                  </option>
+                ))}
+              </select>
+            </div>
             <input
               type="text"
-              value={selectedNode.fieldBinding}
+              placeholder="Or type custom key..."
+              value={selectedNode.fieldBinding || ""}
               onChange={(e) =>
-                onUpdateNode({ ...selectedNode, fieldBinding: e.target.value })
+                onUpdateNode({ ...selectedNode, fieldBinding: e.target.value } as LayoutNode)
               }
-              className="w-full mt-0.5 px-2 py-1 bg-background border border-border rounded font-mono"
+              className="w-full mt-1 px-2 py-1 bg-background border border-border rounded font-mono text-[11px]"
             />
           </div>
 
           <div>
-            <label className="text-[10px] font-medium text-muted-foreground">Label</label>
+            <label className="text-[10px] font-medium text-muted-foreground">Widget Label</label>
             <input
               type="text"
               value={selectedNode.label || ""}
               onChange={(e) =>
-                onUpdateNode({ ...selectedNode, label: e.target.value })
+                onUpdateNode({ ...selectedNode, label: e.target.value } as LayoutNode)
               }
               className="w-full mt-0.5 px-2 py-1 bg-background border border-border rounded"
             />
@@ -317,7 +564,7 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
               type="checkbox"
               checked={selectedNode.readOnly ?? false}
               onChange={(e) =>
-                onUpdateNode({ ...selectedNode, readOnly: e.target.checked })
+                onUpdateNode({ ...selectedNode, readOnly: e.target.checked } as LayoutNode)
               }
               className="rounded"
             />
@@ -349,20 +596,27 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
               <option value="hug">Hug Contents</option>
               <option value="fixed">Fixed (px)</option>
             </select>
-            {selectedNode.box.width.mode === "fixed" && (
+          </div>
+
+          {selectedNode.box.width.mode === "fixed" && (
+            <div>
+              <label className="text-[10px] font-medium text-muted-foreground">Fixed Width</label>
               <input
                 type="number"
+                min="10"
                 value={selectedNode.box.width.value}
                 onChange={(e) =>
                   updateBox({
                     width: { mode: "fixed", value: Number(e.target.value) || 10 },
                   })
                 }
-                className="w-full mt-1 px-2 py-1 bg-background border border-border rounded"
+                className="w-full mt-0.5 px-2 py-1 bg-background border border-border rounded"
               />
-            )}
-          </div>
+            </div>
+          )}
+        </div>
 
+        <div className="grid grid-cols-2 gap-2">
           <div>
             <label className="text-[10px] font-medium text-muted-foreground">Height</label>
             <select
@@ -379,19 +633,24 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
               <option value="fill">Fill Container</option>
               <option value="fixed">Fixed (px)</option>
             </select>
-            {selectedNode.box.height.mode === "fixed" && (
+          </div>
+
+          {selectedNode.box.height.mode === "fixed" && (
+            <div>
+              <label className="text-[10px] font-medium text-muted-foreground">Fixed Height</label>
               <input
                 type="number"
+                min="10"
                 value={selectedNode.box.height.value}
                 onChange={(e) =>
                   updateBox({
                     height: { mode: "fixed", value: Number(e.target.value) || 10 },
                   })
                 }
-                className="w-full mt-1 px-2 py-1 bg-background border border-border rounded"
+                className="w-full mt-0.5 px-2 py-1 bg-background border border-border rounded"
               />
-            )}
-          </div>
+            </div>
+          )}
         </div>
 
         {/* 4-side Padding */}
@@ -597,6 +856,88 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
           })}
         </div>
       </div>
+
+      {/* Modal for Creating New Semantic Field */}
+      {showNewFieldModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-sm rounded-[var(--radius-card)] border border-border bg-card p-5 shadow-lg">
+            <h3 className="text-sm font-bold">New Semantic Field Definition</h3>
+            <form onSubmit={handleCreateField} className="mt-3 space-y-3">
+              <div>
+                <label className="text-[11px] font-medium">Field Key *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. strength, armor_class"
+                  value={newFieldKey}
+                  onChange={(e) => setNewFieldKey(e.target.value)}
+                  className="w-full mt-1 px-2.5 py-1.5 bg-background border border-border rounded text-xs font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] font-medium">Label</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Strength, Armor Class"
+                  value={newFieldLabel}
+                  onChange={(e) => setNewFieldLabel(e.target.value)}
+                  className="w-full mt-1 px-2.5 py-1.5 bg-background border border-border rounded text-xs"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[11px] font-medium">Kind</label>
+                  <select
+                    value={newFieldKind}
+                    onChange={(e) =>
+                      setNewFieldKind(
+                        e.target.value as SheetFieldDefinition["kind"],
+                      )
+                    }
+                    className="w-full mt-1 px-2 py-1.5 bg-background border border-border rounded text-xs"
+                  >
+                    <option value="text">Text</option>
+                    <option value="number">Number</option>
+                    <option value="checkbox">Checkbox</option>
+                    <option value="select">Select</option>
+                    <option value="multiline">Multiline</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-medium">Default Value</label>
+                  <input
+                    type="text"
+                    placeholder="Optional default"
+                    value={newFieldDefault}
+                    onChange={(e) => setNewFieldDefault(e.target.value)}
+                    className="w-full mt-1 px-2.5 py-1.5 bg-background border border-border rounded text-xs"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowNewFieldModal(false)}
+                  className="px-3 py-1.5 text-xs rounded border border-border hover:bg-muted"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={!newFieldKey.trim()}
+                  className="px-3.5 py-1.5 text-xs font-semibold rounded bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                >
+                  Save & Bind
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -1,5 +1,5 @@
 import type { Database } from "@mycharacter/database";
-import type { CharacterField, TemplateField } from "@mycharacter/contracts";
+import type { CharacterField, FieldValue, TemplateField } from "@mycharacter/contracts";
 import type { Kysely, Transaction } from "kysely";
 import { sql } from "kysely";
 import { loadTemplateFields } from "../templates/repository.js";
@@ -8,7 +8,9 @@ export type CharacterDatabase = Kysely<Database> | Transaction<Database>;
 
 export interface CharacterAccessRow {
   id: string;
-  templateId: string;
+  templateId: string | null;
+  sheetVersionId: string | null;
+  systemId: string | null;
   ownerId: string;
   name: string;
   slug: string;
@@ -33,7 +35,8 @@ export async function findCharacterAccess(
 ): Promise<CharacterAccessRow | undefined> {
   const row = await db
     .selectFrom("characters as character")
-    .innerJoin("pdf_templates as template", "template.id", "character.template_id")
+    .leftJoin("pdf_templates as template", "template.id", "character.template_id")
+    .leftJoin("game_systems as game_system", "game_system.id", "character.system_id")
     .leftJoin("character_members as member", (join) =>
       join
         .onRef("member.character_id", "=", "character.id")
@@ -42,6 +45,8 @@ export async function findCharacterAccess(
     .select([
       "character.id",
       "character.template_id as templateId",
+      "character.sheet_version_id as sheetVersionId",
+      "character.system_id as systemId",
       "character.owner_id as ownerId",
       "character.name",
       "character.slug",
@@ -51,9 +56,9 @@ export async function findCharacterAccess(
       "character.revision",
       "character.deleted_at as deletedAt",
       "character.updated_at as updatedAt",
-      "template.catalog_status as catalogStatus",
-      "template.page_count as pageCount",
-      "template.game_system as gameSystem",
+      sql<"pending" | "processing" | "ready" | "partial" | "failed">`COALESCE(template.catalog_status, 'ready')`.as("catalogStatus"),
+      sql<number>`COALESCE(template.page_count, 1)`.as("pageCount"),
+      sql<string | null>`COALESCE(template.game_system, game_system.title)`.as("gameSystem"),
       "member.role as memberRole",
       (eb) =>
         eb
@@ -80,7 +85,8 @@ export async function listCharacters(
 ): Promise<CharacterAccessRow[]> {
   const rows = await db
     .selectFrom("characters as character")
-    .innerJoin("pdf_templates as template", "template.id", "character.template_id")
+    .leftJoin("pdf_templates as template", "template.id", "character.template_id")
+    .leftJoin("game_systems as game_system", "game_system.id", "character.system_id")
     .leftJoin("character_members as member", (join) =>
       join
         .onRef("member.character_id", "=", "character.id")
@@ -89,6 +95,8 @@ export async function listCharacters(
     .select([
       "character.id",
       "character.template_id as templateId",
+      "character.sheet_version_id as sheetVersionId",
+      "character.system_id as systemId",
       "character.owner_id as ownerId",
       "character.name",
       "character.slug",
@@ -98,9 +106,9 @@ export async function listCharacters(
       "character.revision",
       "character.deleted_at as deletedAt",
       "character.updated_at as updatedAt",
-      "template.catalog_status as catalogStatus",
-      "template.page_count as pageCount",
-      "template.game_system as gameSystem",
+      sql<"pending" | "processing" | "ready" | "partial" | "failed">`COALESCE(template.catalog_status, 'ready')`.as("catalogStatus"),
+      sql<number>`COALESCE(template.page_count, 1)`.as("pageCount"),
+      sql<string | null>`COALESCE(template.game_system, game_system.title)`.as("gameSystem"),
       "member.role as memberRole",
       (eb) =>
         eb
@@ -174,9 +182,27 @@ export async function loadCharacterFields(
     });
 }
 
+export async function loadCharacterSheetFieldValues(
+  db: Kysely<Database>,
+  characterId: string,
+): Promise<Record<string, FieldValue>> {
+  const rows = await db
+    .selectFrom("character_sheet_field_values")
+    .select(["field_key", "value"])
+    .where("character_id", "=", characterId)
+    .execute();
+
+  const result: Record<string, FieldValue> = {};
+  for (const row of rows) {
+    result[row.field_key] = row.value as FieldValue;
+  }
+  return result;
+}
+
 function normalizeValue(value: unknown): CharacterField["value"] {
   if (value === null) return null;
   if (typeof value === "string") return value;
+  if (typeof value === "number") return value;
   if (typeof value === "boolean") return value;
   if (Array.isArray(value) && value.every((item) => typeof item === "string")) {
     return value as string[];

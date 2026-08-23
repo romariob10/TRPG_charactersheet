@@ -445,6 +445,7 @@ export type {
 } from "./sheet-blueprints.js";
 export {
   createGameSystemRequestSchema,
+  createGameSystemResponseSchema,
   gameSystemIdSchema,
   gameSystemSlugSchema,
   gameSystemSummarySchema,
@@ -454,6 +455,7 @@ export {
 } from "./game-systems.js";
 export type {
   CreateGameSystemRequest,
+  CreateGameSystemResponse,
   GameSystemSummary,
   SheetKind,
   UpdateGameSystemRequest,

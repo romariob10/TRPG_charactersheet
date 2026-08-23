@@ -51,6 +51,7 @@ export const PaletteView: React.FC<PaletteViewProps> = ({
       variant,
       align: "left",
       weight: variant === "title" ? "bold" : "normal",
+      fontFamily: "Noto Sans",
       uppercase: variant === "label",
       color: "default",
       box: { ...defaultBoxProps, width: { mode: "hug" } },

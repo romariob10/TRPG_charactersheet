@@ -2,8 +2,8 @@
 
 import React, { useState } from "react";
 import type { RepeaterNode } from "@mycharacter/contracts";
-import { SheetNodeRenderer } from "./sheet-node-renderer.js";
-import { SheetRenderProvider, useSheetRender } from "./sheet-render-context.js";
+import { SheetNodeRenderer } from "./sheet-node-renderer";
+import { SheetRenderProvider, useSheetRender } from "./sheet-render-context";
 
 export const RepeaterRenderer: React.FC<{ node: RepeaterNode }> = ({ node }) => {
   const context = useSheetRender();

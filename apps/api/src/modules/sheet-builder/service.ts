@@ -2,7 +2,9 @@ import type { Database } from "@mycharacter/database";
 import type {
   AutosaveSheetDraftRequest,
   AutosaveSheetDraftResponse,
+  ComponentVersionDetails,
   CreateSheetDefinitionRequest,
+  LayoutNode,
   PublishSheetVersionRequest,
   PublishSheetVersionResponse,
   SheetEditorDataResponse,
@@ -66,16 +68,16 @@ export class SheetBuilderService {
     // Initialize default draft
     const defaultRootNode = {
       id: crypto.randomUUID(),
-      kind: "frame",
-      direction: "vertical",
+      kind: "frame" as const,
+      direction: "vertical" as const,
       gap: 16,
-      align: "stretch",
-      justify: "start",
+      align: "stretch" as const,
+      justify: "start" as const,
       wrap: false,
       collapseAdjacentStrokes: false,
-      ornamentStyle: "regular",
-      titleDock: { dock: "none", variant: "none" },
-      footerDock: { dock: "none", variant: "none" },
+      ornamentStyle: "regular" as const,
+      titleDock: { dock: "none" as const, variant: "none" as const },
+      footerDock: { dock: "none" as const, variant: "none" as const },
       box: defaultBoxProps,
       children: [],
     };
@@ -161,16 +163,16 @@ export class SheetBuilderService {
     if (!draftRow) {
       const defaultRoot = {
         id: crypto.randomUUID(),
-        kind: "frame",
-        direction: "vertical",
+        kind: "frame" as const,
+        direction: "vertical" as const,
         gap: 16,
-        align: "stretch",
-        justify: "start",
+        align: "stretch" as const,
+        justify: "start" as const,
         wrap: false,
         collapseAdjacentStrokes: false,
-        ornamentStyle: "regular",
-        titleDock: { dock: "none", variant: "none" },
-        footerDock: { dock: "none", variant: "none" },
+        ornamentStyle: "regular" as const,
+        titleDock: { dock: "none" as const, variant: "none" as const },
+        footerDock: { dock: "none" as const, variant: "none" as const },
         box: defaultBoxProps,
         children: [],
       };
@@ -213,14 +215,16 @@ export class SheetBuilderService {
         ? JSON.parse(draftRow.fields)
         : draftRow.fields;
 
+    const resolvedComponents = await this.resolveComponentDependencies(parsedLayouts);
+
     return {
       sheetDefinition: {
         id: sheet.id,
         systemId: sheet.systemId,
         title: sheet.title,
-        description: sheet.description ?? "",
         slug: sheet.slug,
         kind: sheet.kind,
+        description: sheet.description ?? "",
         updatedAt:
           sheet.updatedAt instanceof Date
             ? sheet.updatedAt.toISOString()
@@ -230,7 +234,7 @@ export class SheetBuilderService {
         id: sheet.gsId,
         slug: sheet.gsSlug,
         title: sheet.gsTitle,
-        description: sheet.gsDescription,
+        description: sheet.gsDescription ?? "",
         visibility: sheet.gsVisibility,
         isOwner,
         createdAt:
@@ -269,8 +273,122 @@ export class SheetBuilderService {
             ? v.created_at.toISOString()
             : String(v.created_at),
       })),
+      resolvedComponents,
       isOwner,
     };
+  }
+
+  async resolveComponentDependencies(
+    layouts: Record<string, LayoutNode>,
+  ): Promise<Record<string, ComponentVersionDetails>> {
+    const resolved: Record<string, ComponentVersionDetails> = {};
+    const visitingPath = new Set<string>();
+
+    const extractVersionIdsFromNode = (
+      node: LayoutNode,
+      collected: Set<string>,
+    ) => {
+      if (!node || typeof node !== "object") return;
+      if (node.kind === "component-instance" && node.componentVersionId) {
+        collected.add(node.componentVersionId);
+      }
+      if ("children" in node && Array.isArray(node.children)) {
+        for (const child of node.children) {
+          extractVersionIdsFromNode(child, collected);
+        }
+      }
+      if ("rowTemplate" in node && node.rowTemplate) {
+        extractVersionIdsFromNode(node.rowTemplate, collected);
+      }
+    };
+
+    const initialIds = new Set<string>();
+    if (layouts && typeof layouts === "object") {
+      for (const root of Object.values(layouts)) {
+        if (root) extractVersionIdsFromNode(root, initialIds);
+      }
+    }
+
+    const resolveRecursive = async (versionIds: Set<string>) => {
+      if (versionIds.size === 0) return;
+
+      const unvisited = Array.from(versionIds).filter((id) => !resolved[id]);
+      if (unvisited.length === 0) return;
+
+      const rows = await this.db
+        .selectFrom("component_versions")
+        .where("id", "in", unvisited)
+        .selectAll()
+        .execute();
+
+      const foundMap = new Map(rows.map((r) => [r.id, r]));
+
+      for (const id of unvisited) {
+        if (visitingPath.has(id)) {
+          throw new AppError(
+            "CYCLIC_COMPONENT_DEPENDENCY",
+            400,
+            `Cyclic component dependency detected involving component version ${id}.`,
+          );
+        }
+
+        const row = foundMap.get(id);
+        if (!row) {
+          throw new AppError(
+            "MISSING_COMPONENT_DEPENDENCY",
+            400,
+            `Referenced component version ${id} was not found in component library.`,
+          );
+        }
+
+        visitingPath.add(id);
+
+        const parsedLayouts =
+          typeof row.layouts === "string" ? JSON.parse(row.layouts) : row.layouts;
+
+        const details: ComponentVersionDetails = {
+          id: row.id,
+          componentId: row.component_id,
+          versionNumber: row.version_number,
+          schemaVersion: row.schema_version,
+          layouts: parsedLayouts,
+          exposedProperties:
+            typeof row.exposed_properties === "string"
+              ? JSON.parse(row.exposed_properties)
+              : (row.exposed_properties ?? []),
+          dependencies:
+            typeof row.dependencies === "string"
+              ? JSON.parse(row.dependencies)
+              : (row.dependencies ?? []),
+          changelog: row.changelog,
+          authorId: row.author_id,
+          createdAt:
+            row.created_at instanceof Date
+              ? row.created_at.toISOString()
+              : String(row.created_at),
+        };
+
+        resolved[id] = details;
+
+        const nestedIds = new Set<string>();
+        if (parsedLayouts && typeof parsedLayouts === "object") {
+          for (const componentRoot of Object.values(parsedLayouts)) {
+            if (componentRoot && typeof componentRoot === "object") {
+              extractVersionIdsFromNode(componentRoot as LayoutNode, nestedIds);
+            }
+          }
+        }
+
+        if (nestedIds.size > 0) {
+          await resolveRecursive(nestedIds);
+        }
+
+        visitingPath.delete(id);
+      }
+    };
+
+    await resolveRecursive(initialIds);
+    return resolved;
   }
 
   async autosaveSheetDraft(
@@ -312,7 +430,6 @@ export class SheetBuilderService {
       );
     }
 
-    // Validate layout constraints for all targets
     const validationErrors: string[] = [];
     for (const [targetName, rootNode] of Object.entries(input.layouts)) {
       const check = validateLayoutNodeConstraints(rootNode);
@@ -395,7 +512,6 @@ export class SheetBuilderService {
       );
     }
 
-    // Check all constraints
     for (const [targetName, rootNode] of Object.entries(parsedLayouts.data)) {
       const check = validateLayoutNodeConstraints(rootNode);
       if (!check.valid) {
@@ -407,6 +523,9 @@ export class SheetBuilderService {
       }
     }
 
+    // Resolve and freeze all component dependencies immutably
+    const dependenciesSnapshot = await this.resolveComponentDependencies(parsedLayouts.data);
+
     const latestVersion = await this.db
       .selectFrom("sheet_versions")
       .where("sheet_definition_id", "=", sheetDefinitionId)
@@ -414,6 +533,12 @@ export class SheetBuilderService {
       .executeTakeFirst();
 
     const nextVersionNumber = Number(latestVersion?.maxVer ?? 0) + 1;
+
+    const draftFields = draft.fields
+      ? typeof draft.fields === "string"
+        ? JSON.parse(draft.fields)
+        : draft.fields
+      : [];
 
     return this.db.transaction().execute(async (trx) => {
       const published = await trx
@@ -423,7 +548,8 @@ export class SheetBuilderService {
           version_number: nextVersionNumber,
           schema_version: draft.schema_version,
           layouts: JSON.stringify(layouts),
-          dependencies: JSON.stringify([]),
+          fields: JSON.stringify(draftFields),
+          dependencies: JSON.stringify(dependenciesSnapshot),
           changelog: input.changelog,
           published_by: userId,
         })
@@ -490,6 +616,16 @@ export class SheetBuilderService {
         ? JSON.parse(version.layouts)
         : version.layouts;
 
+    const fields =
+      typeof version.fields === "string"
+        ? JSON.parse(version.fields)
+        : (version.fields ?? []);
+
+    const dependencies =
+      typeof version.dependencies === "string"
+        ? JSON.parse(version.dependencies)
+        : (version.dependencies ?? {});
+
     return {
       id: version.id,
       sheetDefinitionId: version.sheet_definition_id,
@@ -498,6 +634,8 @@ export class SheetBuilderService {
       versionNumber: version.version_number,
       schemaVersion: version.schema_version,
       layouts,
+      fields,
+      dependencies,
       changelog: version.changelog,
       publishedBy: version.published_by,
       publishedAt:

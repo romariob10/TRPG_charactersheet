@@ -29,6 +29,9 @@ const baseNodeProps = {
   name: z.string().trim().max(120).optional(),
 };
 
+export const textFontFamilySchema = z.enum(["Montserrat Alternates", "Noto Sans", "default"]);
+export const textFontWeightSchema = z.enum(["normal", "medium", "bold", "400", "500", "600", "700"]);
+
 export const textNodeSchema = z.object({
   ...baseNodeProps,
   kind: z.literal("text"),
@@ -36,6 +39,11 @@ export const textNodeSchema = z.object({
   variant: textVariantSchema.default("body"),
   align: textAlignSchema.default("left"),
   weight: textWeightSchema.default("normal"),
+  fontFamily: textFontFamilySchema.default("default"),
+  fontSize: z.number().finite().min(6).max(120).optional(),
+  fontWeight: textFontWeightSchema.optional(),
+  letterSpacing: z.number().finite().min(-0.20).max(0.20).optional(),
+  lineHeight: z.number().finite().min(0.8).max(2.5).optional(),
   uppercase: z.boolean().default(false),
   color: strokeTokenSchema.default("default"),
 });

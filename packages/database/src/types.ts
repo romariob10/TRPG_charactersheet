@@ -169,7 +169,7 @@ export interface TemplateCommentsTable {
 
 export interface CharactersTable {
   id: Uuid;
-  template_id: string;
+  template_id: string | null;
   owner_id: string;
   name: string;
   slug: Generated<string>;
@@ -310,6 +310,7 @@ export interface PostsTable {
   updated_at: Timestamp;
   deleted_at: Timestamp | null;
   system_id: string | null;
+  game_system_id: string | null;
 }
 
 export interface PostImagesTable {
@@ -454,7 +455,7 @@ export interface WorkspaceItemsTable {
 
 export interface SystemMaterialsTable {
   id: Uuid;
-  template_id: string;
+  template_id: string | null;
   uploader_id: string | null;
   title: string;
   storage_path: string;
@@ -526,6 +527,7 @@ export interface SheetVersionsTable {
   version_number: number;
   schema_version: number;
   layouts: Json;
+  fields: Json;
   dependencies: Json;
   changelog: string;
   published_by: string;
@@ -610,6 +612,15 @@ export interface CharacterRepeaterMutationsTable {
   created_at: Timestamp;
 }
 
+export interface CharacterSheetFieldValuesTable {
+  character_id: string;
+  field_key: string;
+  value: Json | null;
+  version: number;
+  updated_by: string | null;
+  updated_at: Timestamp;
+}
+
 export interface Database {
   users: UsersTable;
   profiles: ProfilesTable;
@@ -662,4 +673,5 @@ export interface Database {
   character_repeater_rows: CharacterRepeaterRowsTable;
   character_repeater_values: CharacterRepeaterValuesTable;
   character_repeater_mutations: CharacterRepeaterMutationsTable;
+  character_sheet_field_values: CharacterSheetFieldValuesTable;
 }

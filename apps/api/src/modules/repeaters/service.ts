@@ -3,19 +3,29 @@ import type {
   AddRepeaterRowRequest,
   CharacterRepeaterRow,
   ReorderRepeaterRowsRequest,
+  RepeaterRowValue,
   UpdateRepeaterRowFieldRequest,
 } from "@mycharacter/contracts";
 import type { Kysely } from "kysely";
 import { sql } from "kysely";
 import { AppError } from "../../errors.js";
 
-function parseJsonValue(v: unknown): unknown {
-  if (typeof v !== "string") return v;
-  try {
-    return JSON.parse(v);
-  } catch {
+function parseJsonValue(v: unknown): RepeaterRowValue {
+  if (v === null) return null;
+  if (typeof v === "boolean" || typeof v === "number") return v;
+  if (typeof v === "string") {
+    try {
+      const parsed: unknown = JSON.parse(v);
+      if (parsed === null) return null;
+      if (typeof parsed === "boolean" || typeof parsed === "number" || typeof parsed === "string") {
+        return parsed;
+      }
+    } catch {
+      return v;
+    }
     return v;
   }
+  return null;
 }
 
 export class RepeaterService {
@@ -50,7 +60,7 @@ export class RepeaterService {
       .selectAll()
       .execute();
 
-    const valueMap = new Map<string, Record<string, any>>();
+    const valueMap = new Map<string, Record<string, RepeaterRowValue>>();
     for (const v of values) {
       if (!valueMap.has(v.row_id)) {
         valueMap.set(v.row_id, {});
@@ -347,7 +357,7 @@ export class RepeaterService {
       .selectAll()
       .execute();
 
-    const valObj: Record<string, any> = {};
+    const valObj: Record<string, RepeaterRowValue> = {};
     for (const v of values) {
       valObj[v.slot_id] = parseJsonValue(v.value);
     }

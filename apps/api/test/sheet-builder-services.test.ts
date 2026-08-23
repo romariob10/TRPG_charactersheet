@@ -58,7 +58,7 @@ describe("Sheet Builder & Component Library Services", () => {
     });
 
     expect(system.title).toBe("XolonoFade Core");
-    expect(system.isOwner).toBe(true);
+    expect(system.defaultSheetId).toBeDefined();
 
     // Stranger cannot edit
     await expect(

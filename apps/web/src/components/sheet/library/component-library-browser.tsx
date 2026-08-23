@@ -7,7 +7,7 @@ import type {
   ComponentVersionDetails,
   ListComponentsResponse,
 } from "@mycharacter/contracts";
-import { ComponentCard } from "./component-card.js";
+import { ComponentCard } from "./component-card";
 
 interface ComponentLibraryBrowserProps {
   systemId?: string;

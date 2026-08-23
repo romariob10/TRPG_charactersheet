@@ -12,7 +12,7 @@ import type {
   TextNode,
   TextareaNode,
 } from "@mycharacter/contracts";
-import { useSheetRender } from "./sheet-render-context.js";
+import { useSheetRender } from "./sheet-render-context";
 
 const TEXT_VARIANTS = {
   body: "text-sm text-foreground",
@@ -32,11 +32,33 @@ export const RenderText: React.FC<{ node: TextNode }> = ({ node }) => {
   const variantClass = TEXT_VARIANTS[node.variant] || TEXT_VARIANTS.body;
   const alignClass = TEXT_ALIGNS[node.align] || TEXT_ALIGNS.left;
 
+  const fontStyle: React.CSSProperties = {
+    fontFamily:
+      node.fontFamily === "Montserrat Alternates"
+        ? "'Montserrat Alternates', sans-serif"
+        : node.fontFamily === "Noto Sans"
+          ? "'Noto Sans', sans-serif"
+          : undefined,
+    fontSize: node.fontSize !== undefined ? `${node.fontSize}px` : undefined,
+    fontWeight:
+      node.fontWeight !== undefined
+        ? node.fontWeight
+        : node.weight === "bold"
+          ? 700
+          : node.weight === "medium"
+            ? 500
+            : 400,
+    letterSpacing:
+      node.letterSpacing !== undefined ? `${node.letterSpacing}em` : undefined,
+    lineHeight: node.lineHeight !== undefined ? node.lineHeight : undefined,
+  };
+
   return (
     <div
+      style={fontStyle}
       className={`${variantClass} ${alignClass} ${
         node.uppercase ? "uppercase" : ""
-      } ${node.weight === "bold" ? "font-bold" : node.weight === "medium" ? "font-medium" : "font-normal"}`}
+      }`}
     >
       {node.text || <span className="opacity-40 italic">Empty text</span>}
     </div>
