@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import { useTranslations } from "next-intl";
 import type {
   BoxProps,
   FillToken,
@@ -35,6 +36,7 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
   draftFields = [],
   onUpdateDraftFields,
 }) => {
+  const t = useTranslations("Inspector");
   const [linkPadding, setLinkPadding] = useState(true);
   const [linkStroke, setLinkStroke] = useState(true);
   const [linkRadius, setLinkRadius] = useState(true);
@@ -47,7 +49,7 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
   if (!selectedNode) {
     return (
       <div className="p-6 text-center text-xs text-muted-foreground italic">
-        Select an element on the canvas or layers tree to inspect properties.
+        {t("noSelection")}
       </div>
     );
   }
@@ -121,11 +123,11 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
             onClick={() => onSaveAsComponent(selectedNode)}
             className="text-[11px] font-semibold text-primary hover:underline"
           >
-            Save as Component…
+            {t("saveAsComponent")}
           </button>
         </div>
         <div>
-          <label className="text-[10px] font-medium text-muted-foreground">Name</label>
+          <label className="text-[10px] font-medium text-muted-foreground">{t("name")}</label>
           <input
             type="text"
             value={selectedNode.name || ""}
@@ -140,11 +142,11 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
       {selectedNode.kind === "text" && (
         <div className="flex flex-col gap-3 pb-3 border-b border-border">
           <h4 className="font-bold text-[11px] text-muted-foreground uppercase tracking-wider">
-            Typography & Font
+            {t("typography")}
           </h4>
 
           <div>
-            <label className="text-[10px] font-medium text-muted-foreground">Text Content</label>
+            <label className="text-[10px] font-medium text-muted-foreground">{t("textContent")}</label>
             <input
               type="text"
               value={selectedNode.text}
@@ -155,7 +157,7 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
 
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="text-[10px] font-medium text-muted-foreground">Font Family</label>
+              <label className="text-[10px] font-medium text-muted-foreground">{t("fontFamily")}</label>
               <select
                 value={selectedNode.fontFamily || "Noto Sans"}
                 onChange={(e) =>
@@ -172,7 +174,7 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
             </div>
 
             <div>
-              <label className="text-[10px] font-medium text-muted-foreground">Weight</label>
+              <label className="text-[10px] font-medium text-muted-foreground">{t("fontWeight")}</label>
               <select
                 value={selectedNode.fontWeight || (selectedNode.weight === "bold" ? "700" : selectedNode.weight === "medium" ? "500" : "400")}
                 onChange={(e) => {
@@ -185,10 +187,10 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
                 }}
                 className="w-full mt-0.5 px-2 py-1 bg-background border border-border rounded"
               >
-                <option value="400">400 (Regular)</option>
-                <option value="500">500 (Medium)</option>
-                <option value="600">600 (SemiBold)</option>
-                <option value="700">700 (Bold)</option>
+                <option value="400">{t("weightNormal")}</option>
+                <option value="500">{t("weightMedium")}</option>
+                <option value="600">{t("weightSemibold")}</option>
+                <option value="700">{t("weightBold")}</option>
               </select>
             </div>
           </div>
@@ -196,7 +198,7 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
           {/* Font Size & Presets */}
           <div>
             <div className="flex items-center justify-between">
-              <label className="text-[10px] font-medium text-muted-foreground">Font Size (px)</label>
+              <label className="text-[10px] font-medium text-muted-foreground">{t("fontSize")}</label>
               <span className="text-[10px] text-muted-foreground">{selectedNode.fontSize || 14}px</span>
             </div>
             <input
@@ -234,7 +236,7 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
           <div className="grid grid-cols-2 gap-2">
             <div>
               <div className="flex items-center justify-between">
-                <label className="text-[10px] font-medium text-muted-foreground">Tracking (em)</label>
+                <label className="text-[10px] font-medium text-muted-foreground">{t("trackingEm")}</label>
                 <span className="text-[10px] text-muted-foreground">{selectedNode.letterSpacing ?? 0}em</span>
               </div>
               <input
@@ -266,7 +268,7 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
 
             <div>
               <div className="flex items-center justify-between">
-                <label className="text-[10px] font-medium text-muted-foreground">Line Height</label>
+                <label className="text-[10px] font-medium text-muted-foreground">{t("lineHeight")}</label>
                 <span className="text-[10px] text-muted-foreground">{selectedNode.lineHeight ?? 1.2}</span>
               </div>
               <input
@@ -296,7 +298,7 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
                 }
                 className="rounded"
               />
-              <span className="text-[11px]">Uppercase</span>
+              <span className="text-[11px]">{t("uppercase")}</span>
             </label>
           </div>
         </div>
@@ -306,12 +308,12 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
       {selectedNode.kind === "frame" && (
         <div className="flex flex-col gap-3 pb-3 border-b border-border">
           <h4 className="font-bold text-[11px] text-muted-foreground uppercase tracking-wider">
-            Auto Layout
+            {t("layoutSection")}
           </h4>
 
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="text-[10px] font-medium text-muted-foreground">Direction</label>
+              <label className="text-[10px] font-medium text-muted-foreground">{t("direction")}</label>
               <select
                 value={selectedNode.direction}
                 onChange={(e) =>
@@ -322,13 +324,13 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
                 }
                 className="w-full mt-0.5 px-2 py-1 bg-background border border-border rounded"
               >
-                <option value="vertical">Vertical (Column)</option>
-                <option value="horizontal">Horizontal (Row)</option>
+                <option value="vertical">{t("directionVertical")}</option>
+                <option value="horizontal">{t("directionHorizontal")}</option>
               </select>
             </div>
 
             <div>
-              <label className="text-[10px] font-medium text-muted-foreground">Gap (px)</label>
+              <label className="text-[10px] font-medium text-muted-foreground">{t("gap")}</label>
               <input
                 type="number"
                 min="0"
@@ -344,7 +346,7 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
 
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="text-[10px] font-medium text-muted-foreground">Align Items</label>
+              <label className="text-[10px] font-medium text-muted-foreground">{t("alignment")}</label>
               <select
                 value={selectedNode.align}
                 onChange={(e) =>
@@ -355,15 +357,15 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
                 }
                 className="w-full mt-0.5 px-2 py-1 bg-background border border-border rounded"
               >
-                <option value="start">Start</option>
-                <option value="center">Center</option>
-                <option value="end">End</option>
-                <option value="stretch">Stretch</option>
+                <option value="start">{t("alignStart")}</option>
+                <option value="center">{t("alignCenter")}</option>
+                <option value="end">{t("alignEnd")}</option>
+                <option value="stretch">{t("alignStretch")}</option>
               </select>
             </div>
 
             <div>
-              <label className="text-[10px] font-medium text-muted-foreground">Justify</label>
+              <label className="text-[10px] font-medium text-muted-foreground">{t("justify")}</label>
               <select
                 value={selectedNode.justify}
                 onChange={(e) =>
@@ -374,10 +376,10 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
                 }
                 className="w-full mt-0.5 px-2 py-1 bg-background border border-border rounded"
               >
-                <option value="start">Start</option>
-                <option value="center">Center</option>
-                <option value="end">End</option>
-                <option value="space-between">Space Between</option>
+                <option value="start">{t("justifyStart")}</option>
+                <option value="center">{t("justifyCenter")}</option>
+                <option value="end">{t("justifyEnd")}</option>
+                <option value="space-between">{t("justifyBetween")}</option>
               </select>
             </div>
           </div>
@@ -392,7 +394,7 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
                 }
                 className="rounded"
               />
-              <span className="text-[11px]">Wrap</span>
+              <span className="text-[11px]">{t("wrap")}</span>
             </label>
 
             <label className="flex items-center gap-1.5 cursor-pointer select-none">
@@ -407,7 +409,7 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
                 }
                 className="rounded"
               />
-              <span className="text-[11px]">Collapse Strokes</span>
+              <span className="text-[11px]">{t("collapseStrokes")}</span>
             </label>
           </div>
         </div>
@@ -417,11 +419,11 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
       {selectedNode.kind === "frame" && (
         <div className="flex flex-col gap-3 pb-3 border-b border-border">
           <h4 className="font-bold text-[11px] text-muted-foreground uppercase tracking-wider">
-            Corner Ornaments (Fate Turnbacks)
+            {t("cornerOrnamentsSection")}
           </h4>
 
           <div>
-            <label className="text-[10px] font-medium text-muted-foreground">Corner Style Preset</label>
+            <label className="text-[10px] font-medium text-muted-foreground">{t("cornerPreset")}</label>
             <select
               value={selectedNode.cornerOrnaments?.preset || "none"}
               onChange={(e) =>
@@ -438,9 +440,9 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
               }
               className="w-full mt-0.5 px-2 py-1 bg-background border border-border rounded"
             >
-              <option value="none">None</option>
-              <option value="fate-turnback">Fate Turnback (10x10)</option>
-              <option value="arc-corner">Arc Corner (Legacy)</option>
+              <option value="none">{t("presetNone")}</option>
+              <option value="fate-turnback">{t("presetFateTurnback")}</option>
+              <option value="arc-corner">{t("presetArcCorner")}</option>
             </select>
           </div>
 
@@ -464,7 +466,7 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
                   }
                   className="rounded"
                 />
-                <span>Top-Left</span>
+                <span>{t("cornerTopLeft")}</span>
               </label>
 
               <label className="flex items-center gap-1.5 cursor-pointer select-none text-[10px]">
@@ -485,7 +487,7 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
                   }
                   className="rounded"
                 />
-                <span>Top-Right</span>
+                <span>{t("cornerTopRight")}</span>
               </label>
 
               <label className="flex items-center gap-1.5 cursor-pointer select-none text-[10px]">
@@ -506,7 +508,7 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
                   }
                   className="rounded"
                 />
-                <span>Bottom-Left</span>
+                <span>{t("cornerBottomLeft")}</span>
               </label>
 
               <label className="flex items-center gap-1.5 cursor-pointer select-none text-[10px]">
@@ -527,7 +529,7 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
                   }
                   className="rounded"
                 />
-                <span>Bottom-Right</span>
+                <span>{t("cornerBottomRight")}</span>
               </label>
             </div>
           )}
@@ -535,18 +537,18 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
           {/* Top Title Ornament */}
           <div className="flex flex-col gap-2 pt-2 border-t border-border/50">
             <h5 className="font-bold text-[10px] text-muted-foreground uppercase tracking-wider">
-              Top Title Ornament
+              {t("topOrnament")}
             </h5>
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="text-[10px] font-medium text-muted-foreground">Preset</label>
+                <label className="text-[10px] font-medium text-muted-foreground">{t("edgePreset")}</label>
                 <select
                   value={selectedNode.topOrnament?.preset || "none"}
                   onChange={(e) =>
                     onUpdateNode({
                       ...selectedNode,
                       topOrnament: {
-                        preset: e.target.value as "none" | "fate" | "dnd" | "legacy-pill",
+                        preset: e.target.value as "none" | "fate" | "dnd-chevron" | "dnd-diamond" | "legacy-pill",
                         align: selectedNode.topOrnament?.align || "center",
                         offset: selectedNode.topOrnament?.offset || 0,
                         text: selectedNode.topOrnament?.text || "",
@@ -559,15 +561,16 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
                   }
                   className="w-full mt-0.5 px-2 py-1 bg-background border border-border rounded"
                 >
-                  <option value="none">None</option>
-                  <option value="fate">Fate Core Badge</option>
-                  <option value="dnd">D&D Faceted Badge</option>
-                  <option value="legacy-pill">Plain Pill</option>
+                  <option value="none">{t("presetNone")}</option>
+                  <option value="fate">{t("presetFate")}</option>
+                  <option value="dnd-chevron">{t("presetDndChevron")}</option>
+                  <option value="dnd-diamond">{t("presetDndDiamond")}</option>
+                  <option value="legacy-pill">{t("presetLegacyPill")}</option>
                 </select>
               </div>
 
               <div>
-                <label className="text-[10px] font-medium text-muted-foreground">Alignment</label>
+                <label className="text-[10px] font-medium text-muted-foreground">{t("edgeAlign")}</label>
                 <select
                   value={selectedNode.topOrnament?.align || "center"}
                   onChange={(e) =>
@@ -587,15 +590,15 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
                   }
                   className="w-full mt-0.5 px-2 py-1 bg-background border border-border rounded"
                 >
-                  <option value="start">Start</option>
-                  <option value="center">Center</option>
-                  <option value="end">End</option>
+                  <option value="start">{t("alignStart")}</option>
+                  <option value="center">{t("alignCenter")}</option>
+                  <option value="end">{t("alignEnd")}</option>
                 </select>
               </div>
             </div>
 
             <div>
-              <label className="text-[10px] font-medium text-muted-foreground">Title Text</label>
+              <label className="text-[10px] font-medium text-muted-foreground">{t("edgeText")}</label>
               <input
                 type="text"
                 value={selectedNode.topOrnament?.text || ""}
@@ -614,15 +617,15 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
                     },
                   })
                 }
-                placeholder="e.g. ASPECTS or SKILLS"
-                className="w-full mt-0.5 px-2 py-1 bg-background border border-border rounded uppercase"
+                placeholder={t("edgeTextPlaceholder")}
+                className="w-full mt-0.5 px-2 py-1 bg-background border border-border rounded"
               />
             </div>
 
             {selectedNode.topOrnament?.preset && selectedNode.topOrnament.preset !== "none" && (
               <div className="grid grid-cols-2 gap-2 bg-muted/20 p-2 rounded">
                 <div>
-                  <label className="text-[10px] font-medium text-muted-foreground">Font Size (px)</label>
+                  <label className="text-[10px] font-medium text-muted-foreground">{t("fontSize")}</label>
                   <input
                     type="number"
                     min="6"
@@ -647,7 +650,7 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] font-medium text-muted-foreground">Tracking (px)</label>
+                  <label className="text-[10px] font-medium text-muted-foreground">{t("letterSpacingPx")}</label>
                   <input
                     type="number"
                     step="0.1"
@@ -679,18 +682,18 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
           {/* Bottom Title Ornament */}
           <div className="flex flex-col gap-2 pt-2 border-t border-border/50">
             <h5 className="font-bold text-[10px] text-muted-foreground uppercase tracking-wider">
-              Bottom Edge Ornament
+              {t("bottomOrnament")}
             </h5>
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="text-[10px] font-medium text-muted-foreground">Preset</label>
+                <label className="text-[10px] font-medium text-muted-foreground">{t("edgePreset")}</label>
                 <select
                   value={selectedNode.bottomOrnament?.preset || "none"}
                   onChange={(e) =>
                     onUpdateNode({
                       ...selectedNode,
                       bottomOrnament: {
-                        preset: e.target.value as "none" | "fate" | "dnd" | "legacy-pill",
+                        preset: e.target.value as "none" | "fate" | "dnd-chevron" | "dnd-diamond" | "legacy-pill",
                         align: selectedNode.bottomOrnament?.align || "center",
                         offset: selectedNode.bottomOrnament?.offset || 0,
                         text: selectedNode.bottomOrnament?.text || "",
@@ -703,15 +706,16 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
                   }
                   className="w-full mt-0.5 px-2 py-1 bg-background border border-border rounded"
                 >
-                  <option value="none">None</option>
-                  <option value="fate">Fate Core Badge</option>
-                  <option value="dnd">D&D Faceted Badge</option>
-                  <option value="legacy-pill">Plain Pill</option>
+                  <option value="none">{t("presetNone")}</option>
+                  <option value="fate">{t("presetFate")}</option>
+                  <option value="dnd-chevron">{t("presetDndChevron")}</option>
+                  <option value="dnd-diamond">{t("presetDndDiamond")}</option>
+                  <option value="legacy-pill">{t("presetLegacyPill")}</option>
                 </select>
               </div>
 
               <div>
-                <label className="text-[10px] font-medium text-muted-foreground">Alignment</label>
+                <label className="text-[10px] font-medium text-muted-foreground">{t("edgeAlign")}</label>
                 <select
                   value={selectedNode.bottomOrnament?.align || "center"}
                   onChange={(e) =>
@@ -731,15 +735,15 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
                   }
                   className="w-full mt-0.5 px-2 py-1 bg-background border border-border rounded"
                 >
-                  <option value="start">Start</option>
-                  <option value="center">Center</option>
-                  <option value="end">End</option>
+                  <option value="start">{t("alignStart")}</option>
+                  <option value="center">{t("alignCenter")}</option>
+                  <option value="end">{t("alignEnd")}</option>
                 </select>
               </div>
             </div>
 
             <div>
-              <label className="text-[10px] font-medium text-muted-foreground">Footer Text</label>
+              <label className="text-[10px] font-medium text-muted-foreground">{t("footerText")}</label>
               <input
                 type="text"
                 value={selectedNode.bottomOrnament?.text || ""}
@@ -758,7 +762,7 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
                     },
                   })
                 }
-                placeholder="Footer note…"
+                placeholder={t("footerTextPlaceholder")}
                 className="w-full mt-0.5 px-2 py-1 bg-background border border-border rounded"
               />
             </div>
@@ -775,19 +779,19 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
         <div className="flex flex-col gap-3 pb-3 border-b border-border">
           <div className="flex items-center justify-between">
             <h4 className="font-bold text-[11px] text-muted-foreground uppercase tracking-wider">
-              Semantic Field Binding
+              {t("fieldBindingSection")}
             </h4>
             <button
               type="button"
               onClick={() => setShowNewFieldModal(true)}
               className="inline-flex items-center gap-1 text-[10px] font-semibold text-primary hover:underline"
             >
-              <Plus className="size-3" /> New Field
+              <Plus className="size-3" /> {t("createNewField")}
             </button>
           </div>
 
           <div>
-            <label className="text-[10px] font-medium text-muted-foreground">Bound Field Key</label>
+            <label className="text-[10px] font-medium text-muted-foreground">{t("bindField")}</label>
             <div className="flex items-center gap-1 mt-0.5">
               <select
                 value={selectedNode.fieldBinding || ""}
@@ -802,7 +806,7 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
                 }}
                 className="w-full px-2 py-1 bg-background border border-border rounded font-mono"
               >
-                <option value="">-- Choose Field --</option>
+                <option value="">{t("noBinding")}</option>
                 {draftFields.map((f) => (
                   <option key={f.key} value={f.key}>
                     {f.label} ({f.key}) [{f.kind}]
@@ -812,7 +816,7 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
             </div>
             <input
               type="text"
-              placeholder="Or type custom key..."
+              placeholder={t("customFieldKeyPlaceholder")}
               value={selectedNode.fieldBinding || ""}
               onChange={(e) =>
                 onUpdateNode({ ...selectedNode, fieldBinding: e.target.value } as LayoutNode)
@@ -822,7 +826,7 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
           </div>
 
           <div>
-            <label className="text-[10px] font-medium text-muted-foreground">Widget Label</label>
+            <label className="text-[10px] font-medium text-muted-foreground">{t("fieldLabel")}</label>
             <input
               type="text"
               value={selectedNode.label || ""}
@@ -842,7 +846,7 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
               }
               className="rounded"
             />
-            <span className="text-[11px]">Read-only display</span>
+            <span className="text-[11px]">{t("readOnly")}</span>
           </label>
         </div>
       )}
@@ -850,12 +854,12 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
       {/* Sizing & Dimensions */}
       <div className="flex flex-col gap-3 pb-3 border-b border-border">
         <h4 className="font-bold text-[11px] text-muted-foreground uppercase tracking-wider">
-          Dimensions & Sizing
+          {t("dimensionsSection")}
         </h4>
 
         <div className="grid grid-cols-2 gap-2">
           <div>
-            <label className="text-[10px] font-medium text-muted-foreground">Width</label>
+            <label className="text-[10px] font-medium text-muted-foreground">{t("width")}</label>
             <select
               value={selectedNode.box.width.mode}
               onChange={(e) => {
@@ -866,15 +870,15 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
               }}
               className="w-full mt-0.5 px-2 py-1 bg-background border border-border rounded"
             >
-              <option value="fill">Fill Container</option>
-              <option value="hug">Hug Contents</option>
-              <option value="fixed">Fixed (px)</option>
+              <option value="fill">{t("modeFill")}</option>
+              <option value="hug">{t("modeHug")}</option>
+              <option value="fixed">{t("modeFixed")}</option>
             </select>
           </div>
 
           {selectedNode.box.width.mode === "fixed" && (
             <div>
-              <label className="text-[10px] font-medium text-muted-foreground">Fixed Width</label>
+              <label className="text-[10px] font-medium text-muted-foreground">{t("fixedWidth")}</label>
               <input
                 type="number"
                 min="10"
@@ -892,7 +896,7 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
 
         <div className="grid grid-cols-2 gap-2">
           <div>
-            <label className="text-[10px] font-medium text-muted-foreground">Height</label>
+            <label className="text-[10px] font-medium text-muted-foreground">{t("height")}</label>
             <select
               value={selectedNode.box.height.mode}
               onChange={(e) => {
@@ -903,15 +907,15 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
               }}
               className="w-full mt-0.5 px-2 py-1 bg-background border border-border rounded"
             >
-              <option value="hug">Hug Contents</option>
-              <option value="fill">Fill Container</option>
-              <option value="fixed">Fixed (px)</option>
+              <option value="hug">{t("modeHug")}</option>
+              <option value="fill">{t("modeFill")}</option>
+              <option value="fixed">{t("modeFixed")}</option>
             </select>
           </div>
 
           {selectedNode.box.height.mode === "fixed" && (
             <div>
-              <label className="text-[10px] font-medium text-muted-foreground">Fixed Height</label>
+              <label className="text-[10px] font-medium text-muted-foreground">{t("fixedHeight")}</label>
               <input
                 type="number"
                 min="10"
@@ -930,13 +934,13 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
         {/* 4-side Padding */}
         <div className="flex flex-col gap-1">
           <div className="flex items-center justify-between">
-            <span className="text-[10px] font-medium text-muted-foreground">Padding</span>
+            <span className="text-[10px] font-medium text-muted-foreground">{t("padding")}</span>
             <button
               type="button"
               onClick={() => setLinkPadding(!linkPadding)}
               className="text-[10px] text-primary hover:underline"
             >
-              {linkPadding ? "Unlink" : "Link"}
+              {linkPadding ? t("unlink") : t("link")}
             </button>
           </div>
           {linkPadding ? (
@@ -976,13 +980,13 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
         {/* 4-side Stroke */}
         <div className="flex flex-col gap-1">
           <div className="flex items-center justify-between">
-            <span className="text-[10px] font-medium text-muted-foreground">Border Stroke</span>
+            <span className="text-[10px] font-medium text-muted-foreground">{t("strokeWidth")}</span>
             <button
               type="button"
               onClick={() => setLinkStroke(!linkStroke)}
               className="text-[10px] text-primary hover:underline"
             >
-              {linkStroke ? "Unlink" : "Link"}
+              {linkStroke ? t("unlink") : t("link")}
             </button>
           </div>
           {linkStroke ? (
@@ -1022,13 +1026,13 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
         {/* 4-corner Radius */}
         <div className="flex flex-col gap-1">
           <div className="flex items-center justify-between">
-            <span className="text-[10px] font-medium text-muted-foreground">Corner Radius</span>
+            <span className="text-[10px] font-medium text-muted-foreground">{t("cornerRadius")}</span>
             <button
               type="button"
               onClick={() => setLinkRadius(!linkRadius)}
               className="text-[10px] text-primary hover:underline"
             >
-              {linkRadius ? "Unlink" : "Link"}
+              {linkRadius ? t("unlink") : t("link")}
             </button>
           </div>
           {linkRadius ? (
@@ -1069,12 +1073,12 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
       {/* Color Tokens */}
       <div className="flex flex-col gap-3 pb-3 border-b border-border">
         <h4 className="font-bold text-[11px] text-muted-foreground uppercase tracking-wider">
-          Colors & Fill
+          {t("colorsSection")}
         </h4>
 
         <div className="grid grid-cols-2 gap-2">
           <div>
-            <label className="text-[10px] font-medium text-muted-foreground">Fill Token</label>
+            <label className="text-[10px] font-medium text-muted-foreground">{t("fillToken")}</label>
             <select
               value={selectedNode.box.fill}
               onChange={(e) => updateBox({ fill: e.target.value as FillToken })}
@@ -1089,7 +1093,7 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
           </div>
 
           <div>
-            <label className="text-[10px] font-medium text-muted-foreground">Stroke Token</label>
+            <label className="text-[10px] font-medium text-muted-foreground">{t("strokeColor")}</label>
             <select
               value={selectedNode.box.strokeColor}
               onChange={(e) => updateBox({ strokeColor: e.target.value as StrokeToken })}
@@ -1108,23 +1112,23 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
       {/* Responsive Target Visibility */}
       <div className="flex flex-col gap-2">
         <h4 className="font-bold text-[11px] text-muted-foreground uppercase tracking-wider">
-          Target Visibility
+          {t("targetVisibility")}
         </h4>
         <div className="grid grid-cols-2 gap-2">
-          {TARGET_LAYOUT_KINDS.map((t) => {
-            const isHidden = selectedNode.box.hiddenOnTargets?.includes(t);
+          {TARGET_LAYOUT_KINDS.map((target) => {
+            const isHidden = selectedNode.box.hiddenOnTargets?.includes(target);
             return (
               <label
-                key={t}
+                key={target}
                 className="flex items-center gap-1.5 p-1.5 rounded border border-border bg-card cursor-pointer select-none"
               >
                 <input
                   type="checkbox"
                   checked={!isHidden}
-                  onChange={() => toggleTargetVisibility(t)}
+                  onChange={() => toggleTargetVisibility(target)}
                   className="rounded"
                 />
-                <span className="text-xs capitalize">{t}</span>
+                <span className="text-xs">{t(`target.${target}`)}</span>
               </label>
             );
           })}
@@ -1135,14 +1139,14 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
       {showNewFieldModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-sm rounded-[var(--radius-card)] border border-border bg-card p-5 shadow-lg">
-            <h3 className="text-sm font-bold">New Semantic Field Definition</h3>
+            <h3 className="text-sm font-bold">{t("newFieldTitle")}</h3>
             <form onSubmit={handleCreateField} className="mt-3 space-y-3">
               <div>
-                <label className="text-[11px] font-medium">Field Key *</label>
+                <label className="text-[11px] font-medium">{t("fieldKey")} *</label>
                 <input
                   type="text"
                   required
-                  placeholder="e.g. strength, armor_class"
+                  placeholder={t("fieldKeyPlaceholder")}
                   value={newFieldKey}
                   onChange={(e) => setNewFieldKey(e.target.value)}
                   className="w-full mt-1 px-2.5 py-1.5 bg-background border border-border rounded text-xs font-mono"
@@ -1150,10 +1154,10 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
               </div>
 
               <div>
-                <label className="text-[11px] font-medium">Label</label>
+                <label className="text-[11px] font-medium">{t("fieldLabel")}</label>
                 <input
                   type="text"
-                  placeholder="e.g. Strength, Armor Class"
+                  placeholder={t("fieldLabelPlaceholder")}
                   value={newFieldLabel}
                   onChange={(e) => setNewFieldLabel(e.target.value)}
                   className="w-full mt-1 px-2.5 py-1.5 bg-background border border-border rounded text-xs"
@@ -1162,7 +1166,7 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="text-[11px] font-medium">Kind</label>
+                  <label className="text-[11px] font-medium">{t("fieldKind")}</label>
                   <select
                     value={newFieldKind}
                     onChange={(e) =>
@@ -1172,19 +1176,19 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
                     }
                     className="w-full mt-1 px-2 py-1.5 bg-background border border-border rounded text-xs"
                   >
-                    <option value="text">Text</option>
-                    <option value="number">Number</option>
-                    <option value="checkbox">Checkbox</option>
-                    <option value="select">Select</option>
-                    <option value="multiline">Multiline</option>
+                    <option value="text">{t("kindText")}</option>
+                    <option value="number">{t("kindNumber")}</option>
+                    <option value="checkbox">{t("kindCheckbox")}</option>
+                    <option value="select">{t("kindSelect")}</option>
+                    <option value="multiline">{t("kindMultiline")}</option>
                   </select>
                 </div>
 
                 <div>
-                  <label className="text-[11px] font-medium">Default Value</label>
+                  <label className="text-[11px] font-medium">{t("defaultValue")}</label>
                   <input
                     type="text"
-                    placeholder="Optional default"
+                    placeholder={t("defaultValuePlaceholder")}
                     value={newFieldDefault}
                     onChange={(e) => setNewFieldDefault(e.target.value)}
                     className="w-full mt-1 px-2.5 py-1.5 bg-background border border-border rounded text-xs"
@@ -1198,14 +1202,14 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
                   onClick={() => setShowNewFieldModal(false)}
                   className="px-3 py-1.5 text-xs rounded border border-border hover:bg-muted"
                 >
-                  Cancel
+                  {t("cancel")}
                 </button>
                 <button
                   type="submit"
                   disabled={!newFieldKey.trim()}
                   className="px-3.5 py-1.5 text-xs font-semibold rounded bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
                 >
-                  Save & Bind
+                  {t("saveAndBind")}
                 </button>
               </div>
             </form>

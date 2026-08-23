@@ -70,14 +70,18 @@ export class SheetBuilderService {
       id: crypto.randomUUID(),
       kind: "frame" as const,
       direction: "vertical" as const,
-      gap: 16,
+      gap: 9,
       align: "stretch" as const,
       justify: "start" as const,
       wrap: false,
       collapseAdjacentStrokes: false,
-      ornamentStyle: "regular" as const,
-      titleDock: { dock: "none" as const, variant: "none" as const },
-      footerDock: { dock: "none" as const, variant: "none" as const },
+      cornerOrnaments: {
+        preset: "none" as const,
+        topLeft: true,
+        topRight: true,
+        bottomRight: true,
+        bottomLeft: true,
+      },
       box: defaultBoxProps,
       children: [],
     };
@@ -165,14 +169,18 @@ export class SheetBuilderService {
         id: crypto.randomUUID(),
         kind: "frame" as const,
         direction: "vertical" as const,
-        gap: 16,
+        gap: 9,
         align: "stretch" as const,
         justify: "start" as const,
         wrap: false,
         collapseAdjacentStrokes: false,
-        ornamentStyle: "regular" as const,
-        titleDock: { dock: "none" as const, variant: "none" as const },
-        footerDock: { dock: "none" as const, variant: "none" as const },
+        cornerOrnaments: {
+          preset: "none" as const,
+          topLeft: true,
+          topRight: true,
+          bottomRight: true,
+          bottomLeft: true,
+        },
         box: defaultBoxProps,
         children: [],
       };
@@ -205,10 +213,11 @@ export class SheetBuilderService {
       .orderBy("version_number", "desc")
       .execute();
 
-    const parsedLayouts =
+    const storedLayouts =
       typeof draftRow.layouts === "string"
         ? JSON.parse(draftRow.layouts)
         : draftRow.layouts;
+    const parsedLayouts = targetLayoutMapSchema.parse(storedLayouts);
 
     const parsedFields =
       typeof draftRow.fields === "string"
@@ -343,8 +352,9 @@ export class SheetBuilderService {
 
         visitingPath.add(id);
 
-        const parsedLayouts =
+        const storedLayouts =
           typeof row.layouts === "string" ? JSON.parse(row.layouts) : row.layouts;
+        const parsedLayouts = targetLayoutMapSchema.parse(storedLayouts);
 
         const details: ComponentVersionDetails = {
           id: row.id,
@@ -430,8 +440,9 @@ export class SheetBuilderService {
       );
     }
 
+    const normalizedLayouts = targetLayoutMapSchema.parse(input.layouts);
     const validationErrors: string[] = [];
-    for (const [targetName, rootNode] of Object.entries(input.layouts)) {
+    for (const [targetName, rootNode] of Object.entries(normalizedLayouts)) {
       const check = validateLayoutNodeConstraints(rootNode);
       if (!check.valid) {
         validationErrors.push(
@@ -447,7 +458,7 @@ export class SheetBuilderService {
       .updateTable("sheet_drafts")
       .set({
         revision: nextRevision,
-        layouts: JSON.stringify(input.layouts),
+        layouts: JSON.stringify(normalizedLayouts),
         fields: JSON.stringify(input.fields ?? []),
         updated_by: userId,
         updated_at: now,
@@ -547,7 +558,7 @@ export class SheetBuilderService {
           sheet_definition_id: sheetDefinitionId,
           version_number: nextVersionNumber,
           schema_version: draft.schema_version,
-          layouts: JSON.stringify(layouts),
+          layouts: JSON.stringify(parsedLayouts.data),
           fields: JSON.stringify(draftFields),
           dependencies: JSON.stringify(dependenciesSnapshot),
           changelog: input.changelog,
@@ -611,10 +622,11 @@ export class SheetBuilderService {
       throw new AppError("VERSION_NOT_FOUND", 404, "Sheet version not found.");
     }
 
-    const layouts =
+    const storedLayouts =
       typeof version.layouts === "string"
         ? JSON.parse(version.layouts)
         : version.layouts;
+    const layouts = targetLayoutMapSchema.parse(storedLayouts);
 
     const fields =
       typeof version.fields === "string"

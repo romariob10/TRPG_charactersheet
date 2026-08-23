@@ -6,6 +6,7 @@ import {
   normalizeLayoutNode,
   repeaterConfigSchema,
   sheetBlueprintDocumentSchema,
+  targetLayoutMapSchema,
   validateLayoutNodeConstraints,
 } from "../src/index.js";
 
@@ -248,6 +249,59 @@ describe("Sheet Builder Contracts", () => {
     }
   });
 
+  it("normalizes legacy ornaments at the target-layout API boundary", () => {
+    const legacyRoot = {
+      id: crypto.randomUUID(),
+      kind: "frame",
+      direction: "vertical",
+      gap: 9,
+      align: "stretch",
+      justify: "start",
+      wrap: false,
+      collapseAdjacentStrokes: false,
+      ornamentStyle: "arc-corner",
+      titleDock: {
+        dock: "top",
+        variant: "inline-center",
+        text: "Character name",
+      },
+      footerDock: { dock: "none", variant: "none" },
+      box: {
+        width: { mode: "fill" },
+        height: { mode: "hug" },
+        padding: { top: 0, right: 0, bottom: 0, left: 0 },
+        strokeWidth: { top: 1, right: 1, bottom: 1, left: 1 },
+        strokeColor: "ink",
+        cornerRadius: {
+          topLeft: 0,
+          topRight: 0,
+          bottomRight: 0,
+          bottomLeft: 0,
+        },
+        fill: "surface",
+        overflow: "visible",
+        hiddenOnTargets: [],
+      },
+      children: [],
+    };
+
+    const layouts = targetLayoutMapSchema.parse({
+      mobile: structuredClone(legacyRoot),
+      tablet: structuredClone(legacyRoot),
+      desktop: structuredClone(legacyRoot),
+      print: structuredClone(legacyRoot),
+    });
+
+    expect(layouts.print.kind).toBe("frame");
+    if (layouts.print.kind === "frame") {
+      expect(layouts.print.cornerOrnaments?.preset).toBe("arc-corner");
+      expect(layouts.print.topOrnament?.text).toBe("Character name");
+      expect(layouts.print).not.toHaveProperty("ornamentStyle");
+      expect(layouts.print).not.toHaveProperty("titleDock");
+      expect(layouts.print).not.toHaveProperty("footerDock");
+    }
+  });
+
   it("validates new Fate corner turnbacks and Fate title ornaments with letterSpacingPx", () => {
     const modernFateFrame = {
       id: crypto.randomUUID(),
@@ -309,4 +363,3 @@ describe("Sheet Builder Contracts", () => {
     }
   });
 });
-

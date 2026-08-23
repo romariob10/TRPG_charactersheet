@@ -17,6 +17,8 @@ import type {
   LayoutNode,
 } from "@mycharacter/contracts";
 import {
+  DND_CHEVRON_TITLE_ORNAMENT_GEOMETRY,
+  DND_DIAMOND_TITLE_ORNAMENT_GEOMETRY,
   DND_TITLE_ORNAMENT_GEOMETRY,
   FATE_CORNER_TURNBACK_GEOMETRY,
   FATE_TITLE_ORNAMENT_GEOMETRY,
@@ -43,6 +45,7 @@ function parseColorToken(token?: string | null, fallback: RGB = rgb(0.13, 0.13, 
   if (token === "danger") return rgb(0.70, 0.28, 0.25);
   if (token === "gold") return rgb(0.72, 0.53, 0.04);
   if (token === "parchment") return rgb(0.98, 0.96, 0.93);
+  if (token === "ink") return rgb(0, 0, 0);
   if (token === "surface" || token === "card") return rgb(1, 1, 1);
   if (token === "surface-subtle") return rgb(0.96, 0.97, 0.96);
   if (token === "dark") return rgb(0.12, 0.14, 0.13);
@@ -228,117 +231,251 @@ function drawCornerTurnbacksPdf(
   height: number,
   corners: CornerOrnaments,
   color: RGB,
+  maskColor: RGB,
 ) {
-  if (corners.preset !== "fate-turnback") return;
-  const white = rgb(1, 1, 1);
+  if (
+    corners.preset !== "fate-turnback" &&
+    corners.preset !== "arc-corner"
+  ) {
+    return;
+  }
   const size = FATE_CORNER_TURNBACK_GEOMETRY.width;
   const outerWidth = FATE_CORNER_TURNBACK_GEOMETRY.outerArcStrokeWidth;
   const innerWidth = FATE_CORNER_TURNBACK_GEOMETRY.innerArcStrokeWidth;
 
   // Top-Left Corner
   if (corners.topLeft) {
-    const cx = x - 1;
-    const cy = y - 9;
-    // White mask to erase frame border under the corner
-    ctx.page.drawRectangle({ x: cx, y: cy, width: size, height: size, color: white });
-    // Outer arc (r=10) & Inner arc (r=8)
-    ctx.page.drawCircle({
-      x: cx,
-      y: cy + size,
-      size: 10,
+    ctx.page.drawRectangle({ x, y: y - size, width: size, height: size, color: maskColor });
+    ctx.page.drawSvgPath(FATE_CORNER_TURNBACK_GEOMETRY.outerArcPath, {
+      x,
+      y,
       borderColor: color,
       borderWidth: outerWidth,
-      opacity: 0,
-      borderOpacity: 1,
     });
-    ctx.page.drawCircle({
-      x: cx,
-      y: cy + size,
-      size: 8,
+    ctx.page.drawSvgPath(FATE_CORNER_TURNBACK_GEOMETRY.innerArcPath, {
+      x,
+      y,
       borderColor: color,
       borderWidth: innerWidth,
-      opacity: 0,
-      borderOpacity: 1,
+    });
+    ctx.page.drawSvgPath(FATE_CORNER_TURNBACK_GEOMETRY.diagonalPath, {
+      x,
+      y,
+      borderColor: color,
+      borderWidth: FATE_CORNER_TURNBACK_GEOMETRY.diagonalStrokeWidth,
     });
   }
 
   // Top-Right Corner
   if (corners.topRight) {
-    const cx = x + width - size + 1;
-    const cy = y - 9;
-    ctx.page.drawRectangle({ x: cx, y: cy, width: size, height: size, color: white });
-    ctx.page.drawCircle({
-      x: cx + size,
-      y: cy + size,
-      size: 10,
+    const cornerX = x + width - size;
+    ctx.page.drawRectangle({ x: cornerX, y: y - size, width: size, height: size, color: maskColor });
+    ctx.page.drawSvgPath("M0 0.25A9.75 9.75 0 0 1 9.75 10", {
+      x: cornerX,
+      y,
       borderColor: color,
       borderWidth: outerWidth,
-      opacity: 0,
-      borderOpacity: 1,
     });
-    ctx.page.drawCircle({
-      x: cx + size,
-      y: cy + size,
-      size: 8,
+    ctx.page.drawSvgPath("M0 2.5A7.5 7.5 0 0 1 7.5 10", {
+      x: cornerX,
+      y,
       borderColor: color,
       borderWidth: innerWidth,
-      opacity: 0,
-      borderOpacity: 1,
+    });
+    ctx.page.drawSvgPath("M7 3L5 5", {
+      x: cornerX,
+      y,
+      borderColor: color,
+      borderWidth: FATE_CORNER_TURNBACK_GEOMETRY.diagonalStrokeWidth,
     });
   }
 
   // Bottom-Left Corner
   if (corners.bottomLeft) {
-    const cx = x - 1;
-    const cy = y - height - 1;
-    ctx.page.drawRectangle({ x: cx, y: cy, width: size, height: size, color: white });
-    ctx.page.drawCircle({
-      x: cx,
-      y: cy,
-      size: 10,
-      borderColor: color,
-      borderWidth: outerWidth,
-      opacity: 0,
-      borderOpacity: 1,
-    });
-    ctx.page.drawCircle({
-      x: cx,
-      y: cy,
-      size: 8,
+    const cornerTop = y - height + size;
+    ctx.page.drawRectangle({ x, y: y - height, width: size, height: size, color: maskColor });
+    ctx.page.drawSvgPath("M2.5 0A7.5 7.5 0 0 0 10 7.5", {
+      x,
+      y: cornerTop,
       borderColor: color,
       borderWidth: innerWidth,
-      opacity: 0,
-      borderOpacity: 1,
+    });
+    ctx.page.drawSvgPath("M0.25 0A9.75 9.75 0 0 0 10 9.75", {
+      x,
+      y: cornerTop,
+      borderColor: color,
+      borderWidth: outerWidth,
+    });
+    ctx.page.drawSvgPath("M3 7L5 5", {
+      x,
+      y: cornerTop,
+      borderColor: color,
+      borderWidth: FATE_CORNER_TURNBACK_GEOMETRY.diagonalStrokeWidth,
     });
   }
 
   // Bottom-Right Corner
   if (corners.bottomRight) {
-    const cx = x + width - size + 1;
-    const cy = y - height - 1;
-    ctx.page.drawRectangle({ x: cx, y: cy, width: size, height: size, color: white });
-    ctx.page.drawCircle({
-      x: cx + size,
-      y: cy,
-      size: 10,
-      borderColor: color,
-      borderWidth: outerWidth,
-      opacity: 0,
-      borderOpacity: 1,
-    });
-    ctx.page.drawCircle({
-      x: cx + size,
-      y: cy,
-      size: 8,
+    const cornerX = x + width - size;
+    const cornerTop = y - height + size;
+    ctx.page.drawRectangle({ x: cornerX, y: y - height, width: size, height: size, color: maskColor });
+    ctx.page.drawSvgPath("M7.5 0A7.5 7.5 0 0 1 0 7.5", {
+      x: cornerX,
+      y: cornerTop,
       borderColor: color,
       borderWidth: innerWidth,
-      opacity: 0,
-      borderOpacity: 1,
+    });
+    ctx.page.drawSvgPath("M9.75 0A9.75 9.75 0 0 1 0 9.75", {
+      x: cornerX,
+      y: cornerTop,
+      borderColor: color,
+      borderWidth: outerWidth,
+    });
+    ctx.page.drawSvgPath("M7 7L5 5", {
+      x: cornerX,
+      y: cornerTop,
+      borderColor: color,
+      borderWidth: FATE_CORNER_TURNBACK_GEOMETRY.diagonalStrokeWidth,
     });
   }
 }
 
+type PdfEdgeGeometry = {
+  height: number;
+  capWidth: number;
+  leftOuterPath: string;
+  leftInnerPath: string;
+  rightOuterPath: string;
+  rightInnerPath: string;
+  outerStrokeWidth: number;
+  innerStrokeWidth: number;
+  innerTopLineY: number;
+  innerBottomLineY: number;
+};
+
 function drawEdgeOrnamentPdf(
+  ctx: PdfRenderContext,
+  x: number,
+  startY: number,
+  frameWidth: number,
+  frameHeight: number,
+  ornament: EdgeOrnament,
+  dock: "top" | "bottom",
+  color: RGB,
+  maskColor: RGB,
+) {
+  if (ornament.preset === "none" || !ornament.text.trim()) return;
+  if (ornament.preset === "legacy-pill") {
+    drawLegacyEdgeOrnamentPdf(
+      ctx,
+      x,
+      startY,
+      frameWidth,
+      frameHeight,
+      ornament,
+      dock,
+      color,
+    );
+    return;
+  }
+
+  const geometry: PdfEdgeGeometry =
+    ornament.preset === "fate"
+      ? FATE_TITLE_ORNAMENT_GEOMETRY
+      : ornament.preset === "dnd-diamond"
+        ? DND_DIAMOND_TITLE_ORNAMENT_GEOMETRY
+        : DND_CHEVRON_TITLE_ORNAMENT_GEOMETRY;
+  const font =
+    ornament.fontFamily === "Montserrat Alternates"
+      ? ornament.fontWeight === "bold" || ornament.fontWeight === "700"
+        ? ctx.fonts.titleBoldFont
+        : ctx.fonts.titleFont
+      : ornament.fontWeight === "bold" || ornament.fontWeight === "700"
+        ? ctx.fonts.bodyBoldFont
+        : ctx.fonts.bodyFont;
+  const fontSize = ornament.fontSize;
+  const text = ornament.text;
+  const rawTextWidth = font.widthOfTextAtSize(text, fontSize);
+  const textWidth = Math.max(
+    10,
+    rawTextWidth + Math.max(0, text.length - 1) * ornament.letterSpacingPx,
+  );
+  const centerWidth = textWidth + 16;
+  const totalWidth = geometry.capWidth * 2 + centerWidth;
+  let badgeX = x + (frameWidth - totalWidth) / 2 + ornament.offset;
+  if (ornament.align === "start") badgeX = x + 5 + ornament.offset;
+  if (ornament.align === "end") {
+    badgeX = x + frameWidth - totalWidth - 5 + ornament.offset;
+  }
+  const badgeBottom =
+    dock === "top"
+      ? startY - geometry.height / 2
+      : startY - frameHeight - geometry.height / 2;
+  const badgeTop = badgeBottom + geometry.height;
+  const centerX = badgeX + geometry.capWidth;
+
+  ctx.page.drawSvgPath(geometry.leftOuterPath, {
+    x: badgeX,
+    y: badgeTop,
+    color: maskColor,
+    borderColor: color,
+    borderWidth: geometry.outerStrokeWidth,
+  });
+  ctx.page.drawSvgPath(geometry.leftInnerPath, {
+    x: badgeX,
+    y: badgeTop,
+    borderColor: color,
+    borderWidth: geometry.innerStrokeWidth,
+  });
+  ctx.page.drawRectangle({
+    x: centerX,
+    y: badgeBottom,
+    width: centerWidth,
+    height: geometry.height,
+    color: maskColor,
+  });
+  for (const lineY of [
+    0,
+    geometry.innerTopLineY,
+    geometry.innerBottomLineY,
+    geometry.height,
+  ]) {
+    const inner =
+      lineY === geometry.innerTopLineY ||
+      lineY === geometry.innerBottomLineY;
+    ctx.page.drawLine({
+      start: { x: centerX, y: badgeTop - lineY },
+      end: { x: centerX + centerWidth, y: badgeTop - lineY },
+      thickness: inner
+        ? geometry.innerStrokeWidth
+        : geometry.outerStrokeWidth,
+      color,
+    });
+  }
+  const rightX = centerX + centerWidth;
+  ctx.page.drawSvgPath(geometry.rightOuterPath, {
+    x: rightX,
+    y: badgeTop,
+    color: maskColor,
+    borderColor: color,
+    borderWidth: geometry.outerStrokeWidth,
+  });
+  ctx.page.drawSvgPath(geometry.rightInnerPath, {
+    x: rightX,
+    y: badgeTop,
+    borderColor: color,
+    borderWidth: geometry.innerStrokeWidth,
+  });
+  ctx.page.drawText(text, {
+    x: centerX + (centerWidth - textWidth) / 2,
+    y: badgeBottom + (geometry.height - fontSize) / 2 + 1.5,
+    size: fontSize,
+    font,
+    color: rgb(0, 0, 0),
+  });
+}
+
+function drawLegacyEdgeOrnamentPdf(
   ctx: PdfRenderContext,
   x: number,
   startY: number,
@@ -602,6 +739,7 @@ function renderFrameNode(
   // Background fill and border stroke drawn underneath
   const fillColor = parseColorToken(node.box?.fill ?? "transparent");
   const strokeColor = parseColorToken(node.box?.strokeColor ?? "none");
+  const ornamentMaskColor = fillColor ?? rgb(1, 1, 1);
   const strokeTop = node.box?.strokeWidth?.top ?? (strokeColor ? 1 : 0);
 
   if (fillColor) {
@@ -660,7 +798,7 @@ function renderFrameNode(
   };
   const activeCorners = node.cornerOrnaments ?? defaultCorners;
   if (strokeColor && activeCorners.preset === "fate-turnback") {
-    drawCornerTurnbacksPdf(ctx, x, startY, availableWidth, finalHeight, activeCorners, strokeColor);
+    drawCornerTurnbacksPdf(ctx, x, startY, availableWidth, finalHeight, activeCorners, strokeColor, ornamentMaskColor);
   }
 
   // Draw Top Edge Ornament
@@ -676,7 +814,7 @@ function renderFrameNode(
   };
   const activeTop = node.topOrnament ?? defaultTop;
   if (strokeColor && activeTop.preset !== "none") {
-    drawEdgeOrnamentPdf(ctx, x, startY, availableWidth, finalHeight, activeTop, "top", strokeColor);
+    drawEdgeOrnamentPdf(ctx, x, startY, availableWidth, finalHeight, activeTop, "top", strokeColor, ornamentMaskColor);
   }
 
   // Draw Bottom Edge Ornament
@@ -692,7 +830,7 @@ function renderFrameNode(
   };
   const activeBottom = node.bottomOrnament ?? defaultBottom;
   if (strokeColor && activeBottom.preset !== "none") {
-    drawEdgeOrnamentPdf(ctx, x, startY, availableWidth, finalHeight, activeBottom, "bottom", strokeColor);
+    drawEdgeOrnamentPdf(ctx, x, startY, availableWidth, finalHeight, activeBottom, "bottom", strokeColor, ornamentMaskColor);
   }
 
   return finalHeight;

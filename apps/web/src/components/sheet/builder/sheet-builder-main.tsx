@@ -82,6 +82,7 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
   const [activeTab, setActiveTab] = useState<"layers" | "palette">("layers");
   const [sidebarWidth, setSidebarWidth] = useState(280);
   const isResizingRef = useRef(false);
+  const resizeStartRef = useRef({ pointerX: 0, width: 280 });
 
   // Expansion state per target layout (non-persistent, does not trigger autosave)
   const [expandedNodesByTarget, setExpandedNodesByTarget] = useState<
@@ -297,7 +298,7 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
       setSaveStatus("saving");
       try {
         const res = await fetch(
-          `/api/sheets/${initialData.sheetDefinition.id}/draft`,
+          `/api/sheet-definitions/${initialData.sheetDefinition.id}/draft`,
           {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
@@ -363,27 +364,27 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
     setPublishError(null);
     try {
       const res = await fetch(
-        `/api/sheets/${initialData.sheetDefinition.id}/publish`,
+        `/api/sheet-definitions/${initialData.sheetDefinition.id}/publish`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            changelog: publishChangelog || "Published version",
+            changelog: publishChangelog || t("defaultChangelog"),
           }),
         },
       );
 
       if (!res.ok) {
         const err = await res.json();
-        throw new Error(err.message || "Publication failed");
+        throw new Error(err.message || t("publishFailed"));
       }
 
       setShowPublishModal(false);
-      alert("Sheet version published successfully!");
+      alert(t("publishSucceeded"));
       window.location.reload();
     } catch (err: unknown) {
       setPublishError(
-        err instanceof Error ? err.message : "Failed to publish version",
+        err instanceof Error ? err.message : t("publishFailed"),
       );
     } finally {
       setPublishing(false);
@@ -393,12 +394,17 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
   // Sidebar resize handlers
   const handleResizePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     isResizingRef.current = true;
+    resizeStartRef.current = { pointerX: e.clientX, width: sidebarWidth };
     e.currentTarget.setPointerCapture(e.pointerId);
   };
 
   const handleResizePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!isResizingRef.current) return;
-    const newWidth = Math.max(220, Math.min(480, e.clientX));
+    const delta = e.clientX - resizeStartRef.current.pointerX;
+    const newWidth = Math.max(
+      220,
+      Math.min(480, resizeStartRef.current.width + delta),
+    );
     setSidebarWidth(newWidth);
   };
 
@@ -409,6 +415,13 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
     } catch {
       // ignore
     }
+  };
+
+  const handleResizeKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+    e.preventDefault();
+    const delta = e.key === "ArrowLeft" ? -10 : 10;
+    setSidebarWidth((width) => Math.max(220, Math.min(480, width + delta)));
   };
 
   const canvasWidthClass = {
@@ -522,7 +535,7 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
               type="button"
               onClick={() => setZoom((z) => Math.max(0.5, z - 0.1))}
               className="p-1 hover:text-foreground"
-              aria-label="Zoom out"
+              aria-label={t("zoomOut")}
             >
               -
             </button>
@@ -531,7 +544,7 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
               type="button"
               onClick={() => setZoom((z) => Math.min(1.5, z + 0.1))}
               className="p-1 hover:text-foreground"
-              aria-label="Zoom in"
+              aria-label={t("zoomIn")}
             >
               +
             </button>
@@ -542,7 +555,7 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
             type="button"
             onClick={handleAutoGenerateTargets}
             className="text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded border border-border"
-            title="Auto-generate mobile/tablet/print from desktop layout"
+            title={t("adaptTargetsHint")}
           >
             {t("adaptTargets")}
           </button>
@@ -637,8 +650,16 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
             onPointerDown={handleResizePointerDown}
             onPointerMove={handleResizePointerMove}
             onPointerUp={handleResizePointerUp}
+            onKeyDown={handleResizeKeyDown}
             className="absolute top-0 right-0 bottom-0 w-1.5 cursor-col-resize hover:bg-primary/40 active:bg-primary z-20"
-            title="Resize Panel"
+            title={t("resizePanel")}
+            aria-label={t("resizePanel")}
+            role="separator"
+            aria-orientation="vertical"
+            aria-valuemin={220}
+            aria-valuemax={480}
+            aria-valuenow={sidebarWidth}
+            tabIndex={0}
           />
         </aside>
 
@@ -747,7 +768,7 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
                 disabled={publishing}
                 className="px-4 py-2 text-xs font-semibold rounded border border-border hover:bg-muted"
               >
-                Cancel
+                {t("cancel")}
               </button>
               <button
                 type="button"

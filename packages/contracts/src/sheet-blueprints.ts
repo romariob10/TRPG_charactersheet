@@ -334,9 +334,6 @@ export function normalizeFrameNode(raw: Record<string, unknown>): FrameNode {
     cornerOrnaments,
     topOrnament,
     bottomOrnament,
-    ornamentStyle: raw.ornamentStyle as OrnamentStyle | undefined,
-    titleDock: raw.titleDock as TitleDock | undefined,
-    footerDock: raw.footerDock as TitleDock | undefined,
     children: Array.isArray(raw.children)
       ? (raw.children.map((c) => normalizeLayoutNode(c)) as LayoutNode[])
       : [],
@@ -366,11 +363,22 @@ export function normalizeLayoutNode(node: unknown): LayoutNode {
   return layoutNodeSchema.parse(node);
 }
 
+const normalizedLayoutNodeSchema = z.preprocess(
+  (node) => {
+    try {
+      return normalizeLayoutNode(node);
+    } catch {
+      return node;
+    }
+  },
+  layoutNodeSchema,
+);
+
 export const targetLayoutMapSchema = z.object({
-  mobile: layoutNodeSchema,
-  tablet: layoutNodeSchema,
-  desktop: layoutNodeSchema,
-  print: layoutNodeSchema,
+  mobile: normalizedLayoutNodeSchema,
+  tablet: normalizedLayoutNodeSchema,
+  desktop: normalizedLayoutNodeSchema,
+  print: normalizedLayoutNodeSchema,
 });
 export type TargetLayoutMap = z.infer<typeof targetLayoutMapSchema>;
 

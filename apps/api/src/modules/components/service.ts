@@ -230,14 +230,18 @@ export class ComponentLibraryService {
       id: crypto.randomUUID(),
       kind: "frame",
       direction: "vertical",
-      gap: 8,
+      gap: 9,
       align: "stretch",
       justify: "start",
       wrap: false,
       collapseAdjacentStrokes: false,
-      ornamentStyle: "none",
-      titleDock: { dock: "none", variant: "none" },
-      footerDock: { dock: "none", variant: "none" },
+      cornerOrnaments: {
+        preset: "none",
+        topLeft: true,
+        topRight: true,
+        bottomRight: true,
+        bottomLeft: true,
+      },
       box: defaultBoxProps,
       children: [],
     };
@@ -317,8 +321,9 @@ export class ComponentLibraryService {
       );
     }
 
+    const normalizedLayouts = targetLayoutMapSchema.parse(input.layouts);
     const validationErrors: string[] = [];
-    const entries = Object.entries(input.layouts) as [string, LayoutNode][];
+    const entries = Object.entries(normalizedLayouts) as [string, LayoutNode][];
     for (const [targetName, rootNode] of entries) {
       const check = validateLayoutNodeConstraints(rootNode);
       if (!check.valid) {
@@ -335,7 +340,7 @@ export class ComponentLibraryService {
       .updateTable("component_drafts")
       .set({
         revision: nextRevision,
-        layouts: JSON.stringify(input.layouts),
+        layouts: JSON.stringify(normalizedLayouts),
         exposed_properties: JSON.stringify(input.exposedProperties ?? []),
         dependencies: JSON.stringify(input.dependencies ?? []),
         updated_by: userId,
@@ -436,7 +441,7 @@ export class ComponentLibraryService {
           component_id: componentId,
           version_number: nextVersionNumber,
           schema_version: draft.schema_version,
-          layouts: JSON.stringify(layouts),
+          layouts: JSON.stringify(parsedLayouts.data),
           exposed_properties: draft.exposed_properties,
           dependencies: JSON.stringify(dependencies),
           changelog: input.changelog,
@@ -524,10 +529,11 @@ export class ComponentLibraryService {
       throw new AppError("VERSION_NOT_FOUND", 404, "Component version not found.");
     }
 
-    const layouts =
+    const storedLayouts =
       typeof version.layouts === "string"
         ? JSON.parse(version.layouts)
         : version.layouts;
+    const layouts = targetLayoutMapSchema.parse(storedLayouts);
 
     const exposedProperties =
       typeof version.exposed_properties === "string"

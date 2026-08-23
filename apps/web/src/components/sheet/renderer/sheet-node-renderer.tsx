@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { useTranslations } from "next-intl";
 import type { LayoutNode } from "@mycharacter/contracts";
 import { FrameDecorator } from "../decorators/frame-decorators";
 import {
@@ -41,7 +42,18 @@ const FILL_MAP = {
   "accent-subtle": "bg-accent/10",
 };
 
+const MASK_COLOR_MAP = {
+  transparent: "var(--sheet-canvas-background, var(--background, #ffffff))",
+  surface: "var(--background, #ffffff)",
+  "surface-subtle": "var(--muted, #f5f5f5)",
+  card: "var(--card, #ffffff)",
+  parchment: "#fef3c7",
+  dark: "var(--foreground, #111111)",
+  "accent-subtle": "var(--accent, #f3f4f6)",
+};
+
 export const SheetNodeRenderer: React.FC<{ node: LayoutNode }> = ({ node }) => {
+  const t = useTranslations("SheetBuilder");
   const { target, mode, selectedNodeId, onSelectNode, resolvedComponents } =
     useSheetRender();
 
@@ -133,6 +145,9 @@ export const SheetNodeRenderer: React.FC<{ node: LayoutNode }> = ({ node }) => {
             strokeColor={node.box.strokeColor}
             strokeWidth={node.box.strokeWidth}
             cornerRadius={node.box.cornerRadius}
+            maskColor={
+              target === "print" ? "#ffffff" : MASK_COLOR_MAP[node.box.fill]
+            }
             titleDock={node.titleDock}
             footerDock={node.footerDock}
             className={`${fillClass} ${widthClass} ${heightClass}`}
@@ -149,7 +164,7 @@ export const SheetNodeRenderer: React.FC<{ node: LayoutNode }> = ({ node }) => {
               ))}
               {node.children.length === 0 && mode === "builder" && (
                 <div className="w-full py-4 border border-dashed border-muted-foreground/30 rounded text-center text-xs text-muted-foreground italic select-none">
-                  Empty Frame (Drop or add items here)
+                  {t("emptyFrame")}
                 </div>
               )}
             </div>
@@ -161,7 +176,7 @@ export const SheetNodeRenderer: React.FC<{ node: LayoutNode }> = ({ node }) => {
         if (!compVersion) {
           return (
             <div className="p-3 border border-dashed border-amber-500/50 rounded bg-amber-50/20 text-xs text-amber-700 dark:text-amber-300">
-              Component Instance ({node.componentId.slice(0, 8)})
+              {t("componentInstance")} ({node.componentId.slice(0, 8)})
             </div>
           );
         }

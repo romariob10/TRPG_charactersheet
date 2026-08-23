@@ -368,6 +368,8 @@ export type {
 } from "./sheet-primitives.js";
 export {
   DND_TITLE_ORNAMENT_GEOMETRY,
+  DND_CHEVRON_TITLE_ORNAMENT_GEOMETRY,
+  DND_DIAMOND_TITLE_ORNAMENT_GEOMETRY,
   FATE_CORNER_TURNBACK_GEOMETRY,
   FATE_TITLE_ORNAMENT_GEOMETRY,
 } from "./ornament-geometry.js";

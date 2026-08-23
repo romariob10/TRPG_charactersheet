@@ -51,6 +51,7 @@ export const STROKE_TOKENS = [
   "none",
   "gold",
   "parchment",
+  "ink",
 ] as const;
 export const strokeTokenSchema = z.enum(STROKE_TOKENS);
 export type StrokeToken = z.infer<typeof strokeTokenSchema>;
@@ -106,7 +107,14 @@ export const cornerOrnamentsSchema = z.object({
 });
 export type CornerOrnaments = z.infer<typeof cornerOrnamentsSchema>;
 
-export const EDGE_ORNAMENT_PRESETS = ["none", "fate", "dnd", "legacy-pill"] as const;
+export const EDGE_ORNAMENT_PRESETS = [
+  "none",
+  "fate",
+  "dnd",
+  "dnd-chevron",
+  "dnd-diamond",
+  "legacy-pill",
+] as const;
 export const edgeOrnamentPresetSchema = z.enum(EDGE_ORNAMENT_PRESETS);
 export type EdgeOrnamentPreset = z.infer<typeof edgeOrnamentPresetSchema>;
 
@@ -172,4 +180,3 @@ export const defaultBoxProps: BoxProps = {
   overflow: "visible",
   hiddenOnTargets: [],
 };
-

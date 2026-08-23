@@ -9,7 +9,8 @@ import type {
   TitleDock,
 } from "@mycharacter/contracts";
 import {
-  DND_TITLE_ORNAMENT_GEOMETRY,
+  DND_CHEVRON_TITLE_ORNAMENT_GEOMETRY,
+  DND_DIAMOND_TITLE_ORNAMENT_GEOMETRY,
   FATE_CORNER_TURNBACK_GEOMETRY,
   FATE_TITLE_ORNAMENT_GEOMETRY,
 } from "@mycharacter/contracts";
@@ -17,11 +18,16 @@ import {
 interface FrameDecoratorProps {
   strokeColor: StrokeToken;
   strokeWidth: { top: number; right: number; bottom: number; left: number };
-  cornerRadius: { topLeft: number; topRight: number; bottomRight: number; bottomLeft: number };
+  cornerRadius: {
+    topLeft: number;
+    topRight: number;
+    bottomRight: number;
+    bottomLeft: number;
+  };
+  maskColor: string;
   cornerOrnaments?: CornerOrnaments;
   topOrnament?: EdgeOrnament;
   bottomOrnament?: EdgeOrnament;
-  // Legacy support props
   ornamentStyle?: OrnamentStyle;
   titleDock?: TitleDock;
   footerDock?: TitleDock;
@@ -38,112 +44,149 @@ const STROKE_COLORS: Record<StrokeToken, string> = {
   none: "transparent",
   gold: "#d97706",
   parchment: "#92400e",
+  ink: "#000000",
 };
 
-/**
- * Fate Corner Turnback SVG component.
- * Exact 10x10 geometry from Figma node 17:613 with mask and concentric arcs.
- */
-const FateCornerTurnback: React.FC<{
-  corner: "topLeft" | "topRight" | "bottomRight" | "bottomLeft";
-  color: string;
-}> = ({ corner, color }) => {
-  const rotation = FATE_CORNER_TURNBACK_GEOMETRY.rotations[corner];
-  const offset = FATE_CORNER_TURNBACK_GEOMETRY.offsetPx;
+type Corner = "topLeft" | "topRight" | "bottomRight" | "bottomLeft";
 
-  // Positioning classes and style depending on corner
+const FateCornerTurnback: React.FC<{
+  corner: Corner;
+  color: string;
+  maskColor: string;
+}> = ({ corner, color, maskColor }) => {
+  const geometry = FATE_CORNER_TURNBACK_GEOMETRY;
   const positionStyle: React.CSSProperties = {
     position: "absolute",
-    width: `${FATE_CORNER_TURNBACK_GEOMETRY.width}px`,
-    height: `${FATE_CORNER_TURNBACK_GEOMETRY.height}px`,
+    width: geometry.width,
+    height: geometry.height,
     pointerEvents: "none",
     zIndex: 10,
   };
 
-  if (corner === "topLeft") {
-    positionStyle.top = `${offset}px`;
-    positionStyle.left = `${offset}px`;
-  } else if (corner === "topRight") {
-    positionStyle.top = `${offset}px`;
-    positionStyle.right = `${offset}px`;
-  } else if (corner === "bottomRight") {
-    positionStyle.bottom = `${offset}px`;
-    positionStyle.right = `${offset}px`;
-  } else if (corner === "bottomLeft") {
-    positionStyle.bottom = `${offset}px`;
-    positionStyle.left = `${offset}px`;
-  }
+  if (corner.includes("top")) positionStyle.top = geometry.offsetPx;
+  else positionStyle.bottom = geometry.offsetPx;
+  if (corner.includes("Left")) positionStyle.left = geometry.offsetPx;
+  else positionStyle.right = geometry.offsetPx;
 
   return (
     <svg
       style={positionStyle}
-      viewBox={FATE_CORNER_TURNBACK_GEOMETRY.viewBox}
-      width={FATE_CORNER_TURNBACK_GEOMETRY.width}
-      height={FATE_CORNER_TURNBACK_GEOMETRY.height}
+      viewBox={geometry.viewBox}
+      width={geometry.width}
+      height={geometry.height}
       aria-hidden="true"
     >
-      <g transform={`rotate(${rotation} 5 5)`}>
-        {/* White corner blocker mask to cover underlying straight border corner */}
-        <path
-          d={FATE_CORNER_TURNBACK_GEOMETRY.maskPath}
-          fill="var(--background, #ffffff)"
-        />
-        {/* Inner concentric arc */}
-        <path
-          d={FATE_CORNER_TURNBACK_GEOMETRY.innerArcPath}
-          stroke={color}
-          strokeWidth={FATE_CORNER_TURNBACK_GEOMETRY.innerArcStrokeWidth}
+      <g transform={`rotate(${geometry.rotations[corner]} 5 5)`}>
+        <path d={geometry.clipPath} fill={maskColor} />
+        <circle
+          cx={geometry.outerCircle.cx}
+          cy={geometry.outerCircle.cy}
+          r={geometry.outerCircle.radius}
           fill="none"
-        />
-        {/* Outer concentric arc */}
-        <path
-          d={FATE_CORNER_TURNBACK_GEOMETRY.outerArcPath}
           stroke={color}
-          strokeWidth={FATE_CORNER_TURNBACK_GEOMETRY.outerArcStrokeWidth}
+          strokeWidth={geometry.outerCircle.strokeWidth}
+        />
+        <circle
+          cx={geometry.innerCircle.cx}
+          cy={geometry.innerCircle.cy}
+          r={geometry.innerCircle.radius}
+          fill={maskColor}
+          stroke={color}
+          strokeWidth={geometry.innerCircle.strokeWidth}
+        />
+        <path
+          d={geometry.diagonalPath}
           fill="none"
+          stroke={color}
+          strokeWidth={geometry.diagonalStrokeWidth}
         />
       </g>
     </svg>
   );
 };
 
-/**
- * Renders an edge title/footer ornament (Fate, D&D, or legacy pill).
- */
+type EdgeGeometry = {
+  height: number;
+  capWidth: number;
+  viewBox: string;
+  leftOuterPath: string;
+  leftInnerPath: string;
+  rightOuterPath: string;
+  rightInnerPath: string;
+  outerStrokeWidth: number;
+  innerStrokeWidth: number;
+  innerTopLineY: number;
+  innerBottomLineY: number;
+};
+
+const EdgeCap: React.FC<{
+  geometry: EdgeGeometry;
+  side: "left" | "right";
+  color: string;
+  maskColor: string;
+}> = ({ geometry, side, color, maskColor }) => {
+  return (
+    <svg
+      width={geometry.capWidth}
+      height={geometry.height}
+      viewBox={geometry.viewBox}
+      className="shrink-0"
+      aria-hidden="true"
+    >
+      <g>
+        <path
+          d={side === "left" ? geometry.leftOuterPath : geometry.rightOuterPath}
+          fill={maskColor}
+          stroke={color}
+          strokeWidth={geometry.outerStrokeWidth}
+        />
+        <path
+          d={side === "left" ? geometry.leftInnerPath : geometry.rightInnerPath}
+          fill="none"
+          stroke={color}
+          strokeWidth={geometry.innerStrokeWidth}
+        />
+      </g>
+    </svg>
+  );
+};
+
 const RenderEdgeOrnament: React.FC<{
   ornament: EdgeOrnament;
   dock: "top" | "bottom";
   color: string;
-}> = ({ ornament, dock, color }) => {
-  if (ornament.preset === "none" || !ornament.text.trim()) {
-    return null;
-  }
+  maskColor: string;
+}> = ({ ornament, dock, color, maskColor }) => {
+  if (ornament.preset === "none" || !ornament.text.trim()) return null;
 
-  const { preset, align, offset, text, fontFamily, fontSize, fontWeight, letterSpacingPx } = ornament;
+  const { preset, align, offset, text, fontFamily, fontSize, fontWeight, letterSpacingPx } =
+    ornament;
+  const isFate = preset === "fate";
+  const isDiamond = preset === "dnd-diamond";
+  const isDnd =
+    preset === "dnd" || preset === "dnd-chevron" || preset === "dnd-diamond";
+  const geometry: EdgeGeometry = isFate
+    ? FATE_TITLE_ORNAMENT_GEOMETRY
+    : isDiamond
+      ? DND_DIAMOND_TITLE_ORNAMENT_GEOMETRY
+      : DND_CHEVRON_TITLE_ORNAMENT_GEOMETRY;
 
-  // Alignment positioning style
   const containerStyle: React.CSSProperties = {
     position: "absolute",
     zIndex: 15,
     display: "flex",
-    alignItems: "center",
+    alignItems: "stretch",
     whiteSpace: "nowrap",
     userSelect: "none",
+    [dock]: -geometry.height / 2,
   };
-
-  if (dock === "top") {
-    containerStyle.top = `${-(fontSize > 12 ? 14 : 10)}px`;
-  } else {
-    containerStyle.bottom = `${-(fontSize > 12 ? 14 : 10)}px`;
-  }
-
   if (align === "center") {
     containerStyle.left = `calc(50% + ${offset}px)`;
     containerStyle.transform = "translateX(-50%)";
   } else if (align === "start") {
-    containerStyle.left = `calc(12px + ${offset}px)`;
-  } else if (align === "end") {
-    containerStyle.right = `calc(12px + ${offset}px)`;
+    containerStyle.left = `calc(5px + ${offset}px)`;
+  } else {
+    containerStyle.right = `calc(5px - ${offset}px)`;
   }
 
   const typographyStyle: React.CSSProperties = {
@@ -151,210 +194,72 @@ const RenderEdgeOrnament: React.FC<{
       fontFamily === "Montserrat Alternates"
         ? 'var(--font-montserrat-alternates, "Montserrat Alternates"), sans-serif'
         : fontFamily === "Noto Sans"
-        ? 'var(--font-noto-sans, "Noto Sans"), sans-serif'
-        : "inherit",
-    fontSize: `${fontSize}px`,
-    fontWeight: fontWeight === "bold" ? 700 : fontWeight === "medium" ? 500 : 400,
-    letterSpacing: `${letterSpacingPx}px`,
-    textTransform: "uppercase",
+          ? 'var(--font-noto-sans, "Noto Sans"), sans-serif'
+          : "inherit",
+    fontSize,
+    fontWeight:
+      fontWeight === "bold" || fontWeight === "700"
+        ? 700
+        : fontWeight === "600"
+          ? 600
+          : fontWeight === "medium" || fontWeight === "500"
+            ? 500
+            : 400,
+    letterSpacing: letterSpacingPx,
     lineHeight: 1,
   };
 
-  if (preset === "fate") {
+  if (!isFate && !isDnd) {
     return (
-      <div style={containerStyle} className="items-stretch select-none">
-        {/* Left Fate End Cap */}
-        <svg
-          width={FATE_TITLE_ORNAMENT_GEOMETRY.capWidth}
-          height={FATE_TITLE_ORNAMENT_GEOMETRY.height}
-          viewBox="0 0 14 20"
-          className="flex-shrink-0"
-          aria-hidden="true"
-        >
-          <path
-            d={FATE_TITLE_ORNAMENT_GEOMETRY.leftCapMaskPath}
-            fill="var(--background, #ffffff)"
-          />
-          <path
-            d={FATE_TITLE_ORNAMENT_GEOMETRY.leftCapPath}
-            stroke={color}
-            strokeWidth={1}
-            fill="none"
-          />
-        </svg>
-
-        {/* Center Text Container with Dual Horizontal Lines */}
-        <div
-          className="relative flex items-center justify-center px-2 bg-background"
-          style={{ height: `${FATE_TITLE_ORNAMENT_GEOMETRY.height}px` }}
-        >
-          {/* Top Line */}
-          <div
-            className="absolute top-0 left-0 right-0"
-            style={{
-              height: `${FATE_TITLE_ORNAMENT_GEOMETRY.topLineStrokeWidth}px`,
-              backgroundColor: color,
-            }}
-          />
-          {/* Text */}
-          <span style={typographyStyle} className="text-foreground select-none">
-            {text}
-          </span>
-          {/* Bottom Line */}
-          <div
-            className="absolute bottom-0 left-0 right-0"
-            style={{
-              height: `${FATE_TITLE_ORNAMENT_GEOMETRY.bottomLineStrokeWidth}px`,
-              backgroundColor: color,
-            }}
-          />
-        </div>
-
-        {/* Right Mirrored Fate End Cap */}
-        <svg
-          width={FATE_TITLE_ORNAMENT_GEOMETRY.capWidth}
-          height={FATE_TITLE_ORNAMENT_GEOMETRY.height}
-          viewBox="0 0 14 20"
-          className="flex-shrink-0"
-          aria-hidden="true"
-        >
-          <g transform="scale(-1, 1) translate(-14, 0)">
-            <path
-              d={FATE_TITLE_ORNAMENT_GEOMETRY.leftCapMaskPath}
-              fill="var(--background, #ffffff)"
-            />
-            <path
-              d={FATE_TITLE_ORNAMENT_GEOMETRY.leftCapPath}
-              stroke={color}
-              strokeWidth={1}
-              fill="none"
-            />
-          </g>
-        </svg>
+      <div
+        style={{ ...containerStyle, backgroundColor: maskColor, borderColor: color }}
+        className="rounded border px-2.5 py-0.5 shadow-xs"
+      >
+        <span style={typographyStyle}>{text}</span>
       </div>
     );
   }
 
-  if (preset === "dnd") {
-    return (
-      <div style={containerStyle} className="items-stretch select-none">
-        {/* Left D&D Pointed Facet Cap */}
-        <svg
-          width={DND_TITLE_ORNAMENT_GEOMETRY.capWidth}
-          height={DND_TITLE_ORNAMENT_GEOMETRY.height}
-          viewBox="0 0 18 22"
-          className="flex-shrink-0"
-          aria-hidden="true"
-        >
-          <path
-            d={DND_TITLE_ORNAMENT_GEOMETRY.capMaskPath}
-            fill="var(--background, #ffffff)"
-          />
-          <path
-            d={DND_TITLE_ORNAMENT_GEOMETRY.outerCapPath}
-            stroke={color}
-            strokeWidth={DND_TITLE_ORNAMENT_GEOMETRY.topOuterStrokeWidth}
-            fill="none"
-          />
-          <path
-            d={DND_TITLE_ORNAMENT_GEOMETRY.innerCapPath}
-            stroke={color}
-            strokeWidth={DND_TITLE_ORNAMENT_GEOMETRY.topInnerStrokeWidth}
-            fill="none"
-          />
-          <path
-            d={DND_TITLE_ORNAMENT_GEOMETRY.diamondMarkerPath}
-            fill={color}
-          />
-        </svg>
-
-        {/* Center Text Container with Double Border Lines */}
-        <div
-          className="relative flex items-center justify-center px-2.5 bg-background"
-          style={{ height: `${DND_TITLE_ORNAMENT_GEOMETRY.height}px` }}
-        >
-          {/* Top Double Line */}
-          <div
-            className="absolute top-[1.5px] left-0 right-0"
-            style={{
-              height: `${DND_TITLE_ORNAMENT_GEOMETRY.topOuterStrokeWidth}px`,
-              backgroundColor: color,
-            }}
-          />
-          <div
-            className="absolute top-[4px] left-0 right-0"
-            style={{
-              height: `${DND_TITLE_ORNAMENT_GEOMETRY.topInnerStrokeWidth}px`,
-              backgroundColor: color,
-            }}
-          />
-
-          {/* Center Text */}
-          <span style={typographyStyle} className="text-foreground select-none">
-            {text}
-          </span>
-
-          {/* Bottom Double Line */}
-          <div
-            className="absolute bottom-[4px] left-0 right-0"
-            style={{
-              height: `${DND_TITLE_ORNAMENT_GEOMETRY.bottomInnerStrokeWidth}px`,
-              backgroundColor: color,
-            }}
-          />
-          <div
-            className="absolute bottom-[1.5px] left-0 right-0"
-            style={{
-              height: `${DND_TITLE_ORNAMENT_GEOMETRY.bottomOuterStrokeWidth}px`,
-              backgroundColor: color,
-            }}
-          />
-        </div>
-
-        {/* Right Mirrored D&D Pointed Facet Cap */}
-        <svg
-          width={DND_TITLE_ORNAMENT_GEOMETRY.capWidth}
-          height={DND_TITLE_ORNAMENT_GEOMETRY.height}
-          viewBox="0 0 18 22"
-          className="flex-shrink-0"
-          aria-hidden="true"
-        >
-          <g transform="scale(-1, 1) translate(-18, 0)">
-            <path
-              d={DND_TITLE_ORNAMENT_GEOMETRY.capMaskPath}
-              fill="var(--background, #ffffff)"
-            />
-            <path
-              d={DND_TITLE_ORNAMENT_GEOMETRY.outerCapPath}
-              stroke={color}
-              strokeWidth={DND_TITLE_ORNAMENT_GEOMETRY.topOuterStrokeWidth}
-              fill="none"
-            />
-            <path
-              d={DND_TITLE_ORNAMENT_GEOMETRY.innerCapPath}
-              stroke={color}
-              strokeWidth={DND_TITLE_ORNAMENT_GEOMETRY.topInnerStrokeWidth}
-              fill="none"
-            />
-            <path
-              d={DND_TITLE_ORNAMENT_GEOMETRY.diamondMarkerPath}
-              fill={color}
-            />
-          </g>
-        </svg>
-      </div>
-    );
-  }
-
-  // Legacy pill fallback
   return (
-    <div
-      style={containerStyle}
-      className="px-2.5 py-0.5 rounded bg-background border shadow-xs"
-    >
-      <span style={typographyStyle} className="text-foreground select-none">
-        {text}
-      </span>
+    <div style={containerStyle}>
+      <EdgeCap
+        geometry={geometry}
+        side="left"
+        color={color}
+        maskColor={maskColor}
+      />
+      <div
+        className="relative flex items-center justify-center px-2"
+        style={{
+          height: geometry.height,
+          minWidth: 24,
+          backgroundColor: maskColor,
+          borderTop: `${geometry.outerStrokeWidth}px solid ${color}`,
+          borderBottom: `${geometry.outerStrokeWidth}px solid ${color}`,
+        }}
+      >
+        <span
+          className="absolute left-0 right-0"
+          style={{
+            top: geometry.innerTopLineY,
+            borderTop: `${geometry.innerStrokeWidth}px solid ${color}`,
+          }}
+        />
+        <span style={typographyStyle}>{text}</span>
+        <span
+          className="absolute left-0 right-0"
+          style={{
+            top: geometry.innerBottomLineY,
+            borderTop: `${geometry.innerStrokeWidth}px solid ${color}`,
+          }}
+        />
+      </div>
+      <EdgeCap
+        geometry={geometry}
+        side="right"
+        color={color}
+        maskColor={maskColor}
+      />
     </div>
   );
 };
@@ -363,6 +268,7 @@ export const FrameDecorator: React.FC<FrameDecoratorProps> = ({
   strokeColor,
   strokeWidth,
   cornerRadius,
+  maskColor,
   cornerOrnaments,
   topOrnament,
   bottomOrnament,
@@ -373,8 +279,6 @@ export const FrameDecorator: React.FC<FrameDecoratorProps> = ({
   className = "",
 }) => {
   const color = STROKE_COLORS[strokeColor] || STROKE_COLORS.default;
-
-  // Resolve active corner ornaments
   const activeCorners: CornerOrnaments = cornerOrnaments ?? {
     preset: ornamentStyle === "arc-corner" ? "arc-corner" : "none",
     topLeft: true,
@@ -382,10 +286,11 @@ export const FrameDecorator: React.FC<FrameDecoratorProps> = ({
     bottomRight: true,
     bottomLeft: true,
   };
-
-  // Resolve top edge ornament
   const activeTop: EdgeOrnament = topOrnament ?? {
-    preset: titleDock && titleDock.dock === "top" && titleDock.variant !== "none" ? "legacy-pill" : "none",
+    preset:
+      titleDock && titleDock.dock === "top" && titleDock.variant !== "none"
+        ? "legacy-pill"
+        : "none",
     align: titleDock?.variant?.includes("center") ? "center" : "start",
     offset: 0,
     text: titleDock?.text || "",
@@ -394,10 +299,11 @@ export const FrameDecorator: React.FC<FrameDecoratorProps> = ({
     fontWeight: "medium",
     letterSpacingPx: -0.9,
   };
-
-  // Resolve bottom edge ornament
   const activeBottom: EdgeOrnament = bottomOrnament ?? {
-    preset: footerDock && footerDock.dock === "bottom" && footerDock.variant !== "none" ? "legacy-pill" : "none",
+    preset:
+      footerDock && footerDock.dock === "bottom" && footerDock.variant !== "none"
+        ? "legacy-pill"
+        : "none",
     align: footerDock?.variant?.includes("center") ? "center" : "start",
     offset: 0,
     text: footerDock?.text || "",
@@ -423,39 +329,33 @@ export const FrameDecorator: React.FC<FrameDecoratorProps> = ({
         borderStyle: strokeColor === "none" ? "none" : "solid",
       }}
     >
-      {/* Fate Corner Turnbacks */}
-      {activeCorners.preset === "fate-turnback" && (
-        <>
-          {activeCorners.topLeft && <FateCornerTurnback corner="topLeft" color={color} />}
-          {activeCorners.topRight && <FateCornerTurnback corner="topRight" color={color} />}
-          {activeCorners.bottomRight && <FateCornerTurnback corner="bottomRight" color={color} />}
-          {activeCorners.bottomLeft && <FateCornerTurnback corner="bottomLeft" color={color} />}
-        </>
-      )}
+      {(activeCorners.preset === "fate-turnback" ||
+        activeCorners.preset === "arc-corner") &&
+        (["topLeft", "topRight", "bottomRight", "bottomLeft"] as const).map(
+          (corner) =>
+            activeCorners[corner] && (
+              <FateCornerTurnback
+                key={corner}
+                corner={corner}
+                color={color}
+                maskColor={maskColor}
+              />
+            ),
+        )}
 
-      {/* Legacy Arc-Corner fallback */}
-      {activeCorners.preset === "arc-corner" && (
-        <svg
-          className="absolute inset-0 pointer-events-none w-full h-full"
-          preserveAspectRatio="none"
-          aria-hidden="true"
-        >
-          {activeCorners.topLeft && (
-            <path d="M 0,12 A 12,12 0 0,0 12,0" stroke={color} strokeWidth="1" fill="none" />
-          )}
-          {activeCorners.topRight && (
-            <path d="M 100%,12 A 12,12 0 0,1 calc(100% - 12px),0" stroke={color} strokeWidth="1" fill="none" />
-          )}
-        </svg>
-      )}
-
-      {/* Top Edge Ornament */}
-      <RenderEdgeOrnament ornament={activeTop} dock="top" color={color} />
-
+      <RenderEdgeOrnament
+        ornament={activeTop}
+        dock="top"
+        color={color}
+        maskColor={maskColor}
+      />
       {children}
-
-      {/* Bottom Edge Ornament */}
-      <RenderEdgeOrnament ornament={activeBottom} dock="bottom" color={color} />
+      <RenderEdgeOrnament
+        ornament={activeBottom}
+        dock="bottom"
+        color={color}
+        maskColor={maskColor}
+      />
     </div>
   );
 };

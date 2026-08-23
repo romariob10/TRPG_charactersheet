@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import {
   AlignLeft,
   CheckSquare,
@@ -21,7 +22,7 @@ import {
   WrapText,
 } from "lucide-react";
 import type { LayoutNode } from "@mycharacter/contracts";
-import { canDropNode } from "../../../lib/tree-utils";
+import { canDropNode, findNodeAndParent } from "../../../lib/tree-utils";
 
 interface TreeViewProps {
   rootNode: LayoutNode;
@@ -57,6 +58,7 @@ export const TreeView: React.FC<TreeViewProps> = ({
   onRenameNode,
   onMoveNodeHierarchy,
 }) => {
+  const t = useTranslations("SheetBuilder");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
   const [dragState, setDragState] = useState<DragState | null>(null);
@@ -186,6 +188,52 @@ export const TreeView: React.FC<TreeViewProps> = ({
     setDragState(null);
   };
 
+  const handleTreeKeyDown = (
+    e: React.KeyboardEvent<HTMLDivElement>,
+    node: LayoutNode,
+  ) => {
+    if (e.key === "F2" || e.key === "Enter") {
+      e.preventDefault();
+      handleStartRename(node.id, node.name, node.kind);
+      return;
+    }
+    if (!e.altKey || node.id === rootNode.id) return;
+
+    const info = findNodeAndParent(rootNode, node.id);
+    if (!info.parent || info.parent.kind !== "frame") return;
+    const siblings = info.parent.children;
+    let targetId: string | null = null;
+    let position: "before" | "inside" | "after" = "before";
+
+    if (e.key === "ArrowUp" && info.index > 0) {
+      targetId = siblings[info.index - 1]?.id ?? null;
+      position = "before";
+    } else if (e.key === "ArrowDown" && info.index < siblings.length - 1) {
+      targetId = siblings[info.index + 1]?.id ?? null;
+      position = "after";
+    } else if (e.key === "ArrowRight" && info.index > 0) {
+      const previous = siblings[info.index - 1];
+      if (previous?.kind === "frame") {
+        targetId = previous.id;
+        position = "inside";
+      }
+    } else if (
+      e.key === "ArrowLeft" &&
+      info.parent.id !== rootNode.id
+    ) {
+      targetId = info.parent.id;
+      position = "after";
+    }
+
+    if (
+      targetId &&
+      canDropNode(rootNode, node.id, targetId, position)
+    ) {
+      e.preventDefault();
+      onMoveNodeHierarchy(node.id, targetId, position);
+    }
+  };
+
   const getNodeIcon = (node: LayoutNode) => {
     switch (node.kind) {
       case "frame": {
@@ -260,9 +308,9 @@ export const TreeView: React.FC<TreeViewProps> = ({
       node.name ||
       (node.kind === "frame"
         ? node.direction === "horizontal"
-          ? "Horizontal Frame"
-          : "Vertical Frame"
-        : `${node.kind} (${node.id.slice(0, 4)})`);
+          ? t("nodeFrameHorizontal")
+          : t("nodeFrameVertical")
+        : `${t(`nodeKind.${node.kind}`)} (${node.id.slice(0, 4)})`);
 
     return (
       <div key={node.id} className="flex flex-col select-none relative">
@@ -278,6 +326,7 @@ export const TreeView: React.FC<TreeViewProps> = ({
           aria-label={displayName}
           onClick={() => onSelectNode(node.id)}
           onDoubleClick={() => handleStartRename(node.id, node.name, node.kind)}
+          onKeyDown={(e) => handleTreeKeyDown(e, node)}
           onPointerDown={(e) => handlePointerDown(e, node.id)}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
@@ -306,8 +355,8 @@ export const TreeView: React.FC<TreeViewProps> = ({
                   onToggleExpand(node.id);
                 }}
                 className="p-0.5 hover:bg-black/10 dark:hover:bg-white/10 rounded transition-transform"
-                title={isExpanded ? "Collapse" : "Expand"}
-                aria-label={isExpanded ? "Collapse" : "Expand"}
+                title={isExpanded ? t("collapse") : t("expand")}
+                aria-label={isExpanded ? t("collapse") : t("expand")}
               >
                 <ChevronRight
                   className={`w-3.5 h-3.5 transition-transform ${
@@ -331,6 +380,7 @@ export const TreeView: React.FC<TreeViewProps> = ({
                 onChange={(e) => setEditingName(e.target.value)}
                 onBlur={handleCommitRename}
                 onKeyDown={(e) => {
+                  e.stopPropagation();
                   if (e.key === "Enter") handleCommitRename();
                   else if (e.key === "Escape") handleCancelRename();
                 }}
@@ -356,8 +406,8 @@ export const TreeView: React.FC<TreeViewProps> = ({
                 e.stopPropagation();
                 onDuplicateNode(node.id);
               }}
-              title="Duplicate"
-              aria-label="Duplicate"
+              title={t("duplicate")}
+              aria-label={t("duplicate")}
               className="p-1 hover:text-foreground rounded"
             >
               <Copy className="w-3 h-3" />
@@ -369,8 +419,8 @@ export const TreeView: React.FC<TreeViewProps> = ({
                   e.stopPropagation();
                   onDeleteNode(node.id);
                 }}
-                title="Delete"
-                aria-label="Delete"
+                title={t("delete")}
+                aria-label={t("delete")}
                 className="p-1 hover:text-destructive rounded"
               >
                 <Trash2 className="w-3 h-3" />

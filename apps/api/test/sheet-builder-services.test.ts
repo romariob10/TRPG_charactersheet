@@ -137,6 +137,19 @@ describe("Sheet Builder & Component Library Services", () => {
     expect(autosaveRes.revision).toBe(2);
     expect(autosaveRes.valid).toBe(true);
 
+    const normalizedEditorData = await sheetBuilderService.getSheetEditorData(
+      user1Id,
+      sheetDef.id,
+    );
+    const normalizedPrint = normalizedEditorData.draft.layouts.print;
+    expect(normalizedPrint.kind).toBe("frame");
+    if (normalizedPrint.kind === "frame") {
+      expect(normalizedPrint.cornerOrnaments?.preset).toBe("none");
+      expect(normalizedPrint).not.toHaveProperty("ornamentStyle");
+      expect(normalizedPrint).not.toHaveProperty("titleDock");
+      expect(normalizedPrint).not.toHaveProperty("footerDock");
+    }
+
     // Stale revision conflict
     await expect(
       sheetBuilderService.autosaveSheetDraft(user1Id, sheetDef.id, {
@@ -159,6 +172,10 @@ describe("Sheet Builder & Component Library Services", () => {
     const versions = await sheetBuilderService.listSheetVersions(sheetDef.id);
     expect(versions).toHaveLength(1);
     expect(versions[0].versionNumber).toBe(1);
+    const publishedVersion = await sheetBuilderService.getSheetVersion(
+      pubRes.versionId,
+    );
+    expect(publishedVersion.layouts.print).not.toHaveProperty("ornamentStyle");
   });
 
   it("handles component library, drafts, versioning, cycles and forks", async () => {
