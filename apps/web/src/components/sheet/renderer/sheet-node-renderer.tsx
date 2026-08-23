@@ -126,6 +126,9 @@ export const SheetNodeRenderer: React.FC<{ node: LayoutNode }> = ({ node }) => {
 
         return (
           <FrameDecorator
+            cornerOrnaments={node.cornerOrnaments}
+            topOrnament={node.topOrnament}
+            bottomOrnament={node.bottomOrnament}
             ornamentStyle={node.ornamentStyle}
             strokeColor={node.box.strokeColor}
             strokeWidth={node.box.strokeWidth}

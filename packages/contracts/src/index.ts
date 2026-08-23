@@ -310,6 +310,8 @@ export type {
   WorkspacePost,
 } from "./system-workspace.js";
 export {
+  CORNER_ORNAMENT_PRESETS,
+  EDGE_ORNAMENT_PRESETS,
   FILL_TOKENS,
   LAYOUT_ALIGNS,
   LAYOUT_DIRECTIONS,
@@ -321,8 +323,12 @@ export {
   TARGET_LAYOUT_KINDS,
   TITLE_DOCK_VARIANTS,
   boxPropsSchema,
+  cornerOrnamentPresetSchema,
+  cornerOrnamentsSchema,
   cornerRadiusSchema,
   defaultBoxProps,
+  edgeOrnamentPresetSchema,
+  edgeOrnamentSchema,
   fillTokenSchema,
   layoutAlignSchema,
   layoutDirectionSchema,
@@ -340,7 +346,11 @@ export {
 } from "./sheet-primitives.js";
 export type {
   BoxProps,
+  CornerOrnamentPreset,
+  CornerOrnaments,
   CornerRadius,
+  EdgeOrnament,
+  EdgeOrnamentPreset,
   FillToken,
   LayoutAlign,
   LayoutDirection,
@@ -356,6 +366,12 @@ export type {
   TitleDock,
   TitleDockVariant,
 } from "./sheet-primitives.js";
+export {
+  DND_TITLE_ORNAMENT_GEOMETRY,
+  FATE_CORNER_TURNBACK_GEOMETRY,
+  FATE_TITLE_ORNAMENT_GEOMETRY,
+} from "./ornament-geometry.js";
+export type { VectorPathDefinition } from "./ornament-geometry.js";
 export {
   PRINT_SPLIT_POLICIES,
   REPEATER_MODES,
@@ -410,6 +426,8 @@ export {
   fieldInputNodeSchema,
   imageNodeSchema,
   layoutNodeSchema,
+  normalizeFrameNode,
+  normalizeLayoutNode,
   numberInputNodeSchema,
   selectNodeSchema,
   selectOptionSchema,

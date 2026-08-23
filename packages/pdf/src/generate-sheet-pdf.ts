@@ -11,8 +11,15 @@ import {
 import type {
   CharacterRepeaterRow,
   ComponentVersionDetails,
+  CornerOrnaments,
+  EdgeOrnament,
   FieldValue,
   LayoutNode,
+} from "@mycharacter/contracts";
+import {
+  DND_TITLE_ORNAMENT_GEOMETRY,
+  FATE_CORNER_TURNBACK_GEOMETRY,
+  FATE_TITLE_ORNAMENT_GEOMETRY,
 } from "@mycharacter/contracts";
 
 export interface GenerateSheetPdfOptions {
@@ -213,6 +220,351 @@ function estimateNodeHeight(
   }
 }
 
+function drawCornerTurnbacksPdf(
+  ctx: PdfRenderContext,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  corners: CornerOrnaments,
+  color: RGB,
+) {
+  if (corners.preset !== "fate-turnback") return;
+  const white = rgb(1, 1, 1);
+  const size = FATE_CORNER_TURNBACK_GEOMETRY.width;
+  const outerWidth = FATE_CORNER_TURNBACK_GEOMETRY.outerArcStrokeWidth;
+  const innerWidth = FATE_CORNER_TURNBACK_GEOMETRY.innerArcStrokeWidth;
+
+  // Top-Left Corner
+  if (corners.topLeft) {
+    const cx = x - 1;
+    const cy = y - 9;
+    // White mask to erase frame border under the corner
+    ctx.page.drawRectangle({ x: cx, y: cy, width: size, height: size, color: white });
+    // Outer arc (r=10) & Inner arc (r=8)
+    ctx.page.drawCircle({
+      x: cx,
+      y: cy + size,
+      size: 10,
+      borderColor: color,
+      borderWidth: outerWidth,
+      opacity: 0,
+      borderOpacity: 1,
+    });
+    ctx.page.drawCircle({
+      x: cx,
+      y: cy + size,
+      size: 8,
+      borderColor: color,
+      borderWidth: innerWidth,
+      opacity: 0,
+      borderOpacity: 1,
+    });
+  }
+
+  // Top-Right Corner
+  if (corners.topRight) {
+    const cx = x + width - size + 1;
+    const cy = y - 9;
+    ctx.page.drawRectangle({ x: cx, y: cy, width: size, height: size, color: white });
+    ctx.page.drawCircle({
+      x: cx + size,
+      y: cy + size,
+      size: 10,
+      borderColor: color,
+      borderWidth: outerWidth,
+      opacity: 0,
+      borderOpacity: 1,
+    });
+    ctx.page.drawCircle({
+      x: cx + size,
+      y: cy + size,
+      size: 8,
+      borderColor: color,
+      borderWidth: innerWidth,
+      opacity: 0,
+      borderOpacity: 1,
+    });
+  }
+
+  // Bottom-Left Corner
+  if (corners.bottomLeft) {
+    const cx = x - 1;
+    const cy = y - height - 1;
+    ctx.page.drawRectangle({ x: cx, y: cy, width: size, height: size, color: white });
+    ctx.page.drawCircle({
+      x: cx,
+      y: cy,
+      size: 10,
+      borderColor: color,
+      borderWidth: outerWidth,
+      opacity: 0,
+      borderOpacity: 1,
+    });
+    ctx.page.drawCircle({
+      x: cx,
+      y: cy,
+      size: 8,
+      borderColor: color,
+      borderWidth: innerWidth,
+      opacity: 0,
+      borderOpacity: 1,
+    });
+  }
+
+  // Bottom-Right Corner
+  if (corners.bottomRight) {
+    const cx = x + width - size + 1;
+    const cy = y - height - 1;
+    ctx.page.drawRectangle({ x: cx, y: cy, width: size, height: size, color: white });
+    ctx.page.drawCircle({
+      x: cx + size,
+      y: cy,
+      size: 10,
+      borderColor: color,
+      borderWidth: outerWidth,
+      opacity: 0,
+      borderOpacity: 1,
+    });
+    ctx.page.drawCircle({
+      x: cx + size,
+      y: cy,
+      size: 8,
+      borderColor: color,
+      borderWidth: innerWidth,
+      opacity: 0,
+      borderOpacity: 1,
+    });
+  }
+}
+
+function drawEdgeOrnamentPdf(
+  ctx: PdfRenderContext,
+  x: number,
+  startY: number,
+  frameWidth: number,
+  frameHeight: number,
+  ornament: EdgeOrnament,
+  dock: "top" | "bottom",
+  color: RGB,
+) {
+  if (ornament.preset === "none" || !ornament.text.trim()) return;
+
+  const font =
+    ornament.fontFamily === "Montserrat Alternates"
+      ? ornament.fontWeight === "bold"
+        ? ctx.fonts.titleBoldFont
+        : ctx.fonts.titleFont
+      : ornament.fontWeight === "bold"
+      ? ctx.fonts.bodyBoldFont
+      : ctx.fonts.bodyFont;
+
+  const fontSize = ornament.fontSize ?? 10;
+  const text = ornament.text;
+  const rawTextWidth = font.widthOfTextAtSize(text, fontSize);
+  const letterSpacing = ornament.letterSpacingPx ?? -0.9;
+  const textWidth = Math.max(10, rawTextWidth + (text.length - 1) * letterSpacing);
+
+  const white = rgb(1, 1, 1);
+  const ornHeight = ornament.preset === "dnd" ? DND_TITLE_ORNAMENT_GEOMETRY.height : FATE_TITLE_ORNAMENT_GEOMETRY.height;
+  const capWidth = ornament.preset === "dnd" ? DND_TITLE_ORNAMENT_GEOMETRY.capWidth : FATE_TITLE_ORNAMENT_GEOMETRY.capWidth;
+  const totalWidth = Math.min(frameWidth - 8, textWidth + capWidth * 2 + 12);
+
+  let badgeX = x + (frameWidth - totalWidth) / 2 + (ornament.offset || 0);
+  if (ornament.align === "start") {
+    badgeX = x + 12 + (ornament.offset || 0);
+  } else if (ornament.align === "end") {
+    badgeX = x + frameWidth - totalWidth - 12 + (ornament.offset || 0);
+  }
+
+  const badgeY =
+    dock === "top"
+      ? startY - ornHeight / 2
+      : startY - frameHeight - ornHeight / 2;
+
+  // Clear background underneath ornament
+  ctx.page.drawRectangle({
+    x: badgeX,
+    y: badgeY,
+    width: totalWidth,
+    height: ornHeight,
+    color: white,
+  });
+
+  if (ornament.preset === "fate") {
+    // Top line (0.5)
+    ctx.page.drawLine({
+      start: { x: badgeX + capWidth, y: badgeY + ornHeight },
+      end: { x: badgeX + totalWidth - capWidth, y: badgeY + ornHeight },
+      thickness: FATE_TITLE_ORNAMENT_GEOMETRY.topLineStrokeWidth,
+      color,
+    });
+    // Bottom line (1.5)
+    ctx.page.drawLine({
+      start: { x: badgeX + capWidth, y: badgeY },
+      end: { x: badgeX + totalWidth - capWidth, y: badgeY },
+      thickness: FATE_TITLE_ORNAMENT_GEOMETRY.bottomLineStrokeWidth,
+      color,
+    });
+
+    // Left bracket cap
+    ctx.page.drawLine({
+      start: { x: badgeX + capWidth, y: badgeY + ornHeight },
+      end: { x: badgeX + 4, y: badgeY + ornHeight },
+      thickness: 1,
+      color,
+    });
+    ctx.page.drawLine({
+      start: { x: badgeX + 4, y: badgeY + ornHeight },
+      end: { x: badgeX + 1, y: badgeY + ornHeight / 2 },
+      thickness: 1,
+      color,
+    });
+    ctx.page.drawLine({
+      start: { x: badgeX + 1, y: badgeY + ornHeight / 2 },
+      end: { x: badgeX + 4, y: badgeY },
+      thickness: 1,
+      color,
+    });
+    ctx.page.drawLine({
+      start: { x: badgeX + 4, y: badgeY },
+      end: { x: badgeX + capWidth, y: badgeY },
+      thickness: 1,
+      color,
+    });
+
+    // Right mirrored bracket cap
+    const rx = badgeX + totalWidth;
+    ctx.page.drawLine({
+      start: { x: rx - capWidth, y: badgeY + ornHeight },
+      end: { x: rx - 4, y: badgeY + ornHeight },
+      thickness: 1,
+      color,
+    });
+    ctx.page.drawLine({
+      start: { x: rx - 4, y: badgeY + ornHeight },
+      end: { x: rx - 1, y: badgeY + ornHeight / 2 },
+      thickness: 1,
+      color,
+    });
+    ctx.page.drawLine({
+      start: { x: rx - 1, y: badgeY + ornHeight / 2 },
+      end: { x: rx - 4, y: badgeY },
+      thickness: 1,
+      color,
+    });
+    ctx.page.drawLine({
+      start: { x: rx - 4, y: badgeY },
+      end: { x: rx - capWidth, y: badgeY },
+      thickness: 1,
+      color,
+    });
+  } else if (ornament.preset === "dnd") {
+    // Top double lines
+    ctx.page.drawLine({
+      start: { x: badgeX + capWidth, y: badgeY + ornHeight - 1.5 },
+      end: { x: badgeX + totalWidth - capWidth, y: badgeY + ornHeight - 1.5 },
+      thickness: DND_TITLE_ORNAMENT_GEOMETRY.topOuterStrokeWidth,
+      color,
+    });
+    ctx.page.drawLine({
+      start: { x: badgeX + capWidth, y: badgeY + ornHeight - 4 },
+      end: { x: badgeX + totalWidth - capWidth, y: badgeY + ornHeight - 4 },
+      thickness: DND_TITLE_ORNAMENT_GEOMETRY.topInnerStrokeWidth,
+      color,
+    });
+
+    // Bottom double lines
+    ctx.page.drawLine({
+      start: { x: badgeX + capWidth, y: badgeY + 4 },
+      end: { x: badgeX + totalWidth - capWidth, y: badgeY + 4 },
+      thickness: DND_TITLE_ORNAMENT_GEOMETRY.bottomInnerStrokeWidth,
+      color,
+    });
+    ctx.page.drawLine({
+      start: { x: badgeX + capWidth, y: badgeY + 1.5 },
+      end: { x: badgeX + totalWidth - capWidth, y: badgeY + 1.5 },
+      thickness: DND_TITLE_ORNAMENT_GEOMETRY.bottomOuterStrokeWidth,
+      color,
+    });
+
+    // Outer faceted caps
+    ctx.page.drawLine({
+      start: { x: badgeX + capWidth, y: badgeY + ornHeight - 1.5 },
+      end: { x: badgeX + 7, y: badgeY + ornHeight - 1.5 },
+      thickness: 1,
+      color,
+    });
+    ctx.page.drawLine({
+      start: { x: badgeX + 7, y: badgeY + ornHeight - 1.5 },
+      end: { x: badgeX + 1.5, y: badgeY + ornHeight / 2 },
+      thickness: 1,
+      color,
+    });
+    ctx.page.drawLine({
+      start: { x: badgeX + 1.5, y: badgeY + ornHeight / 2 },
+      end: { x: badgeX + 7, y: badgeY + 1.5 },
+      thickness: 1,
+      color,
+    });
+    ctx.page.drawLine({
+      start: { x: badgeX + 7, y: badgeY + 1.5 },
+      end: { x: badgeX + capWidth, y: badgeY + 1.5 },
+      thickness: 1,
+      color,
+    });
+
+    const rx = badgeX + totalWidth;
+    ctx.page.drawLine({
+      start: { x: rx - capWidth, y: badgeY + ornHeight - 1.5 },
+      end: { x: rx - 7, y: badgeY + ornHeight - 1.5 },
+      thickness: 1,
+      color,
+    });
+    ctx.page.drawLine({
+      start: { x: rx - 7, y: badgeY + ornHeight - 1.5 },
+      end: { x: rx - 1.5, y: badgeY + ornHeight / 2 },
+      thickness: 1,
+      color,
+    });
+    ctx.page.drawLine({
+      start: { x: rx - 1.5, y: badgeY + ornHeight / 2 },
+      end: { x: rx - 7, y: badgeY + 1.5 },
+      thickness: 1,
+      color,
+    });
+    ctx.page.drawLine({
+      start: { x: rx - 7, y: badgeY + 1.5 },
+      end: { x: rx - capWidth, y: badgeY + 1.5 },
+      thickness: 1,
+      color,
+    });
+  } else {
+    // Legacy pill border
+    ctx.page.drawRectangle({
+      x: badgeX,
+      y: badgeY,
+      width: totalWidth,
+      height: ornHeight,
+      borderColor: color,
+      borderWidth: 1,
+      color: white,
+    });
+  }
+
+  // Draw Text centered horizontally and vertically
+  const textX = badgeX + capWidth + (totalWidth - capWidth * 2 - textWidth) / 2;
+  const textY = badgeY + (ornHeight - fontSize) / 2 + 2;
+
+  ctx.page.drawText(text, {
+    x: textX,
+    y: textY,
+    size: fontSize,
+    font,
+    color: rgb(0.1, 0.1, 0.1),
+  });
+}
+
 function renderFrameNode(
   ctx: PdfRenderContext,
   node: LayoutNode & { kind: "frame" },
@@ -226,34 +578,6 @@ function renderFrameNode(
 
   const startY = y;
   let contentY = y - pad.top;
-
-  // Title dock if present
-  let titleBadgeHeight = 0;
-  if (node.titleDock && node.titleDock.dock !== "none" && node.titleDock.text) {
-    const titleText = node.titleDock.text;
-    const font = ctx.fonts.titleBoldFont;
-    const titleSize = 10;
-    const textWidth = font.widthOfTextAtSize(titleText, titleSize);
-
-    const badgeX = x + pad.left;
-    const badgeY = contentY - 14;
-    ctx.page.drawRectangle({
-      x: badgeX,
-      y: badgeY,
-      width: Math.min(innerWidth, textWidth + 16),
-      height: 16,
-      color: rgb(0.06, 0.24, 0.09),
-    });
-    ctx.page.drawText(titleText, {
-      x: badgeX + 8,
-      y: badgeY + 4,
-      size: titleSize,
-      font,
-      color: rgb(1, 1, 1),
-    });
-    titleBadgeHeight = 22;
-    contentY -= titleBadgeHeight;
-  }
 
   // Precalculate children height
   let estimatedChildrenHeight = 0;
@@ -271,7 +595,7 @@ function renderFrameNode(
   }
 
   const estimatedTotalHeight = Math.max(
-    pad.top + titleBadgeHeight + estimatedChildrenHeight + pad.bottom,
+    pad.top + estimatedChildrenHeight + pad.bottom,
     node.box?.height?.mode === "fixed" ? node.box.height.value : 20,
   );
 
@@ -301,26 +625,6 @@ function renderFrameNode(
     });
   }
 
-  // Draw ornament decorations if specified
-  if (node.ornamentStyle && node.ornamentStyle !== "none") {
-    const ornColor = strokeColor ?? rgb(0.6, 0.65, 0.6);
-    const ornSize = 4;
-    ctx.page.drawRectangle({
-      x: x + 2,
-      y: startY - 6,
-      width: ornSize,
-      height: ornSize,
-      color: ornColor,
-    });
-    ctx.page.drawRectangle({
-      x: x + availableWidth - 6,
-      y: startY - 6,
-      width: ornSize,
-      height: ornSize,
-      color: ornColor,
-    });
-  }
-
   // Render children
   if (node.direction === "horizontal" && node.children.length > 0) {
     const totalGaps = gap * (node.children.length - 1);
@@ -345,6 +649,52 @@ function renderFrameNode(
   }
 
   const finalHeight = Math.max(startY - contentY + pad.bottom, estimatedTotalHeight);
+
+  // Draw Corner Ornaments (Fate turnbacks)
+  const defaultCorners: CornerOrnaments = {
+    preset: node.ornamentStyle === "arc-corner" ? "arc-corner" : "none",
+    topLeft: true,
+    topRight: true,
+    bottomRight: true,
+    bottomLeft: true,
+  };
+  const activeCorners = node.cornerOrnaments ?? defaultCorners;
+  if (strokeColor && activeCorners.preset === "fate-turnback") {
+    drawCornerTurnbacksPdf(ctx, x, startY, availableWidth, finalHeight, activeCorners, strokeColor);
+  }
+
+  // Draw Top Edge Ornament
+  const defaultTop: EdgeOrnament = {
+    preset: node.titleDock && node.titleDock.dock === "top" && node.titleDock.variant !== "none" ? "legacy-pill" : "none",
+    align: node.titleDock?.variant?.includes("center") ? "center" : "start",
+    offset: 0,
+    text: node.titleDock?.text || "",
+    fontFamily: "Montserrat Alternates",
+    fontSize: 10,
+    fontWeight: "medium",
+    letterSpacingPx: -0.9,
+  };
+  const activeTop = node.topOrnament ?? defaultTop;
+  if (strokeColor && activeTop.preset !== "none") {
+    drawEdgeOrnamentPdf(ctx, x, startY, availableWidth, finalHeight, activeTop, "top", strokeColor);
+  }
+
+  // Draw Bottom Edge Ornament
+  const defaultBottom: EdgeOrnament = {
+    preset: node.footerDock && node.footerDock.dock === "bottom" && node.footerDock.variant !== "none" ? "legacy-pill" : "none",
+    align: node.footerDock?.variant?.includes("center") ? "center" : "start",
+    offset: 0,
+    text: node.footerDock?.text || "",
+    fontFamily: "Montserrat Alternates",
+    fontSize: 10,
+    fontWeight: "medium",
+    letterSpacingPx: -0.9,
+  };
+  const activeBottom = node.bottomOrnament ?? defaultBottom;
+  if (strokeColor && activeBottom.preset !== "none") {
+    drawEdgeOrnamentPdf(ctx, x, startY, availableWidth, finalHeight, activeBottom, "bottom", strokeColor);
+  }
+
   return finalHeight;
 }
 

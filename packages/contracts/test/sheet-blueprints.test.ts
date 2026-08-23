@@ -3,6 +3,7 @@ import crypto from "node:crypto";
 import {
   boxPropsSchema,
   layoutNodeSchema,
+  normalizeLayoutNode,
   repeaterConfigSchema,
   sheetBlueprintDocumentSchema,
   validateLayoutNodeConstraints,
@@ -204,6 +205,108 @@ describe("Sheet Builder Contracts", () => {
     const parsed = sheetBlueprintDocumentSchema.parse(doc);
     expect(parsed.schemaVersion).toBe(1);
     expect(parsed.fields).toHaveLength(1);
+  });
+
+  it("normalizes legacy frame node with ornamentStyle, titleDock and footerDock", () => {
+    const legacyFrame = {
+      id: crypto.randomUUID(),
+      kind: "frame",
+      direction: "vertical",
+      gap: 8,
+      align: "start",
+      justify: "start",
+      wrap: false,
+      collapseAdjacentStrokes: false,
+      ornamentStyle: "arc-corner",
+      titleDock: { dock: "top", variant: "inline-center", text: "Aspects" },
+      footerDock: { dock: "bottom", variant: "diamond-start", text: "Fate Core" },
+      box: {
+        width: { mode: "fill" },
+        height: { mode: "hug" },
+        padding: { top: 0, right: 0, bottom: 0, left: 0 },
+        strokeWidth: { top: 1, right: 1, bottom: 1, left: 1 },
+        strokeColor: "default",
+        cornerRadius: { topLeft: 0, topRight: 0, bottomRight: 0, bottomLeft: 0 },
+        fill: "transparent",
+        overflow: "visible",
+        hiddenOnTargets: [],
+      },
+      children: [],
+    };
+
+    const parsed = normalizeLayoutNode(legacyFrame);
+    expect(parsed.kind).toBe("frame");
+    if (parsed.kind === "frame") {
+      expect(parsed.cornerOrnaments.preset).toBe("arc-corner");
+      expect(parsed.cornerOrnaments.topLeft).toBe(true);
+      expect(parsed.topOrnament.preset).toBe("legacy-pill");
+      expect(parsed.topOrnament.align).toBe("center");
+      expect(parsed.topOrnament.text).toBe("Aspects");
+      expect(parsed.bottomOrnament.preset).toBe("legacy-pill");
+      expect(parsed.bottomOrnament.align).toBe("start");
+      expect(parsed.bottomOrnament.text).toBe("Fate Core");
+    }
+  });
+
+  it("validates new Fate corner turnbacks and Fate title ornaments with letterSpacingPx", () => {
+    const modernFateFrame = {
+      id: crypto.randomUUID(),
+      kind: "frame",
+      direction: "vertical",
+      gap: 12,
+      align: "stretch",
+      justify: "start",
+      wrap: false,
+      collapseAdjacentStrokes: false,
+      cornerOrnaments: {
+        preset: "fate-turnback",
+        topLeft: true,
+        topRight: true,
+        bottomRight: false,
+        bottomLeft: true,
+      },
+      topOrnament: {
+        preset: "fate",
+        align: "center",
+        offset: 0,
+        text: "SKILLS",
+        fontFamily: "Montserrat Alternates",
+        fontSize: 10,
+        fontWeight: "medium",
+        letterSpacingPx: -0.9,
+      },
+      bottomOrnament: {
+        preset: "none",
+        align: "center",
+        offset: 0,
+        text: "",
+        fontFamily: "Montserrat Alternates",
+        fontSize: 10,
+        fontWeight: "medium",
+        letterSpacingPx: -0.9,
+      },
+      box: {
+        width: { mode: "fill" },
+        height: { mode: "hug" },
+        padding: { top: 8, right: 8, bottom: 8, left: 8 },
+        strokeWidth: { top: 1, right: 1, bottom: 1, left: 1 },
+        strokeColor: "default",
+        cornerRadius: { topLeft: 0, topRight: 0, bottomRight: 0, bottomLeft: 0 },
+        fill: "transparent",
+        overflow: "visible",
+        hiddenOnTargets: [],
+      },
+      children: [],
+    };
+
+    const parsed = layoutNodeSchema.parse(modernFateFrame);
+    expect(parsed.kind).toBe("frame");
+    if (parsed.kind === "frame") {
+      expect(parsed.cornerOrnaments.preset).toBe("fate-turnback");
+      expect(parsed.cornerOrnaments.bottomRight).toBe(false);
+      expect(parsed.topOrnament.preset).toBe("fate");
+      expect(parsed.topOrnament.letterSpacingPx).toBe(-0.9);
+    }
   });
 });
 

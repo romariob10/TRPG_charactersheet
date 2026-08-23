@@ -3,12 +3,15 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   FileText,
+  Layers,
   Monitor,
+  Plus,
   Redo2,
   Smartphone,
   Tablet,
   Undo2,
 } from "lucide-react";
+import { useTranslations } from "next-intl";
 import type {
   ComponentSummary,
   ComponentVersionDetails,
@@ -19,6 +22,15 @@ import type {
   TargetLayoutMap,
 } from "@mycharacter/contracts";
 import { defaultBoxProps } from "@mycharacter/contracts";
+import {
+  duplicateNode,
+  findNode,
+  getAncestorIds,
+  insertNode,
+  moveNode,
+  removeNode,
+  renameNode,
+} from "../../../lib/tree-utils";
 import { InspectorView } from "./inspector-view";
 import { PaletteView } from "./palette-view";
 import { TreeView } from "./tree-view";
@@ -30,19 +42,6 @@ import { SaveComponentModal } from "../library/save-component-modal";
 interface SheetBuilderMainProps {
   initialData: SheetEditorDataResponse;
   systemId: string;
-}
-
-function findNode(root: LayoutNode, id: string): LayoutNode | null {
-  if (root.id === id) return root;
-  if (root.kind === "frame") {
-    for (const child of root.children) {
-      const res = findNode(child, id);
-      if (res) return res;
-    }
-  } else if (root.kind === "repeater") {
-    return findNode(root.rowTemplate, id);
-  }
-  return null;
 }
 
 function updateNodeInTree(root: LayoutNode, updated: LayoutNode): LayoutNode {
@@ -62,22 +61,11 @@ function updateNodeInTree(root: LayoutNode, updated: LayoutNode): LayoutNode {
   return root;
 }
 
-function deleteNodeFromTree(root: LayoutNode, id: string): LayoutNode {
-  if (root.kind === "frame") {
-    return {
-      ...root,
-      children: root.children
-        .filter((c) => c.id !== id)
-        .map((c) => deleteNodeFromTree(c, id)),
-    };
-  }
-  return root;
-}
-
 export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
   initialData,
   systemId,
 }) => {
+  const t = useTranslations("SheetBuilder");
   const [layouts, setLayouts] = useState<TargetLayoutMap>(
     initialData.draft.layouts,
   );
@@ -91,7 +79,19 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
     "idle" | "saving" | "saved" | "error" | "conflict"
   >("saved");
   const [zoom, setZoom] = useState(1);
-  const [activeTab, setActiveTab] = useState<"layers" | "palette">("palette");
+  const [activeTab, setActiveTab] = useState<"layers" | "palette">("layers");
+  const [sidebarWidth, setSidebarWidth] = useState(280);
+  const isResizingRef = useRef(false);
+
+  // Expansion state per target layout (non-persistent, does not trigger autosave)
+  const [expandedNodesByTarget, setExpandedNodesByTarget] = useState<
+    Record<TargetLayoutKind, Set<string>>
+  >({
+    mobile: new Set([initialData.draft.layouts.mobile.id]),
+    tablet: new Set([initialData.draft.layouts.tablet.id]),
+    desktop: new Set([initialData.draft.layouts.desktop.id]),
+    print: new Set([initialData.draft.layouts.print.id]),
+  });
 
   // Undo / Redo history
   const [history, setHistory] = useState<TargetLayoutMap[]>([]);
@@ -138,6 +138,7 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
   const undo = useCallback(() => {
     if (history.length === 0) return;
     const prevLayouts = history[history.length - 1];
+    if (!prevLayouts) return;
     setHistory((h) => h.slice(0, -1));
     setFuture((f) => [layouts, ...f]);
     setLayouts(prevLayouts);
@@ -147,6 +148,7 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
   const redo = useCallback(() => {
     if (future.length === 0) return;
     const nextLayouts = future[0];
+    if (!nextLayouts) return;
     setFuture((f) => f.slice(1));
     setHistory((h) => [...h, layouts]);
     setLayouts(nextLayouts);
@@ -171,7 +173,39 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [undo, redo]);
 
-  // Handle node selection
+  // Selection synchronization with tree expansion
+  const selectNode = useCallback(
+    (id: string | null) => {
+      setSelectedNodeId(id);
+      if (id) {
+        const ancestors = getAncestorIds(currentRoot, id);
+        if (ancestors.length > 0) {
+          setExpandedNodesByTarget((prev) => {
+            const set = new Set(prev[activeTarget]);
+            ancestors.forEach((ancId) => set.add(ancId));
+            return { ...prev, [activeTarget]: set };
+          });
+        }
+      }
+    },
+    [currentRoot, activeTarget],
+  );
+
+  const toggleExpand = useCallback(
+    (id: string) => {
+      setExpandedNodesByTarget((prev) => {
+        const set = new Set(prev[activeTarget]);
+        if (set.has(id)) {
+          set.delete(id);
+        } else {
+          set.add(id);
+        }
+        return { ...prev, [activeTarget]: set };
+      });
+    },
+    [activeTarget],
+  );
+
   const selectedNode = selectedNodeId
     ? findNode(currentRoot, selectedNodeId)
     : null;
@@ -179,82 +213,49 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
   // Insert node
   const handleInsertNode = (newNode: LayoutNode) => {
     if (selectedNode && selectedNode.kind === "frame") {
-      const updatedFrame: LayoutNode = {
-        ...selectedNode,
-        children: [...selectedNode.children, newNode],
-      };
-      setTargetLayout(updateNodeInTree(currentRoot, updatedFrame));
+      const updated = insertNode(currentRoot, selectedNode.id, newNode);
+      setTargetLayout(updated);
     } else if (currentRoot.kind === "frame") {
-      const updatedRoot: LayoutNode = {
-        ...currentRoot,
-        children: [...currentRoot.children, newNode],
-      };
-      setTargetLayout(updatedRoot);
+      const updated = insertNode(currentRoot, currentRoot.id, newNode);
+      setTargetLayout(updated);
     }
-    setSelectedNodeId(newNode.id);
+    selectNode(newNode.id);
   };
 
   // Delete node
   const handleDeleteNode = (id: string) => {
     if (id === currentRoot.id) return;
-    setTargetLayout(deleteNodeFromTree(currentRoot, id));
+    setTargetLayout(removeNode(currentRoot, id));
     if (selectedNodeId === id) setSelectedNodeId(null);
   };
 
   // Duplicate node
   const handleDuplicateNode = (id: string) => {
-    const target = findNode(currentRoot, id);
-    if (!target || id === currentRoot.id) return;
-
-    const deepCloneWithNewIds = (node: LayoutNode): LayoutNode => {
-      const clone = JSON.parse(JSON.stringify(node)) as LayoutNode;
-      const assignNewIds = (n: LayoutNode) => {
-        n.id = crypto.randomUUID();
-        if (n.kind === "frame") n.children.forEach(assignNewIds);
-        if (n.kind === "repeater") assignNewIds(n.rowTemplate);
-      };
-      assignNewIds(clone);
-      clone.name = `${clone.name || clone.kind} (Copy)`;
-      return clone;
-    };
-
-    const duplicate = deepCloneWithNewIds(target);
-    handleInsertNode(duplicate);
+    if (id === currentRoot.id) return;
+    const { updatedRoot, newId } = duplicateNode(currentRoot, id);
+    setTargetLayout(updatedRoot);
+    if (newId) selectNode(newId);
   };
 
-  // Move node up / down
-  const handleMoveNode = (id: string, direction: "up" | "down") => {
-    const moveInChildren = (root: LayoutNode): LayoutNode => {
-      if (root.kind === "frame") {
-        const idx = root.children.findIndex((c) => c.id === id);
-        if (idx !== -1) {
-          const targetIdx = direction === "up" ? idx - 1 : idx + 1;
-          if (targetIdx >= 0 && targetIdx < root.children.length) {
-            const nextChildren = [...root.children];
-            const [item] = nextChildren.splice(idx, 1);
-            nextChildren.splice(targetIdx, 0, item);
-            return { ...root, children: nextChildren };
-          }
-          return root;
-        }
-        return {
-          ...root,
-          children: root.children.map(moveInChildren),
-        };
-      }
-      return root;
-    };
+  // Rename node
+  const handleRenameNode = (id: string, name: string) => {
+    setTargetLayout(renameNode(currentRoot, id, name));
+  };
 
-    setTargetLayout(moveInChildren(currentRoot));
+  // Drag & drop hierarchy movement
+  const handleMoveNodeHierarchy = (
+    draggedId: string,
+    targetId: string,
+    position: "before" | "inside" | "after",
+  ) => {
+    const updated = moveNode(currentRoot, draggedId, targetId, position);
+    setTargetLayout(updated);
+    selectNode(draggedId);
   };
 
   // Auto-generate mobile/tablet/print from desktop layout
   const handleAutoGenerateTargets = () => {
-    if (
-      !confirm(
-        "Auto-generate mobile, tablet, and print layouts from current Desktop layout? This will adapt container directions and widths.",
-      )
-    ) {
+    if (!confirm(t("adaptTargets") + "?")) {
       return;
     }
 
@@ -389,6 +390,27 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
     }
   };
 
+  // Sidebar resize handlers
+  const handleResizePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    isResizingRef.current = true;
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+
+  const handleResizePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isResizingRef.current) return;
+    const newWidth = Math.max(220, Math.min(480, e.clientX));
+    setSidebarWidth(newWidth);
+  };
+
+  const handleResizePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    isResizingRef.current = false;
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    } catch {
+      // ignore
+    }
+  };
+
   const canvasWidthClass = {
     mobile: "max-w-sm",
     tablet: "max-w-2xl",
@@ -405,7 +427,7 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
             href={`/dashboard/systems/${systemId}/workspace`}
             className="text-xs font-semibold text-muted-foreground hover:text-foreground flex items-center gap-1"
           >
-            <span>←</span> Workspace
+            <span>←</span> {t("workspace")}
           </a>
           <span className="text-muted-foreground">/</span>
           <h2 className="text-sm font-bold text-foreground">
@@ -428,7 +450,7 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
             }`}
           >
             <Smartphone className="size-3.5" />
-            <span>Mobile</span>
+            <span>{t("targetMobile")}</span>
           </button>
           <button
             type="button"
@@ -440,7 +462,7 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
             }`}
           >
             <Tablet className="size-3.5" />
-            <span>Tablet</span>
+            <span>{t("targetTablet")}</span>
           </button>
           <button
             type="button"
@@ -452,7 +474,7 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
             }`}
           >
             <Monitor className="size-3.5" />
-            <span>Desktop</span>
+            <span>{t("targetDesktop")}</span>
           </button>
           <button
             type="button"
@@ -464,7 +486,7 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
             }`}
           >
             <FileText className="size-3.5" />
-            <span>A4 Print</span>
+            <span>{t("targetPrint")}</span>
           </button>
         </div>
 
@@ -477,7 +499,8 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
               onClick={undo}
               disabled={history.length === 0}
               className="p-1 text-muted-foreground hover:text-foreground disabled:opacity-30 rounded"
-              title="Undo (Cmd+Z)"
+              title={`${t("undo")} (Cmd+Z)`}
+              aria-label={t("undo")}
             >
               <Undo2 className="size-3.5" />
             </button>
@@ -486,7 +509,8 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
               onClick={redo}
               disabled={future.length === 0}
               className="p-1 text-muted-foreground hover:text-foreground disabled:opacity-30 rounded"
-              title="Redo (Cmd+Shift+Z)"
+              title={`${t("redo")} (Cmd+Shift+Z)`}
+              aria-label={t("redo")}
             >
               <Redo2 className="size-3.5" />
             </button>
@@ -498,6 +522,7 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
               type="button"
               onClick={() => setZoom((z) => Math.max(0.5, z - 0.1))}
               className="p-1 hover:text-foreground"
+              aria-label="Zoom out"
             >
               -
             </button>
@@ -506,6 +531,7 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
               type="button"
               onClick={() => setZoom((z) => Math.min(1.5, z + 0.1))}
               className="p-1 hover:text-foreground"
+              aria-label="Zoom in"
             >
               +
             </button>
@@ -518,26 +544,26 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
             className="text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded border border-border"
             title="Auto-generate mobile/tablet/print from desktop layout"
           >
-            Adapt All Targets
+            {t("adaptTargets")}
           </button>
 
           {/* Save Status indicator */}
           <div className="flex items-center gap-1.5 text-xs">
             {saveStatus === "saving" && (
-              <span className="text-muted-foreground">Saving…</span>
+              <span className="text-muted-foreground">{t("saving")}</span>
             )}
             {saveStatus === "saved" && (
               <span className="text-emerald-600 dark:text-emerald-400 font-medium">
-                ✓ Saved
+                ✓ {t("saved")}
               </span>
             )}
             {saveStatus === "conflict" && (
               <span className="text-amber-600 dark:text-amber-400 font-bold">
-                ⚠️ Conflict
+                ⚠️ {t("conflict")}
               </span>
             )}
             {saveStatus === "error" && (
-              <span className="text-destructive font-bold">Error</span>
+              <span className="text-destructive font-bold">{t("error")}</span>
             )}
           </div>
 
@@ -546,57 +572,74 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
             onClick={() => setShowPublishModal(true)}
             className="px-3.5 py-1.5 bg-primary text-primary-foreground font-semibold text-xs rounded-md hover:bg-primary/90 shadow-sm transition-colors"
           >
-            Publish Version
+            {t("publish")}
           </button>
         </div>
       </header>
 
       {/* Main Workspace Layout */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Left Sidebar (Palette / Layers) */}
-        <aside className="w-80 border-r border-border bg-card flex flex-col shrink-0">
+        {/* Left Sidebar (Layers / Add Elements) */}
+        <aside
+          style={{ width: `${sidebarWidth}px` }}
+          className="border-r border-border bg-card flex flex-col shrink-0 relative"
+        >
           <div className="flex border-b border-border">
             <button
               type="button"
-              onClick={() => setActiveTab("palette")}
-              className={`flex-1 py-2.5 text-xs font-bold text-center border-b-2 transition-colors ${
-                activeTab === "palette"
-                  ? "border-primary text-primary"
-                  : "border-transparent text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              Palette
-            </button>
-            <button
-              type="button"
               onClick={() => setActiveTab("layers")}
-              className={`flex-1 py-2.5 text-xs font-bold text-center border-b-2 transition-colors ${
+              className={`flex-1 py-2.5 text-xs font-bold text-center border-b-2 transition-colors flex items-center justify-center gap-1.5 ${
                 activeTab === "layers"
                   ? "border-primary text-primary"
                   : "border-transparent text-muted-foreground hover:text-foreground"
               }`}
             >
-              Layers Tree
+              <Layers className="size-3.5" />
+              <span>{t("layers")}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("palette")}
+              className={`flex-1 py-2.5 text-xs font-bold text-center border-b-2 transition-colors flex items-center justify-center gap-1.5 ${
+                activeTab === "palette"
+                  ? "border-primary text-primary"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <Plus className="size-3.5" />
+              <span>{t("palette")}</span>
             </button>
           </div>
 
           <div className="flex-1 overflow-y-auto">
-            {activeTab === "palette" ? (
+            {activeTab === "layers" ? (
+              <TreeView
+                rootNode={currentRoot}
+                selectedNodeId={selectedNodeId}
+                expandedNodeIds={expandedNodesByTarget[activeTarget]}
+                onToggleExpand={toggleExpand}
+                onSelectNode={selectNode}
+                onDeleteNode={handleDeleteNode}
+                onDuplicateNode={handleDuplicateNode}
+                onRenameNode={handleRenameNode}
+                onMoveNodeHierarchy={handleMoveNodeHierarchy}
+              />
+            ) : (
               <PaletteView
                 onInsertNode={handleInsertNode}
                 onOpenComponentLibrary={() => setShowLibrary(true)}
               />
-            ) : (
-              <TreeView
-                rootNode={currentRoot}
-                selectedNodeId={selectedNodeId}
-                onSelectNode={(id) => setSelectedNodeId(id)}
-                onDeleteNode={handleDeleteNode}
-                onDuplicateNode={handleDuplicateNode}
-                onMoveNode={handleMoveNode}
-              />
             )}
           </div>
+
+          {/* Drag Resize Handle */}
+          <div
+            onPointerDown={handleResizePointerDown}
+            onPointerMove={handleResizePointerMove}
+            onPointerUp={handleResizePointerUp}
+            className="absolute top-0 right-0 bottom-0 w-1.5 cursor-col-resize hover:bg-primary/40 active:bg-primary z-20"
+            title="Resize Panel"
+          />
         </aside>
 
         {/* Central Visual Canvas */}
@@ -617,7 +660,7 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
                 mode: "builder",
                 target: activeTarget,
                 selectedNodeId,
-                onSelectNode: (id: string | null) => setSelectedNodeId(id),
+                onSelectNode: selectNode,
                 resolvedComponents,
               }}
             >
@@ -630,7 +673,7 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
         <aside className="w-80 border-l border-border bg-card flex flex-col shrink-0">
           <header className="p-3 border-b border-border">
             <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-              Properties
+              {t("inspector")}
             </h3>
           </header>
           <InspectorView
@@ -672,10 +715,10 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-md rounded-[var(--radius-card)] border border-border bg-card p-6 shadow-xl">
             <h3 className="text-lg font-bold text-foreground">
-              Publish Sheet Version
+              {t("publishModalTitle")}
             </h3>
             <p className="mt-1 text-xs text-muted-foreground">
-              Create an immutable snapshot of all responsive layouts and semantic fields for character creation and PDF export.
+              {t("publishModalDescription")}
             </p>
 
             {publishError && (
@@ -686,13 +729,13 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
 
             <div className="mt-4">
               <label className="text-xs font-semibold text-foreground">
-                Changelog / Version Notes
+                {t("changelogLabel")}
               </label>
               <textarea
                 rows={3}
                 value={publishChangelog}
                 onChange={(e) => setPublishChangelog(e.target.value)}
-                placeholder="What changed in this version?"
+                placeholder={t("changelogPlaceholder")}
                 className="w-full mt-1.5 p-2 bg-background border border-border rounded text-xs"
               />
             </div>
@@ -712,7 +755,7 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
                 disabled={publishing}
                 className="px-4 py-2 text-xs font-semibold rounded bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm"
               >
-                {publishing ? "Publishing…" : "Confirm & Publish"}
+                {publishing ? t("publishing") : t("confirmPublish")}
               </button>
             </div>
           </div>

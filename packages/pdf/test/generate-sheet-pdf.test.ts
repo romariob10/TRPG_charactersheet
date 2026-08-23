@@ -312,4 +312,75 @@ describe("generateA4SheetPdf", () => {
     const doc = await PDFDocument.load(pdfBytes);
     expect(doc.getPageCount()).toBeGreaterThan(1);
   });
+
+  it("renders Fate turnbacks and Fate/D&D title ornaments in PDF", async () => {
+    const layout: LayoutNode = {
+      id: "550e8400-e29b-41d4-a716-446655440400",
+      kind: "frame",
+      direction: "vertical",
+      gap: 16,
+      align: "stretch",
+      justify: "start",
+      wrap: false,
+      collapseAdjacentStrokes: false,
+      cornerOrnaments: {
+        preset: "fate-turnback",
+        topLeft: true,
+        topRight: true,
+        bottomRight: true,
+        bottomLeft: true,
+      },
+      topOrnament: {
+        preset: "fate",
+        align: "center",
+        offset: 0,
+        text: "FATE CORE ASPECTS",
+        fontFamily: "Montserrat Alternates",
+        fontSize: 10,
+        fontWeight: "medium",
+        letterSpacingPx: -0.9,
+      },
+      bottomOrnament: {
+        preset: "dnd",
+        align: "center",
+        offset: 0,
+        text: "LEVEL 5 HERO",
+        fontFamily: "Montserrat Alternates",
+        fontSize: 10,
+        fontWeight: "bold",
+        letterSpacingPx: 0.5,
+      },
+      box: {
+        ...defaultBoxProps,
+        strokeWidth: { top: 1, right: 1, bottom: 1, left: 1 },
+        strokeColor: "default",
+        padding: { top: 24, right: 16, bottom: 24, left: 16 },
+      },
+      children: [
+        {
+          id: "550e8400-e29b-41d4-a716-446655440401",
+          kind: "text",
+          text: "High Concept: Star-Touched Wanderer",
+          variant: "body",
+          align: "left",
+          weight: "normal",
+          fontFamily: "Noto Sans",
+          uppercase: false,
+          color: "default",
+          box: defaultBoxProps,
+        },
+      ],
+    };
+
+    const pdfBytes = await generateA4SheetPdf({
+      layout,
+      title: "Fate & D&D Ornaments PDF",
+    });
+
+    expect(pdfBytes).toBeInstanceOf(Uint8Array);
+    expect(pdfBytes.length).toBeGreaterThan(1000);
+
+    const doc = await PDFDocument.load(pdfBytes);
+    expect(doc.getPageCount()).toBe(1);
+  });
 });

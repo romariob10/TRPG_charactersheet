@@ -1,13 +1,25 @@
 import { z } from "zod";
 import {
   boxPropsSchema,
+  cornerOrnamentsSchema,
   defaultBoxProps,
+  edgeOrnamentSchema,
   layoutAlignSchema,
   layoutDirectionSchema,
   layoutJustifySchema,
   ornamentStyleSchema,
   strokeTokenSchema,
   titleDockSchema,
+} from "./sheet-primitives.js";
+import type {
+  BoxProps,
+  CornerOrnaments,
+  EdgeOrnament,
+  LayoutAlign,
+  LayoutDirection,
+  LayoutJustify,
+  OrnamentStyle,
+  TitleDock,
 } from "./sheet-primitives.js";
 import {
   propertyOverrideValueSchema,
@@ -168,28 +180,51 @@ export type LayoutNode =
 export interface FrameNode {
   id: string;
   kind: "frame";
-  box: z.infer<typeof boxPropsSchema>;
+  box: BoxProps;
   name?: string;
-  direction: z.infer<typeof layoutDirectionSchema>;
+  direction: LayoutDirection;
   gap: number;
-  align: z.infer<typeof layoutAlignSchema>;
-  justify: z.infer<typeof layoutJustifySchema>;
+  align: LayoutAlign;
+  justify: LayoutJustify;
   wrap: boolean;
   collapseAdjacentStrokes: boolean;
-  ornamentStyle: z.infer<typeof ornamentStyleSchema>;
-  titleDock: z.infer<typeof titleDockSchema>;
-  footerDock: z.infer<typeof titleDockSchema>;
+  cornerOrnaments?: CornerOrnaments;
+  topOrnament?: EdgeOrnament;
+  bottomOrnament?: EdgeOrnament;
+  // Backward compatibility fields
+  ornamentStyle?: OrnamentStyle;
+  titleDock?: TitleDock;
+  footerDock?: TitleDock;
   children: LayoutNode[];
 }
 
 export interface RepeaterNode {
   id: string;
   kind: "repeater";
-  box: z.infer<typeof boxPropsSchema>;
+  box: BoxProps;
   name?: string;
   config: z.infer<typeof repeaterConfigSchema>;
   rowTemplate: LayoutNode;
 }
+
+const defaultEdgeOrnament: EdgeOrnament = {
+  preset: "none",
+  align: "center",
+  offset: 0,
+  text: "",
+  fontFamily: "Montserrat Alternates",
+  fontSize: 10,
+  fontWeight: "medium",
+  letterSpacingPx: -0.9,
+};
+
+const defaultCornerOrnaments: CornerOrnaments = {
+  preset: "none",
+  topLeft: true,
+  topRight: true,
+  bottomRight: true,
+  bottomLeft: true,
+};
 
 export const layoutNodeSchema: z.ZodType<LayoutNode> = z.lazy(() =>
   z.discriminatedUnion("kind", [
@@ -212,9 +247,12 @@ export const layoutNodeSchema: z.ZodType<LayoutNode> = z.lazy(() =>
       justify: layoutJustifySchema.default("start"),
       wrap: z.boolean().default(false),
       collapseAdjacentStrokes: z.boolean().default(false),
-      ornamentStyle: ornamentStyleSchema.default("none"),
-      titleDock: titleDockSchema.default({ dock: "none", variant: "none" }),
-      footerDock: titleDockSchema.default({ dock: "none", variant: "none" }),
+      cornerOrnaments: cornerOrnamentsSchema.default(defaultCornerOrnaments),
+      topOrnament: edgeOrnamentSchema.default(defaultEdgeOrnament),
+      bottomOrnament: edgeOrnamentSchema.default(defaultEdgeOrnament),
+      ornamentStyle: ornamentStyleSchema.optional(),
+      titleDock: titleDockSchema.optional(),
+      footerDock: titleDockSchema.optional(),
       children: z.array(layoutNodeSchema).default([]),
     }),
     z.object({
@@ -225,6 +263,108 @@ export const layoutNodeSchema: z.ZodType<LayoutNode> = z.lazy(() =>
     }),
   ]),
 );
+
+/**
+ * Pure normalization function for FrameNode.
+ * Migrates legacy `ornamentStyle`, `titleDock`, and `footerDock` into `cornerOrnaments`,
+ * `topOrnament`, and `bottomOrnament` while retaining full backward compatibility.
+ */
+export function normalizeFrameNode(raw: Record<string, unknown>): FrameNode {
+  const cornerOrnaments = (raw.cornerOrnaments && typeof raw.cornerOrnaments === "object"
+    ? cornerOrnamentsSchema.parse(raw.cornerOrnaments)
+    : raw.ornamentStyle === "arc-corner"
+    ? {
+        preset: "arc-corner" as const,
+        topLeft: true,
+        topRight: true,
+        bottomRight: true,
+        bottomLeft: true,
+      }
+    : { ...defaultCornerOrnaments }) as CornerOrnaments;
+
+  let topOrnament: EdgeOrnament = { ...defaultEdgeOrnament };
+  if (raw.topOrnament && typeof raw.topOrnament === "object") {
+    topOrnament = edgeOrnamentSchema.parse(raw.topOrnament);
+  } else if (raw.titleDock && typeof raw.titleDock === "object") {
+    const td = titleDockSchema.parse(raw.titleDock);
+    if (td.dock === "top" && td.variant !== "none") {
+      topOrnament = {
+        preset: "legacy-pill",
+        align: td.variant.includes("center") ? "center" : "start",
+        offset: 0,
+        text: td.text || "",
+        fontFamily: "Montserrat Alternates",
+        fontSize: 10,
+        fontWeight: "medium",
+        letterSpacingPx: -0.9,
+      };
+    }
+  }
+
+  let bottomOrnament: EdgeOrnament = { ...defaultEdgeOrnament };
+  if (raw.bottomOrnament && typeof raw.bottomOrnament === "object") {
+    bottomOrnament = edgeOrnamentSchema.parse(raw.bottomOrnament);
+  } else if (raw.footerDock && typeof raw.footerDock === "object") {
+    const fd = titleDockSchema.parse(raw.footerDock);
+    if (fd.dock === "bottom" && fd.variant !== "none") {
+      bottomOrnament = {
+        preset: "legacy-pill",
+        align: fd.variant.includes("center") ? "center" : "start",
+        offset: 0,
+        text: fd.text || "",
+        fontFamily: "Montserrat Alternates",
+        fontSize: 10,
+        fontWeight: "medium",
+        letterSpacingPx: -0.9,
+      };
+    }
+  }
+
+  return {
+    id: String(raw.id),
+    kind: "frame",
+    box: boxPropsSchema.parse(raw.box || defaultBoxProps),
+    name: typeof raw.name === "string" ? raw.name : undefined,
+    direction: layoutDirectionSchema.parse(raw.direction || "vertical"),
+    gap: typeof raw.gap === "number" ? raw.gap : 0,
+    align: layoutAlignSchema.parse(raw.align || "start"),
+    justify: layoutJustifySchema.parse(raw.justify || "start"),
+    wrap: Boolean(raw.wrap),
+    collapseAdjacentStrokes: Boolean(raw.collapseAdjacentStrokes),
+    cornerOrnaments,
+    topOrnament,
+    bottomOrnament,
+    ornamentStyle: raw.ornamentStyle as OrnamentStyle | undefined,
+    titleDock: raw.titleDock as TitleDock | undefined,
+    footerDock: raw.footerDock as TitleDock | undefined,
+    children: Array.isArray(raw.children)
+      ? (raw.children.map((c) => normalizeLayoutNode(c)) as LayoutNode[])
+      : [],
+  };
+}
+
+/**
+ * Normalizes any LayoutNode recursively, cleanly upgrading legacy frames.
+ */
+export function normalizeLayoutNode(node: unknown): LayoutNode {
+  if (node && typeof node === "object" && "kind" in node) {
+    const rawObj = node as Record<string, unknown>;
+    if (rawObj.kind === "frame") {
+      return normalizeFrameNode(rawObj);
+    }
+    if (rawObj.kind === "repeater") {
+      return {
+        id: String(rawObj.id),
+        kind: "repeater",
+        box: boxPropsSchema.parse(rawObj.box || defaultBoxProps),
+        name: typeof rawObj.name === "string" ? rawObj.name : undefined,
+        config: repeaterConfigSchema.parse(rawObj.config),
+        rowTemplate: normalizeLayoutNode(rawObj.rowTemplate),
+      };
+    }
+  }
+  return layoutNodeSchema.parse(node);
+}
 
 export const targetLayoutMapSchema = z.object({
   mobile: layoutNodeSchema,

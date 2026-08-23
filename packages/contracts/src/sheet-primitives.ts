@@ -93,6 +93,35 @@ export const ORNAMENT_STYLES = [
 export const ornamentStyleSchema = z.enum(ORNAMENT_STYLES);
 export type OrnamentStyle = z.infer<typeof ornamentStyleSchema>;
 
+export const CORNER_ORNAMENT_PRESETS = ["none", "fate-turnback", "arc-corner"] as const;
+export const cornerOrnamentPresetSchema = z.enum(CORNER_ORNAMENT_PRESETS);
+export type CornerOrnamentPreset = z.infer<typeof cornerOrnamentPresetSchema>;
+
+export const cornerOrnamentsSchema = z.object({
+  preset: cornerOrnamentPresetSchema.default("none"),
+  topLeft: z.boolean().default(true),
+  topRight: z.boolean().default(true),
+  bottomRight: z.boolean().default(true),
+  bottomLeft: z.boolean().default(true),
+});
+export type CornerOrnaments = z.infer<typeof cornerOrnamentsSchema>;
+
+export const EDGE_ORNAMENT_PRESETS = ["none", "fate", "dnd", "legacy-pill"] as const;
+export const edgeOrnamentPresetSchema = z.enum(EDGE_ORNAMENT_PRESETS);
+export type EdgeOrnamentPreset = z.infer<typeof edgeOrnamentPresetSchema>;
+
+export const edgeOrnamentSchema = z.object({
+  preset: edgeOrnamentPresetSchema.default("none"),
+  align: z.enum(["start", "center", "end"]).default("center"),
+  offset: z.number().finite().default(0),
+  text: z.string().trim().max(120).default(""),
+  fontFamily: z.enum(["Montserrat Alternates", "Noto Sans", "default"]).default("Montserrat Alternates"),
+  fontSize: z.number().finite().min(6).max(48).default(10),
+  fontWeight: z.enum(["normal", "medium", "bold", "400", "500", "600", "700"]).default("medium"),
+  letterSpacingPx: z.number().finite().min(-10).max(20).default(-0.9),
+});
+export type EdgeOrnament = z.infer<typeof edgeOrnamentSchema>;
+
 export const TITLE_DOCK_VARIANTS = [
   "none",
   "inline-start",

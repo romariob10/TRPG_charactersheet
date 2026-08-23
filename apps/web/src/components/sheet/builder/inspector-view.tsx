@@ -8,19 +8,15 @@ import type {
   LayoutDirection,
   LayoutJustify,
   LayoutNode,
-  OrnamentStyle,
   SheetFieldDefinition,
   SizingMode,
   StrokeToken,
   TargetLayoutKind,
-  TitleDockVariant,
 } from "@mycharacter/contracts";
 import {
   FILL_TOKENS,
-  ORNAMENT_STYLES,
   STROKE_TOKENS,
   TARGET_LAYOUT_KINDS,
-  TITLE_DOCK_VARIANTS,
 } from "@mycharacter/contracts";
 import { Plus } from "lucide-react";
 
@@ -417,74 +413,352 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
         </div>
       )}
 
-      {/* Frame Decorator & Docks */}
+      {/* Frame Corner & Edge Ornaments */}
       {selectedNode.kind === "frame" && (
         <div className="flex flex-col gap-3 pb-3 border-b border-border">
           <h4 className="font-bold text-[11px] text-muted-foreground uppercase tracking-wider">
-            Decoration & Docks
+            Corner Ornaments (Fate Turnbacks)
           </h4>
 
           <div>
-            <label className="text-[10px] font-medium text-muted-foreground">Ornament Style</label>
+            <label className="text-[10px] font-medium text-muted-foreground">Corner Style Preset</label>
             <select
-              value={selectedNode.ornamentStyle}
+              value={selectedNode.cornerOrnaments?.preset || "none"}
               onChange={(e) =>
                 onUpdateNode({
                   ...selectedNode,
-                  ornamentStyle: e.target.value as OrnamentStyle,
+                  cornerOrnaments: {
+                    preset: e.target.value as "none" | "fate-turnback" | "arc-corner",
+                    topLeft: selectedNode.cornerOrnaments?.topLeft ?? true,
+                    topRight: selectedNode.cornerOrnaments?.topRight ?? true,
+                    bottomRight: selectedNode.cornerOrnaments?.bottomRight ?? true,
+                    bottomLeft: selectedNode.cornerOrnaments?.bottomLeft ?? true,
+                  },
                 })
               }
-              className="w-full mt-0.5 px-2 py-1 bg-background border border-border rounded capitalize"
+              className="w-full mt-0.5 px-2 py-1 bg-background border border-border rounded"
             >
-              {ORNAMENT_STYLES.map((st) => (
-                <option key={st} value={st}>
-                  {st.replace("-", " ")}
-                </option>
-              ))}
+              <option value="none">None</option>
+              <option value="fate-turnback">Fate Turnback (10x10)</option>
+              <option value="arc-corner">Arc Corner (Legacy)</option>
             </select>
           </div>
 
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="text-[10px] font-medium text-muted-foreground">Header Dock</label>
-              <select
-                value={selectedNode.titleDock?.variant || "none"}
-                onChange={(e) =>
-                  onUpdateNode({
-                    ...selectedNode,
-                    titleDock: {
-                      dock: e.target.value === "none" ? "none" : "top",
-                      variant: e.target.value as TitleDockVariant,
-                      text: selectedNode.titleDock?.text || "",
-                    },
-                  })
-                }
-                className="w-full mt-0.5 px-2 py-1 bg-background border border-border rounded"
-              >
-                {TITLE_DOCK_VARIANTS.map((v) => (
-                  <option key={v} value={v}>
-                    {v.replace("-", " ")}
-                  </option>
-                ))}
-              </select>
+          {selectedNode.cornerOrnaments?.preset && selectedNode.cornerOrnaments.preset !== "none" && (
+            <div className="grid grid-cols-2 gap-2 pt-1 bg-muted/30 p-2 rounded">
+              <label className="flex items-center gap-1.5 cursor-pointer select-none text-[10px]">
+                <input
+                  type="checkbox"
+                  checked={selectedNode.cornerOrnaments?.topLeft ?? true}
+                  onChange={(e) =>
+                    onUpdateNode({
+                      ...selectedNode,
+                      cornerOrnaments: {
+                        preset: selectedNode.cornerOrnaments?.preset ?? "fate-turnback",
+                        topLeft: e.target.checked,
+                        topRight: selectedNode.cornerOrnaments?.topRight ?? true,
+                        bottomRight: selectedNode.cornerOrnaments?.bottomRight ?? true,
+                        bottomLeft: selectedNode.cornerOrnaments?.bottomLeft ?? true,
+                      },
+                    })
+                  }
+                  className="rounded"
+                />
+                <span>Top-Left</span>
+              </label>
+
+              <label className="flex items-center gap-1.5 cursor-pointer select-none text-[10px]">
+                <input
+                  type="checkbox"
+                  checked={selectedNode.cornerOrnaments?.topRight ?? true}
+                  onChange={(e) =>
+                    onUpdateNode({
+                      ...selectedNode,
+                      cornerOrnaments: {
+                        preset: selectedNode.cornerOrnaments?.preset ?? "fate-turnback",
+                        topLeft: selectedNode.cornerOrnaments?.topLeft ?? true,
+                        topRight: e.target.checked,
+                        bottomRight: selectedNode.cornerOrnaments?.bottomRight ?? true,
+                        bottomLeft: selectedNode.cornerOrnaments?.bottomLeft ?? true,
+                      },
+                    })
+                  }
+                  className="rounded"
+                />
+                <span>Top-Right</span>
+              </label>
+
+              <label className="flex items-center gap-1.5 cursor-pointer select-none text-[10px]">
+                <input
+                  type="checkbox"
+                  checked={selectedNode.cornerOrnaments?.bottomLeft ?? true}
+                  onChange={(e) =>
+                    onUpdateNode({
+                      ...selectedNode,
+                      cornerOrnaments: {
+                        preset: selectedNode.cornerOrnaments?.preset ?? "fate-turnback",
+                        topLeft: selectedNode.cornerOrnaments?.topLeft ?? true,
+                        topRight: selectedNode.cornerOrnaments?.topRight ?? true,
+                        bottomRight: selectedNode.cornerOrnaments?.bottomRight ?? true,
+                        bottomLeft: e.target.checked,
+                      },
+                    })
+                  }
+                  className="rounded"
+                />
+                <span>Bottom-Left</span>
+              </label>
+
+              <label className="flex items-center gap-1.5 cursor-pointer select-none text-[10px]">
+                <input
+                  type="checkbox"
+                  checked={selectedNode.cornerOrnaments?.bottomRight ?? true}
+                  onChange={(e) =>
+                    onUpdateNode({
+                      ...selectedNode,
+                      cornerOrnaments: {
+                        preset: selectedNode.cornerOrnaments?.preset ?? "fate-turnback",
+                        topLeft: selectedNode.cornerOrnaments?.topLeft ?? true,
+                        topRight: selectedNode.cornerOrnaments?.topRight ?? true,
+                        bottomRight: e.target.checked,
+                        bottomLeft: selectedNode.cornerOrnaments?.bottomLeft ?? true,
+                      },
+                    })
+                  }
+                  className="rounded"
+                />
+                <span>Bottom-Right</span>
+              </label>
+            </div>
+          )}
+
+          {/* Top Title Ornament */}
+          <div className="flex flex-col gap-2 pt-2 border-t border-border/50">
+            <h5 className="font-bold text-[10px] text-muted-foreground uppercase tracking-wider">
+              Top Title Ornament
+            </h5>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-[10px] font-medium text-muted-foreground">Preset</label>
+                <select
+                  value={selectedNode.topOrnament?.preset || "none"}
+                  onChange={(e) =>
+                    onUpdateNode({
+                      ...selectedNode,
+                      topOrnament: {
+                        preset: e.target.value as "none" | "fate" | "dnd" | "legacy-pill",
+                        align: selectedNode.topOrnament?.align || "center",
+                        offset: selectedNode.topOrnament?.offset || 0,
+                        text: selectedNode.topOrnament?.text || "",
+                        fontFamily: selectedNode.topOrnament?.fontFamily || "Montserrat Alternates",
+                        fontSize: selectedNode.topOrnament?.fontSize || 10,
+                        fontWeight: selectedNode.topOrnament?.fontWeight || "medium",
+                        letterSpacingPx: selectedNode.topOrnament?.letterSpacingPx ?? -0.9,
+                      },
+                    })
+                  }
+                  className="w-full mt-0.5 px-2 py-1 bg-background border border-border rounded"
+                >
+                  <option value="none">None</option>
+                  <option value="fate">Fate Core Badge</option>
+                  <option value="dnd">D&D Faceted Badge</option>
+                  <option value="legacy-pill">Plain Pill</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-medium text-muted-foreground">Alignment</label>
+                <select
+                  value={selectedNode.topOrnament?.align || "center"}
+                  onChange={(e) =>
+                    onUpdateNode({
+                      ...selectedNode,
+                      topOrnament: {
+                        preset: selectedNode.topOrnament?.preset || "fate",
+                        align: e.target.value as "start" | "center" | "end",
+                        offset: selectedNode.topOrnament?.offset || 0,
+                        text: selectedNode.topOrnament?.text || "",
+                        fontFamily: selectedNode.topOrnament?.fontFamily || "Montserrat Alternates",
+                        fontSize: selectedNode.topOrnament?.fontSize || 10,
+                        fontWeight: selectedNode.topOrnament?.fontWeight || "medium",
+                        letterSpacingPx: selectedNode.topOrnament?.letterSpacingPx ?? -0.9,
+                      },
+                    })
+                  }
+                  className="w-full mt-0.5 px-2 py-1 bg-background border border-border rounded"
+                >
+                  <option value="start">Start</option>
+                  <option value="center">Center</option>
+                  <option value="end">End</option>
+                </select>
+              </div>
             </div>
 
             <div>
-              <label className="text-[10px] font-medium text-muted-foreground">Dock Text</label>
+              <label className="text-[10px] font-medium text-muted-foreground">Title Text</label>
               <input
                 type="text"
-                value={selectedNode.titleDock?.text || ""}
+                value={selectedNode.topOrnament?.text || ""}
                 onChange={(e) =>
                   onUpdateNode({
                     ...selectedNode,
-                    titleDock: {
-                      dock: selectedNode.titleDock?.dock || "top",
-                      variant: selectedNode.titleDock?.variant || "inline-center",
+                    topOrnament: {
+                      preset: selectedNode.topOrnament?.preset || "fate",
+                      align: selectedNode.topOrnament?.align || "center",
+                      offset: selectedNode.topOrnament?.offset || 0,
                       text: e.target.value,
+                      fontFamily: selectedNode.topOrnament?.fontFamily || "Montserrat Alternates",
+                      fontSize: selectedNode.topOrnament?.fontSize || 10,
+                      fontWeight: selectedNode.topOrnament?.fontWeight || "medium",
+                      letterSpacingPx: selectedNode.topOrnament?.letterSpacingPx ?? -0.9,
                     },
                   })
                 }
-                placeholder="Title label…"
+                placeholder="e.g. ASPECTS or SKILLS"
+                className="w-full mt-0.5 px-2 py-1 bg-background border border-border rounded uppercase"
+              />
+            </div>
+
+            {selectedNode.topOrnament?.preset && selectedNode.topOrnament.preset !== "none" && (
+              <div className="grid grid-cols-2 gap-2 bg-muted/20 p-2 rounded">
+                <div>
+                  <label className="text-[10px] font-medium text-muted-foreground">Font Size (px)</label>
+                  <input
+                    type="number"
+                    min="6"
+                    max="48"
+                    value={selectedNode.topOrnament?.fontSize || 10}
+                    onChange={(e) =>
+                      onUpdateNode({
+                        ...selectedNode,
+                        topOrnament: {
+                          preset: selectedNode.topOrnament?.preset || "fate",
+                          align: selectedNode.topOrnament?.align || "center",
+                          offset: selectedNode.topOrnament?.offset || 0,
+                          text: selectedNode.topOrnament?.text || "",
+                          fontFamily: selectedNode.topOrnament?.fontFamily || "Montserrat Alternates",
+                          fontSize: Number(e.target.value) || 10,
+                          fontWeight: selectedNode.topOrnament?.fontWeight || "medium",
+                          letterSpacingPx: selectedNode.topOrnament?.letterSpacingPx ?? -0.9,
+                        },
+                      })
+                    }
+                    className="w-full mt-0.5 px-2 py-1 bg-background border border-border rounded"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-medium text-muted-foreground">Tracking (px)</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="-5"
+                    max="10"
+                    value={selectedNode.topOrnament?.letterSpacingPx ?? -0.9}
+                    onChange={(e) =>
+                      onUpdateNode({
+                        ...selectedNode,
+                        topOrnament: {
+                          preset: selectedNode.topOrnament?.preset || "fate",
+                          align: selectedNode.topOrnament?.align || "center",
+                          offset: selectedNode.topOrnament?.offset || 0,
+                          text: selectedNode.topOrnament?.text || "",
+                          fontFamily: selectedNode.topOrnament?.fontFamily || "Montserrat Alternates",
+                          fontSize: selectedNode.topOrnament?.fontSize || 10,
+                          fontWeight: selectedNode.topOrnament?.fontWeight || "medium",
+                          letterSpacingPx: parseFloat(e.target.value) || -0.9,
+                        },
+                      })
+                    }
+                    className="w-full mt-0.5 px-2 py-1 bg-background border border-border rounded"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Bottom Title Ornament */}
+          <div className="flex flex-col gap-2 pt-2 border-t border-border/50">
+            <h5 className="font-bold text-[10px] text-muted-foreground uppercase tracking-wider">
+              Bottom Edge Ornament
+            </h5>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-[10px] font-medium text-muted-foreground">Preset</label>
+                <select
+                  value={selectedNode.bottomOrnament?.preset || "none"}
+                  onChange={(e) =>
+                    onUpdateNode({
+                      ...selectedNode,
+                      bottomOrnament: {
+                        preset: e.target.value as "none" | "fate" | "dnd" | "legacy-pill",
+                        align: selectedNode.bottomOrnament?.align || "center",
+                        offset: selectedNode.bottomOrnament?.offset || 0,
+                        text: selectedNode.bottomOrnament?.text || "",
+                        fontFamily: selectedNode.bottomOrnament?.fontFamily || "Montserrat Alternates",
+                        fontSize: selectedNode.bottomOrnament?.fontSize || 10,
+                        fontWeight: selectedNode.bottomOrnament?.fontWeight || "medium",
+                        letterSpacingPx: selectedNode.bottomOrnament?.letterSpacingPx ?? -0.9,
+                      },
+                    })
+                  }
+                  className="w-full mt-0.5 px-2 py-1 bg-background border border-border rounded"
+                >
+                  <option value="none">None</option>
+                  <option value="fate">Fate Core Badge</option>
+                  <option value="dnd">D&D Faceted Badge</option>
+                  <option value="legacy-pill">Plain Pill</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-medium text-muted-foreground">Alignment</label>
+                <select
+                  value={selectedNode.bottomOrnament?.align || "center"}
+                  onChange={(e) =>
+                    onUpdateNode({
+                      ...selectedNode,
+                      bottomOrnament: {
+                        preset: selectedNode.bottomOrnament?.preset || "fate",
+                        align: e.target.value as "start" | "center" | "end",
+                        offset: selectedNode.bottomOrnament?.offset || 0,
+                        text: selectedNode.bottomOrnament?.text || "",
+                        fontFamily: selectedNode.bottomOrnament?.fontFamily || "Montserrat Alternates",
+                        fontSize: selectedNode.bottomOrnament?.fontSize || 10,
+                        fontWeight: selectedNode.bottomOrnament?.fontWeight || "medium",
+                        letterSpacingPx: selectedNode.bottomOrnament?.letterSpacingPx ?? -0.9,
+                      },
+                    })
+                  }
+                  className="w-full mt-0.5 px-2 py-1 bg-background border border-border rounded"
+                >
+                  <option value="start">Start</option>
+                  <option value="center">Center</option>
+                  <option value="end">End</option>
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label className="text-[10px] font-medium text-muted-foreground">Footer Text</label>
+              <input
+                type="text"
+                value={selectedNode.bottomOrnament?.text || ""}
+                onChange={(e) =>
+                  onUpdateNode({
+                    ...selectedNode,
+                    bottomOrnament: {
+                      preset: selectedNode.bottomOrnament?.preset || "fate",
+                      align: selectedNode.bottomOrnament?.align || "center",
+                      offset: selectedNode.bottomOrnament?.offset || 0,
+                      text: e.target.value,
+                      fontFamily: selectedNode.bottomOrnament?.fontFamily || "Montserrat Alternates",
+                      fontSize: selectedNode.bottomOrnament?.fontSize || 10,
+                      fontWeight: selectedNode.bottomOrnament?.fontWeight || "medium",
+                      letterSpacingPx: selectedNode.bottomOrnament?.letterSpacingPx ?? -0.9,
+                    },
+                  })
+                }
+                placeholder="Footer note…"
                 className="w-full mt-0.5 px-2 py-1 bg-background border border-border rounded"
               />
             </div>
