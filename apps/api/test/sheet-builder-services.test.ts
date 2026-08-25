@@ -169,10 +169,11 @@ describe("Sheet Builder & Component Library Services", () => {
     );
 
     expect(pubRes.versionNumber).toBe(1);
-    const versions = await sheetBuilderService.listSheetVersions(sheetDef.id);
+    const versions = await sheetBuilderService.listSheetVersions(user1Id, sheetDef.id);
     expect(versions).toHaveLength(1);
     expect(versions[0].versionNumber).toBe(1);
     const publishedVersion = await sheetBuilderService.getSheetVersion(
+      user1Id,
       pubRes.versionId,
     );
     expect(publishedVersion.layouts.print).not.toHaveProperty("ornamentStyle");

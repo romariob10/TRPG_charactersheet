@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import {
   Download,
@@ -44,10 +44,37 @@ export const CharacterSheetPlayer: React.FC<CharacterSheetPlayerProps> = ({
   >({});
   const [savingField, setSavingField] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const fieldMutationIds = useRef<Record<string, string>>({});
+
+  useEffect(() => {
+    if (!versionDetails) return;
+    const keys = new Set<string>();
+    const visit = (node: (typeof versionDetails.layouts.desktop)): void => {
+      if (node.kind === "repeater") keys.add(node.config.key);
+      if ("children" in node && Array.isArray(node.children)) node.children.forEach(visit);
+      if ("rowTemplate" in node && node.rowTemplate) visit(node.rowTemplate);
+    };
+    Object.values(versionDetails.layouts).forEach(visit);
+    const controller = new AbortController();
+    void Promise.all(Array.from(keys, async (key) => {
+      const response = await fetch(
+        `/api/characters/${character.id}/repeaters/${encodeURIComponent(key)}/rows`,
+        { signal: controller.signal },
+      );
+      if (!response.ok) throw new Error(t("saveFailed"));
+      return [key, await response.json()] as const;
+    })).then((entries) => setRepeaterRows(Object.fromEntries(entries)))
+      .catch((error: unknown) => {
+        if (!controller.signal.aborted) setSaveError(error instanceof Error ? error.message : t("saveFailed"));
+      });
+    return () => controller.abort();
+  }, [character.id, t, versionDetails]);
 
   // Field change handler with optimistic update and rollback
   const handleFieldValueChange = async (key: string, value: FieldValue) => {
     const prevValue = fieldValues[key];
+    const mutationId = crypto.randomUUID();
+    fieldMutationIds.current[key] = mutationId;
     setFieldValues((prev) => ({ ...prev, [key]: value }));
     setSavingField(true);
     setSaveError(null);
@@ -60,7 +87,7 @@ export const CharacterSheetPlayer: React.FC<CharacterSheetPlayerProps> = ({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             value,
-            clientMutationId: crypto.randomUUID(),
+            clientMutationId: mutationId,
           }),
         },
       );
@@ -73,7 +100,9 @@ export const CharacterSheetPlayer: React.FC<CharacterSheetPlayerProps> = ({
       }
     } catch (err: unknown) {
       // Rollback on error
-      setFieldValues((prev) => ({ ...prev, [key]: prevValue }));
+      if (fieldMutationIds.current[key] === mutationId) {
+        setFieldValues((prev) => ({ ...prev, [key]: prevValue }));
+      }
       setSaveError(err instanceof Error ? err.message : t("saveFailed"));
     } finally {
       setSavingField(false);
@@ -92,15 +121,14 @@ export const CharacterSheetPlayer: React.FC<CharacterSheetPlayerProps> = ({
           initialValues: {},
         }),
       });
-      if (res.ok) {
-        const newRow: CharacterRepeaterRow = await res.json();
-        setRepeaterRows((prev) => ({
-          ...prev,
-          [repeaterKey]: [...(prev[repeaterKey] ?? []), newRow],
-        }));
-      }
+      if (!res.ok) throw new Error(t("saveFailed"));
+      const newRow: CharacterRepeaterRow = await res.json();
+      setRepeaterRows((prev) => ({
+        ...prev,
+        [repeaterKey]: [...(prev[repeaterKey] ?? []), newRow],
+      }));
     } catch (err) {
-      console.error("Failed to add repeater row", err);
+      setSaveError(err instanceof Error ? err.message : t("saveFailed"));
     }
   };
 
@@ -111,6 +139,7 @@ export const CharacterSheetPlayer: React.FC<CharacterSheetPlayerProps> = ({
     value: unknown,
     expectedVersion: number,
   ) => {
+    const previousRow = (repeaterRows[repeaterKey] ?? []).find((row) => row.id === rowId);
     const rowVal = Array.isArray(value)
       ? value.join(", ")
       : (value as string | number | boolean | null);
@@ -139,20 +168,12 @@ export const CharacterSheetPlayer: React.FC<CharacterSheetPlayerProps> = ({
           }),
         },
       );
-      if (res.ok) {
-        const updatedRow: CharacterRepeaterRow = await res.json();
-        setRepeaterRows((prev) => {
-          const list = prev[repeaterKey] ?? [];
-          return {
-            ...prev,
-            [repeaterKey]: list.map((r) =>
-              r.id === rowId ? updatedRow : r,
-            ),
-          };
-        });
-      }
+      if (!res.ok) throw new Error(res.status === 409 ? t("versionConflict") : t("saveFailed"));
+      const updatedRow: CharacterRepeaterRow = await res.json();
+      setRepeaterRows((prev) => ({ ...prev, [repeaterKey]: (prev[repeaterKey] ?? []).map((r) => r.id === rowId ? updatedRow : r) }));
     } catch (err) {
-      console.error("Failed to update repeater row field", err);
+      if (previousRow) setRepeaterRows((prev) => ({ ...prev, [repeaterKey]: (prev[repeaterKey] ?? []).map((r) => r.id === rowId ? previousRow : r) }));
+      setSaveError(err instanceof Error ? err.message : t("saveFailed"));
     }
   };
 
@@ -160,6 +181,7 @@ export const CharacterSheetPlayer: React.FC<CharacterSheetPlayerProps> = ({
     repeaterKey: string,
     rowId: string,
   ) => {
+    const previousRows = repeaterRows[repeaterKey] ?? [];
     setRepeaterRows((prev) => {
       const list = prev[repeaterKey] ?? [];
       return {
@@ -169,7 +191,7 @@ export const CharacterSheetPlayer: React.FC<CharacterSheetPlayerProps> = ({
     });
 
     try {
-      await fetch(
+      const response = await fetch(
         `/api/characters/${character.id}/repeaters/rows/${rowId}`,
         {
           method: "DELETE",
@@ -179,8 +201,10 @@ export const CharacterSheetPlayer: React.FC<CharacterSheetPlayerProps> = ({
           }),
         },
       );
+      if (!response.ok) throw new Error(t("saveFailed"));
     } catch (err) {
-      console.error("Failed to delete repeater row", err);
+      setRepeaterRows((prev) => ({ ...prev, [repeaterKey]: previousRows }));
+      setSaveError(err instanceof Error ? err.message : t("saveFailed"));
     }
   };
 
@@ -188,8 +212,11 @@ export const CharacterSheetPlayer: React.FC<CharacterSheetPlayerProps> = ({
     repeaterKey: string,
     rowIds: string[],
   ) => {
+    const previousRows = repeaterRows[repeaterKey] ?? [];
+    const rowsById = new Map(previousRows.map((row) => [row.id, row]));
+    setRepeaterRows((prev) => ({ ...prev, [repeaterKey]: rowIds.flatMap((id) => rowsById.get(id) ?? []) }));
     try {
-      await fetch(`/api/characters/${character.id}/repeaters/reorder`, {
+      const response = await fetch(`/api/characters/${character.id}/repeaters/reorder`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -198,8 +225,10 @@ export const CharacterSheetPlayer: React.FC<CharacterSheetPlayerProps> = ({
           clientMutationId: crypto.randomUUID(),
         }),
       });
+      if (!response.ok) throw new Error(t("saveFailed"));
     } catch (err) {
-      console.error("Failed to reorder repeater rows", err);
+      setRepeaterRows((prev) => ({ ...prev, [repeaterKey]: previousRows }));
+      setSaveError(err instanceof Error ? err.message : t("saveFailed"));
     }
   };
 

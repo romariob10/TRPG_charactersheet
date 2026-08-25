@@ -295,7 +295,9 @@ export const RenderImage: React.FC<{ node: ImageNode }> = ({ node }) => {
     <img
       src={node.url}
       alt={node.alt || "Character Sheet Asset"}
-      className={`rounded w-full h-full object-${node.fit ?? "cover"}`}
+      className={`rounded w-full h-full ${
+        node.fit === "contain" ? "object-contain" : node.fit === "fill" ? "object-fill" : "object-cover"
+      }`}
     />
   );
 };

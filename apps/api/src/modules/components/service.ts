@@ -49,7 +49,12 @@ export class ComponentLibraryService {
       }
       baseQuery = baseQuery.where("cd.author_id", "=", userId);
     } else if (query.scope === "system" && query.systemId) {
-      baseQuery = baseQuery.where("cd.system_id", "=", query.systemId);
+      baseQuery = baseQuery
+        .where("cd.system_id", "=", query.systemId)
+        .where((eb) => eb.or([
+          eb("gs.visibility", "=", "public"),
+          ...(userId ? [eb("gs.owner_id", "=", userId)] : []),
+        ]));
     } else if (query.scope === "curated") {
       baseQuery = baseQuery.where("cd.scope", "=", "curated");
     } else {
@@ -191,6 +196,14 @@ export class ComponentLibraryService {
     ) {
       throw new AppError("FORBIDDEN", 403, "Access restricted.");
     }
+    if (row.scope === "system" && row.systemId) {
+      const system = await this.db.selectFrom("game_systems")
+        .where("id", "=", row.systemId).where("deleted_at", "is", null)
+        .select(["visibility", "owner_id as ownerId"]).executeTakeFirst();
+      if (!system || (system.visibility !== "public" && system.ownerId !== userId)) {
+        throw new AppError("FORBIDDEN", 403, "Access restricted.");
+      }
+    }
 
     return {
       id: row.id,
@@ -224,6 +237,17 @@ export class ComponentLibraryService {
     userId: string,
     input: CreateComponentRequest,
   ): Promise<ComponentSummary> {
+    if (input.scope === "system") {
+      if (!input.systemId) {
+        throw new AppError("VALIDATION_FAILED", 400, "A system component requires systemId.");
+      }
+      const system = await this.db.selectFrom("game_systems")
+        .where("id", "=", input.systemId).where("deleted_at", "is", null)
+        .select("owner_id as ownerId").executeTakeFirst();
+      if (!system || system.ownerId !== userId) {
+        throw new AppError("FORBIDDEN", 403, "Only the system owner can add components.");
+      }
+    }
     const slug = await this.generateUniqueSlug(input.name);
 
     const defaultRoot = input.layouts?.desktop ?? {
@@ -336,7 +360,7 @@ export class ComponentLibraryService {
     const nextRevision = currentDraft.revision + 1;
     const now = new Date();
 
-    await this.db
+    const updated = await this.db
       .updateTable("component_drafts")
       .set({
         revision: nextRevision,
@@ -347,7 +371,12 @@ export class ComponentLibraryService {
         updated_at: now,
       })
       .where("id", "=", currentDraft.id)
-      .execute();
+      .where("revision", "=", input.expectedRevision)
+      .executeTakeFirst();
+
+    if (Number(updated.numUpdatedRows) !== 1) {
+      throw new AppError("REVISION_CONFLICT", 409, "Draft was modified in another session.");
+    }
 
     await this.db
       .updateTable("component_definitions")
@@ -421,20 +450,15 @@ export class ComponentLibraryService {
         ? JSON.parse(draft.dependencies)
         : (draft.dependencies ?? []);
 
-    // Check for direct self-reference or cycles
-    if (dependencies.includes(componentId)) {
-      throw new AppError("CIRCULAR_DEPENDENCY", 400, "Component cannot depend on itself.");
-    }
-
-    const latestVersion = await this.db
-      .selectFrom("component_versions")
-      .where("component_id", "=", componentId)
-      .select(sql<number>`COALESCE(MAX(version_number), 0)`.as("maxVer"))
-      .executeTakeFirst();
-
-    const nextVersionNumber = Number(latestVersion?.maxVer ?? 0) + 1;
+    await this.validateDependencies(userId, componentId, dependencies);
 
     return this.db.transaction().execute(async (trx) => {
+      await trx.executeQuery(sql`select pg_advisory_xact_lock(hashtext(${componentId}))`.compile(trx));
+      const latestVersion = await trx.selectFrom("component_versions")
+        .where("component_id", "=", componentId)
+        .select(sql<number>`COALESCE(MAX(version_number), 0)`.as("maxVer"))
+        .executeTakeFirst();
+      const nextVersionNumber = Number(latestVersion?.maxVer ?? 0) + 1;
       const published = await trx
         .insertInto("component_versions")
         .values({
@@ -489,22 +513,25 @@ export class ComponentLibraryService {
   ): Promise<ComponentSummary> {
     const original = await this.getComponent(userId, componentId);
 
-    const draft = await this.db
-      .selectFrom("component_drafts")
-      .where("component_id", "=", componentId)
+    if (!original.currentVersionId) {
+      throw new AppError("VERSION_NOT_FOUND", 409, "Publish the component before forking it.");
+    }
+    const sourceVersion = await this.db
+      .selectFrom("component_versions")
+      .where("id", "=", original.currentVersionId)
       .selectAll()
       .executeTakeFirst();
 
-    const layouts = draft
-      ? typeof draft.layouts === "string"
-        ? JSON.parse(draft.layouts)
-        : draft.layouts
+    const layouts = sourceVersion
+      ? targetLayoutMapSchema.parse(typeof sourceVersion.layouts === "string"
+        ? JSON.parse(sourceVersion.layouts)
+        : sourceVersion.layouts)
       : undefined;
 
-    const exposedProperties = draft
-      ? typeof draft.exposed_properties === "string"
-        ? JSON.parse(draft.exposed_properties)
-        : draft.exposed_properties
+    const exposedProperties = sourceVersion
+      ? typeof sourceVersion.exposed_properties === "string"
+        ? JSON.parse(sourceVersion.exposed_properties)
+        : sourceVersion.exposed_properties
       : [];
 
     return this.createComponent(userId, {
@@ -518,7 +545,7 @@ export class ComponentLibraryService {
     });
   }
 
-  async getComponentVersion(versionId: string): Promise<ComponentVersionDetails> {
+  async getComponentVersion(userId: string, versionId: string): Promise<ComponentVersionDetails> {
     const version = await this.db
       .selectFrom("component_versions")
       .where("id", "=", versionId)
@@ -528,6 +555,7 @@ export class ComponentLibraryService {
     if (!version) {
       throw new AppError("VERSION_NOT_FOUND", 404, "Component version not found.");
     }
+    await this.getComponent(userId, version.component_id);
 
     const storedLayouts =
       typeof version.layouts === "string"
@@ -560,6 +588,30 @@ export class ComponentLibraryService {
           ? version.created_at.toISOString()
           : String(version.created_at),
     };
+  }
+
+  private async validateDependencies(
+    userId: string,
+    componentId: string,
+    dependencyIds: string[],
+  ): Promise<void> {
+    const visiting = new Set<string>();
+    const visited = new Set<string>();
+    const visit = async (versionId: string): Promise<void> => {
+      if (visiting.has(versionId)) {
+        throw new AppError("CIRCULAR_DEPENDENCY", 400, "Cyclic component dependency detected.");
+      }
+      if (visited.has(versionId)) return;
+      visiting.add(versionId);
+      const version = await this.getComponentVersion(userId, versionId);
+      if (version.componentId === componentId) {
+        throw new AppError("CIRCULAR_DEPENDENCY", 400, "Component cannot depend on itself.");
+      }
+      for (const nested of version.dependencies) await visit(nested);
+      visiting.delete(versionId);
+      visited.add(versionId);
+    };
+    for (const dependencyId of dependencyIds) await visit(dependencyId);
   }
 
   private async generateUniqueSlug(name: string): Promise<string> {

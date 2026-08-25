@@ -9,6 +9,16 @@ import {
 import { AppError } from "../../errors.js";
 import { requireActor } from "../../plugins/auth.js";
 import { ComponentLibraryService } from "./service.js";
+import { z } from "zod";
+
+const idParamsSchema = z.object({ id: z.string().uuid() });
+const versionParamsSchema = z.object({ versionId: z.string().uuid() });
+
+function parseParams<T>(schema: z.ZodType<T>, params: unknown): T {
+  const parsed = schema.safeParse(params);
+  if (!parsed.success) throw new AppError("VALIDATION_FAILED", 400, "Invalid route parameters.");
+  return parsed.data;
+}
 
 export async function registerComponentRoutes(
   app: FastifyInstance,
@@ -35,14 +45,14 @@ export async function registerComponentRoutes(
   });
 
   app.get("/api/components/:id", async (request, reply) => {
-    reply.header("Cache-Control", "public, max-age=60");
-    const { id } = request.params as { id: string };
+    reply.header("Cache-Control", "private, no-store");
+    const { id } = parseParams(idParamsSchema, request.params);
     return service.getComponent(request.actor?.userId ?? null, id);
   });
 
   app.put("/api/components/:id/draft", async (request) => {
     const actor = requireActor(request);
-    const { id } = request.params as { id: string };
+    const { id } = parseParams(idParamsSchema, request.params);
     const parsed = autosaveComponentDraftRequestSchema.safeParse(request.body);
     if (!parsed.success) {
       throw new AppError("VALIDATION_FAILED", 400, "Invalid component draft payload.");
@@ -52,7 +62,7 @@ export async function registerComponentRoutes(
 
   app.post("/api/components/:id/publish", async (request, reply) => {
     const actor = requireActor(request);
-    const { id } = request.params as { id: string };
+    const { id } = parseParams(idParamsSchema, request.params);
     const parsed = publishComponentVersionRequestSchema.safeParse(request.body ?? {});
     if (!parsed.success) {
       throw new AppError("VALIDATION_FAILED", 400, "Invalid publish payload.");
@@ -63,7 +73,7 @@ export async function registerComponentRoutes(
 
   app.post("/api/components/:id/fork", async (request, reply) => {
     const actor = requireActor(request);
-    const { id } = request.params as { id: string };
+    const { id } = parseParams(idParamsSchema, request.params);
     const parsed = forkComponentRequestSchema.safeParse(request.body ?? {});
     if (!parsed.success) {
       throw new AppError("VALIDATION_FAILED", 400, "Invalid fork payload.");
@@ -73,8 +83,9 @@ export async function registerComponentRoutes(
   });
 
   app.get("/api/components/versions/:versionId", async (request, reply) => {
-    reply.header("Cache-Control", "public, max-age=300");
-    const { versionId } = request.params as { versionId: string };
-    return service.getComponentVersion(versionId);
+    const actor = requireActor(request);
+    reply.header("Cache-Control", "private, no-store");
+    const { versionId } = parseParams(versionParamsSchema, request.params);
+    return service.getComponentVersion(actor.userId, versionId);
   });
 }

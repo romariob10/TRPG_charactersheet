@@ -8,6 +8,7 @@ import type {
   PublishSheetVersionRequest,
   PublishSheetVersionResponse,
   SheetEditorDataResponse,
+  SheetFieldDefinition,
   SheetVersionSummary,
   WorkspaceSheetSummary,
 } from "@mycharacter/contracts";
@@ -19,6 +20,35 @@ import {
 import type { Kysely } from "kysely";
 import { sql } from "kysely";
 import { AppError } from "../../errors.js";
+
+function ensureBoundFieldDefinitions(
+  layouts: Record<string, LayoutNode>,
+  fields: SheetFieldDefinition[],
+): SheetFieldDefinition[] {
+  const result = [...fields];
+  const keys = new Set(result.map((field) => field.key));
+  const visit = (node: LayoutNode): void => {
+    if ("fieldBinding" in node && !keys.has(node.fieldBinding)) {
+      const kind = node.kind === "number-input" ? "number"
+        : node.kind === "checkbox" ? "checkbox"
+        : node.kind === "select" ? "select"
+        : node.kind === "textarea" ? "multiline" : "text";
+      result.push({
+        id: crypto.randomUUID(),
+        key: node.fieldBinding,
+        label: ("label" in node && node.label) || node.name || node.fieldBinding,
+        kind,
+        options: node.kind === "select" ? node.options.map((option) => option.value) : [],
+        readOnly: node.readOnly,
+      });
+      keys.add(node.fieldBinding);
+    }
+    if ("children" in node) node.children.forEach(visit);
+    if ("rowTemplate" in node) visit(node.rowTemplate);
+  };
+  Object.values(layouts).forEach(visit);
+  return result;
+}
 
 export class SheetBuilderService {
   private readonly db: Kysely<Database>;
@@ -454,17 +484,22 @@ export class SheetBuilderService {
     const nextRevision = currentDraft.revision + 1;
     const now = new Date();
 
-    await this.db
+    const updated = await this.db
       .updateTable("sheet_drafts")
       .set({
         revision: nextRevision,
         layouts: JSON.stringify(normalizedLayouts),
-        fields: JSON.stringify(input.fields ?? []),
+        fields: JSON.stringify(ensureBoundFieldDefinitions(normalizedLayouts, input.fields ?? [])),
         updated_by: userId,
         updated_at: now,
       })
       .where("id", "=", currentDraft.id)
-      .execute();
+      .where("revision", "=", input.expectedRevision)
+      .executeTakeFirst();
+
+    if (Number(updated.numUpdatedRows) !== 1) {
+      throw new AppError("REVISION_CONFLICT", 409, "Draft was modified in another session.");
+    }
 
     await this.db
       .updateTable("sheet_definitions")
@@ -537,21 +572,20 @@ export class SheetBuilderService {
     // Resolve and freeze all component dependencies immutably
     const dependenciesSnapshot = await this.resolveComponentDependencies(parsedLayouts.data);
 
-    const latestVersion = await this.db
-      .selectFrom("sheet_versions")
-      .where("sheet_definition_id", "=", sheetDefinitionId)
-      .select(sql<number>`COALESCE(MAX(version_number), 0)`.as("maxVer"))
-      .executeTakeFirst();
-
-    const nextVersionNumber = Number(latestVersion?.maxVer ?? 0) + 1;
-
-    const draftFields = draft.fields
+    const storedDraftFields = draft.fields
       ? typeof draft.fields === "string"
         ? JSON.parse(draft.fields)
         : draft.fields
       : [];
+    const draftFields = ensureBoundFieldDefinitions(parsedLayouts.data, storedDraftFields);
 
     return this.db.transaction().execute(async (trx) => {
+      await trx.executeQuery(sql`select pg_advisory_xact_lock(hashtext(${sheetDefinitionId}))`.compile(trx));
+      const latestVersion = await trx.selectFrom("sheet_versions")
+        .where("sheet_definition_id", "=", sheetDefinitionId)
+        .select(sql<number>`COALESCE(MAX(version_number), 0)`.as("maxVer"))
+        .executeTakeFirst();
+      const nextVersionNumber = Number(latestVersion?.maxVer ?? 0) + 1;
       const published = await trx
         .insertInto("sheet_versions")
         .values({
@@ -588,8 +622,10 @@ export class SheetBuilderService {
   }
 
   async listSheetVersions(
+    userId: string,
     sheetDefinitionId: string,
   ): Promise<SheetVersionSummary[]> {
+    await this.assertSheetReadable(userId, sheetDefinitionId);
     const rows = await this.db
       .selectFrom("sheet_versions")
       .where("sheet_definition_id", "=", sheetDefinitionId)
@@ -609,7 +645,7 @@ export class SheetBuilderService {
     }));
   }
 
-  async getSheetVersion(versionId: string) {
+  async getSheetVersion(userId: string, versionId: string) {
     const version = await this.db
       .selectFrom("sheet_versions as sv")
       .innerJoin("sheet_definitions as sd", "sd.id", "sv.sheet_definition_id")
@@ -621,6 +657,7 @@ export class SheetBuilderService {
     if (!version) {
       throw new AppError("VERSION_NOT_FOUND", 404, "Sheet version not found.");
     }
+    await this.assertSheetReadable(userId, version.sheet_definition_id);
 
     const storedLayouts =
       typeof version.layouts === "string"
@@ -655,6 +692,20 @@ export class SheetBuilderService {
           ? version.created_at.toISOString()
           : String(version.created_at),
     };
+  }
+
+  private async assertSheetReadable(userId: string, sheetDefinitionId: string): Promise<void> {
+    const sheet = await this.db.selectFrom("sheet_definitions as sd")
+      .innerJoin("game_systems as gs", "gs.id", "sd.system_id")
+      .where("sd.id", "=", sheetDefinitionId)
+      .where("sd.deleted_at", "is", null)
+      .where("gs.deleted_at", "is", null)
+      .select(["sd.owner_id as sheetOwnerId", "gs.owner_id as systemOwnerId", "gs.visibility"])
+      .executeTakeFirst();
+    if (!sheet) throw new AppError("SHEET_NOT_FOUND", 404, "Sheet definition not found.");
+    if (sheet.visibility !== "public" && sheet.sheetOwnerId !== userId && sheet.systemOwnerId !== userId) {
+      throw new AppError("FORBIDDEN", 403, "Access restricted.");
+    }
   }
 
   private async generateUniqueSlug(

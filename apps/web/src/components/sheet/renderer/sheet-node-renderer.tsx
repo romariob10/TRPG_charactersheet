@@ -18,6 +18,40 @@ import {
 import { RepeaterRenderer } from "./repeater-renderer";
 import { useSheetRender } from "./sheet-render-context";
 
+function applyComponentOverrides(
+  root: LayoutNode,
+  exposedProperties: Array<{ propertyId: string; targetNodeId: string; targetPropPath: string }>,
+  overrides: Record<string, string | number | boolean | null>,
+): LayoutNode {
+  const clone = structuredClone(root);
+  const findNode = (node: LayoutNode, id: string): LayoutNode | undefined => {
+    if (node.id === id) return node;
+    if ("children" in node) {
+      for (const child of node.children) {
+        const found = findNode(child, id);
+        if (found) return found;
+      }
+    }
+    if ("rowTemplate" in node) return findNode(node.rowTemplate, id);
+    return undefined;
+  };
+  for (const property of exposedProperties) {
+    if (!(property.propertyId in overrides)) continue;
+    const targetNode = findNode(clone, property.targetNodeId);
+    if (!targetNode) continue;
+    const parts = property.targetPropPath.split(".");
+    let target: Record<string, unknown> = targetNode as unknown as Record<string, unknown>;
+    for (const part of parts.slice(0, -1)) {
+      const next = target[part];
+      if (!next || typeof next !== "object" || Array.isArray(next)) break;
+      target = next as Record<string, unknown>;
+    }
+    const leaf = parts.at(-1);
+    if (leaf) target[leaf] = overrides[property.propertyId];
+  }
+  return clone;
+}
+
 const ALIGN_MAP = {
   start: "items-start",
   center: "items-center",
@@ -183,9 +217,14 @@ export const SheetNodeRenderer: React.FC<{ node: LayoutNode }> = ({ node }) => {
 
         const compRootNode =
           compVersion.layouts[target] ?? compVersion.layouts.desktop;
+        const overriddenRoot = applyComponentOverrides(
+          compRootNode,
+          compVersion.exposedProperties,
+          node.propertyOverrides,
+        );
 
         return (
-          <SheetNodeRenderer node={compRootNode} />
+          <SheetNodeRenderer node={overriddenRoot} />
         );
       }
       default:

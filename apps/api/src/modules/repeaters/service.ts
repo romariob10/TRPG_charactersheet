@@ -13,18 +13,7 @@ import { AppError } from "../../errors.js";
 function parseJsonValue(v: unknown): RepeaterRowValue {
   if (v === null) return null;
   if (typeof v === "boolean" || typeof v === "number") return v;
-  if (typeof v === "string") {
-    try {
-      const parsed: unknown = JSON.parse(v);
-      if (parsed === null) return null;
-      if (typeof parsed === "boolean" || typeof parsed === "number" || typeof parsed === "string") {
-        return parsed;
-      }
-    } catch {
-      return v;
-    }
-    return v;
-  }
+  if (typeof v === "string") return v;
   return null;
 }
 
@@ -229,7 +218,7 @@ export class RepeaterService {
         )
         .execute();
 
-      await trx
+      const updated = await trx
         .updateTable("character_repeater_rows")
         .set({
           version: nextVersion,
@@ -237,7 +226,11 @@ export class RepeaterService {
           updated_at: now,
         })
         .where("id", "=", rowId)
-        .execute();
+        .where("version", "=", input.expectedVersion)
+        .executeTakeFirst();
+      if (Number(updated.numUpdatedRows) !== 1) {
+        throw new AppError("REVISION_CONFLICT", 409, "Row was modified concurrently.");
+      }
 
       await trx
         .insertInto("character_repeater_mutations")
@@ -307,6 +300,17 @@ export class RepeaterService {
   ): Promise<{ success: boolean }> {
     await this.assertCharacterAccess(userId, characterId);
 
+    const rows = await this.db.selectFrom("character_repeater_rows")
+      .where("character_id", "=", characterId)
+      .where("repeater_key", "=", input.repeaterKey)
+      .select("id").execute();
+    const existingIds = rows.map((row) => row.id);
+    if (existingIds.length !== input.rowIds.length ||
+        new Set(existingIds).size !== new Set(input.rowIds).size ||
+        existingIds.some((id) => !input.rowIds.includes(id))) {
+      throw new AppError("INVALID_REORDER", 400, "Reorder must contain every row in this repeater exactly once.");
+    }
+
     await this.db.transaction().execute(async (trx) => {
       for (let i = 0; i < input.rowIds.length; i++) {
         await trx
@@ -318,6 +322,7 @@ export class RepeaterService {
           })
           .where("id", "=", input.rowIds[i])
           .where("character_id", "=", characterId)
+          .where("repeater_key", "=", input.repeaterKey)
           .execute();
       }
 
