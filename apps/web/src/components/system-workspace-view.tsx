@@ -4,11 +4,14 @@ import { useRef, useState } from "react";
 import Link from "next/link";
 import {
   BookOpen,
+  FileSpreadsheet,
   FileText,
   Image as ImageIcon,
   Newspaper,
+  Plus,
   Trash2,
   Upload,
+  UserPlus,
   Users,
 } from "lucide-react";
 import { useTranslations } from "next-intl";
@@ -26,7 +29,7 @@ export function SystemWorkspaceView({
 }) {
   const t = useTranslations("SystemWorkspace");
   const [materials, setMaterials] = useState<SystemMaterial[]>(
-    workspace.materials,
+    workspace.materials ?? [],
   );
   const [title, setTitle] = useState("");
   const [uploading, setUploading] = useState(false);
@@ -39,7 +42,7 @@ export function SystemWorkspaceView({
     event.preventDefault();
     const file = fileInputRef.current?.files?.[0];
     if (!file) {
-      setError(t("selectFile"));
+      setError(t("selectFile") || "Please select a file.");
       return;
     }
     setUploading(true);
@@ -55,15 +58,15 @@ export function SystemWorkspaceView({
       const result = await response.json();
       if (!response.ok) {
         throw new Error(
-          result?.error?.message ?? t("uploadFailed"),
+          result?.error?.message ?? t("uploadFailed") ?? "Upload failed",
         );
       }
-      setMaterials((previous) => [result as SystemMaterial, ...previous]);
+      setMaterials((prev) => [result, ...prev]);
       setTitle("");
       if (fileInputRef.current) fileInputRef.current.value = "";
-    } catch (reason) {
+    } catch (err: unknown) {
       setError(
-        reason instanceof Error ? reason.message : t("uploadFailed"),
+        err instanceof Error ? err.message : t("uploadFailed") || "Upload failed",
       );
     } finally {
       setUploading(false);
@@ -71,32 +74,126 @@ export function SystemWorkspaceView({
   }
 
   async function handleDelete(material: SystemMaterial) {
-    setMaterials((previous) =>
-      previous.filter((entry) => entry.id !== material.id),
-    );
+    if (!confirm(t("confirmDeleteMaterial", { title: material.title }))) return;
     try {
       await apiFetch(`/api/systems/${systemId}/materials/${material.id}`, {
         method: "DELETE",
       });
-    } catch {}
+      setMaterials((prev) => prev.filter((m) => m.id !== material.id));
+    } catch (err) {
+      console.error(err);
+    }
   }
 
   return (
     <div className="space-y-8">
+      {/* Sheet Definitions / Builder */}
+      <section aria-labelledby="ws-sheets">
+        <div className="flex items-center justify-between">
+          <h2
+            id="ws-sheets"
+            className="flex items-center gap-2 text-lg font-bold text-[var(--brand)]"
+          >
+            <FileSpreadsheet className="size-4" /> {t("sheetsTitle") || "Character Sheets & Layouts"}
+          </h2>
+          <div className="flex items-center gap-2">
+            <Link
+              href={`/dashboard/systems/${systemId}/sheets/new`}
+              className="inline-flex items-center gap-1.5 rounded-[var(--radius-control)] bg-[var(--brand)] px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-[var(--brand-strong)]"
+            >
+              <Plus className="size-3.5" /> {t("newSheet")}
+            </Link>
+          </div>
+        </div>
+
+        {workspace.sheets && workspace.sheets.length > 0 ? (
+          <ul className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {workspace.sheets.map((sheet) => (
+              <li
+                key={sheet.id}
+                className="flex flex-col justify-between p-4 rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--surface)] hover:border-[var(--brand)]/50 transition-all shadow-sm group"
+              >
+                <div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-sm font-bold text-foreground group-hover:text-[var(--brand)] transition-colors truncate">
+                      {sheet.title}
+                    </span>
+                    <span className="text-[10px] uppercase font-semibold px-2 py-0.5 rounded bg-[var(--surface-subtle)] text-[var(--muted)] capitalize">
+                      {sheet.kind}
+                    </span>
+                  </div>
+                  {sheet.description && (
+                    <p className="text-xs text-[var(--muted)] mt-1.5 line-clamp-2">
+                      {sheet.description}
+                    </p>
+                  )}
+                </div>
+
+                <div className="mt-4 pt-3 border-t border-[var(--border)]/60 flex items-center justify-between gap-2 text-xs">
+                  <span className="font-medium text-[var(--muted)]">
+                    {sheet.currentVersionNumber
+                      ? `v${sheet.currentVersionNumber}`
+                      : "Draft"}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    {sheet.currentVersionId && (
+                      <Link
+                        href={`/dashboard/new?sheetVersionId=${sheet.currentVersionId}&systemId=${systemId}`}
+                        className="inline-flex items-center gap-1 text-[11px] font-semibold text-[var(--brand)] hover:underline"
+                      >
+                        <UserPlus className="size-3" />
+                        {t("createCharacter")}
+                      </Link>
+                    )}
+                    <Link
+                      href={`/dashboard/systems/${systemId}/sheets/${sheet.id}/builder`}
+                      className="inline-flex items-center gap-1 font-semibold text-[var(--brand)] hover:underline"
+                    >
+                      {t("openBuilder")}
+                    </Link>
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <div className="mt-3 rounded-[var(--radius-card)] border border-dashed border-[var(--border)] bg-[var(--surface)] p-6 text-center">
+            <p className="text-sm text-[var(--muted)]">
+              {t("noSheets")}
+            </p>
+            <Link
+              href={`/dashboard/systems/${systemId}/sheets/new`}
+              className="mt-3 inline-flex items-center gap-1.5 rounded-[var(--radius-control)] bg-[var(--brand)] px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-[var(--brand-strong)]"
+            >
+              <Plus className="size-4" /> {t("createFirstSheet")}
+            </Link>
+          </div>
+        )}
+      </section>
+
+      {/* Characters */}
       <section aria-labelledby="ws-characters">
-        <h2
-          id="ws-characters"
-          className="flex items-center gap-2 text-lg font-bold text-[var(--brand)]"
-        >
-          <Users className="size-4" /> {t("characters")}
-        </h2>
+        <div className="flex items-center justify-between">
+          <h2
+            id="ws-characters"
+            className="flex items-center gap-2 text-lg font-bold text-[var(--brand)]"
+          >
+            <Users className="size-4" /> {t("characters")}
+          </h2>
+          <Link
+            href={`/dashboard/new?systemId=${systemId}`}
+            className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--brand)] hover:underline"
+          >
+            <Plus className="size-3.5" /> {t("newCharacter") || "New Character"}
+          </Link>
+        </div>
         {workspace.characters.length ? (
           <ul className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {workspace.characters.map((character) => (
               <li key={character.id}>
                 <Link
                   href={`/characters/${character.id}`}
-                  className="flex items-center gap-3 rounded-[var(--radius-control)] border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 transition-colors hover:border-[var(--brand)]/40"
+                  className="flex items-center gap-3 rounded-[var(--radius-control)] border border-[var(--border)] bg-[var(--surface)] px-3.5 py-3 transition-colors hover:border-[var(--brand)]/40"
                 >
                   <span className="grid size-8 shrink-0 place-items-center rounded-[var(--radius-control)] bg-[var(--keylime)] text-[var(--brand)]">
                     <Users className="size-4" />
@@ -113,6 +210,7 @@ export function SystemWorkspaceView({
         )}
       </section>
 
+      {/* Posts */}
       <section aria-labelledby="ws-posts">
         <h2
           id="ws-posts"
@@ -126,7 +224,7 @@ export function SystemWorkspaceView({
               <li key={post.id}>
                 <Link
                   href={`/users/${post.authorUsername}/posts/${post.slug}`}
-                  className="block rounded-[var(--radius-control)] border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 transition-colors hover:border-[var(--brand)]/40"
+                  className="block rounded-[var(--radius-control)] border border-[var(--border)] bg-[var(--surface)] px-3.5 py-2.5 transition-colors hover:border-[var(--brand)]/40"
                 >
                   <span className="block truncate text-sm font-semibold">
                     {post.title ?? post.excerpt}
@@ -143,6 +241,7 @@ export function SystemWorkspaceView({
         )}
       </section>
 
+      {/* Materials */}
       <section aria-labelledby="ws-materials">
         <h2
           id="ws-materials"
@@ -194,7 +293,7 @@ export function SystemWorkspaceView({
             {materials.map((material) => (
               <li
                 key={material.id}
-                className="flex items-center gap-3 rounded-[var(--radius-control)] border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5"
+                className="flex items-center gap-3 rounded-[var(--radius-control)] border border-[var(--border)] bg-[var(--surface)] px-3.5 py-2.5"
               >
                 <span className="grid size-8 shrink-0 place-items-center rounded-[var(--radius-control)] bg-[var(--keylime)] text-[var(--brand)]">
                   {material.fileType === "image" ? (
@@ -204,7 +303,7 @@ export function SystemWorkspaceView({
                   )}
                 </span>
                 <Link
-                  href={material.url}
+                  href={material.url || `/api/systems/${systemId}/materials/${material.id}/download`}
                   className="min-w-0 flex-1 truncate text-sm font-semibold hover:underline"
                 >
                   {material.title}

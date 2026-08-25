@@ -15,6 +15,7 @@ import { WorkspaceService } from "../workspace/service.js";
 import {
   findCharacterAccess,
   loadCharacterFields,
+  loadCharacterSheetFieldValues,
   listCharacters,
   type CharacterAccessRow,
   type CharacterDatabase,
@@ -46,14 +47,82 @@ export class CharacterService {
     characterId: string,
   ): Promise<CharacterEditorData> {
     const row = await this.authorizeCharacter(actorId, characterId, "read");
+    if (row.sheetVersionId) {
+      const versionRow = await this.db
+        .selectFrom("sheet_versions as sv")
+        .innerJoin("sheet_definitions as sd", "sd.id", "sv.sheet_definition_id")
+        .where("sv.id", "=", row.sheetVersionId)
+        .select([
+          "sv.id",
+          "sv.sheet_definition_id as sheetId",
+          "sv.version_number as versionNumber",
+          "sv.schema_version as schemaVersion",
+          "sv.layouts",
+          "sv.fields",
+          "sv.changelog",
+          "sv.published_by as authorId",
+          "sv.created_at as createdAt",
+        ])
+        .executeTakeFirst();
+
+      const sheetFieldValues = await loadCharacterSheetFieldValues(this.db, row.id);
+
+      const parsedLayouts = versionRow?.layouts
+        ? typeof versionRow.layouts === "string"
+          ? JSON.parse(versionRow.layouts)
+          : versionRow.layouts
+        : undefined;
+
+      const parsedFields = versionRow?.fields
+        ? typeof versionRow.fields === "string"
+          ? JSON.parse(versionRow.fields)
+          : versionRow.fields
+        : [];
+
+      return {
+        id: row.id,
+        name: row.name,
+        role: row.ownerId === actorId ? "owner" : "editor",
+        revision: Number(row.revision),
+        templateId: row.templateId,
+        sheetVersionId: row.sheetVersionId,
+        systemId: row.systemId,
+        catalogStatus: row.catalogStatus,
+        fields: [],
+        pdfUrl: `/api/characters/${row.id}/export`,
+        currentUserId: actorId,
+        sheetVersion: versionRow
+          ? {
+              id: versionRow.id,
+              sheetId: versionRow.sheetId,
+              versionNumber: versionRow.versionNumber,
+              schemaVersion: versionRow.schemaVersion,
+              layouts: parsedLayouts,
+              fields: parsedFields,
+              changelog: versionRow.changelog,
+              authorId: versionRow.authorId,
+              createdAt:
+                versionRow.createdAt instanceof Date
+                  ? versionRow.createdAt.toISOString()
+                  : String(versionRow.createdAt),
+            }
+          : null,
+        sheetFieldValues,
+      };
+    }
+
     return {
       id: row.id,
       name: row.name,
       role: row.ownerId === actorId ? "owner" : "editor",
       revision: Number(row.revision),
       templateId: row.templateId,
+      sheetVersionId: row.sheetVersionId,
+      systemId: row.systemId,
       catalogStatus: row.catalogStatus,
-      fields: await loadCharacterFields(this.db, row.id, row.templateId),
+      fields: row.templateId
+        ? await loadCharacterFields(this.db, row.id, row.templateId)
+        : [],
       pdfUrl: `/api/characters/${row.id}/pdf`,
       currentUserId: actorId,
     };
@@ -63,6 +132,122 @@ export class CharacterService {
     actorId: string,
     input: CreateCharacterRequest,
   ): Promise<CharacterSummary> {
+    if (input.sheetVersionId || input.systemId) {
+      let resolvedVersionId = input.sheetVersionId;
+      let resolvedSystemId = input.systemId;
+
+      if (!resolvedVersionId && input.systemId) {
+        // Resolve latest published version of system's primary sheet
+        const sheet = await this.db
+          .selectFrom("sheet_definitions as sd")
+          .innerJoin("game_systems as gs", "gs.id", "sd.system_id")
+          .where("sd.system_id", "=", input.systemId)
+          .where("sd.deleted_at", "is", null)
+          .where("gs.deleted_at", "is", null)
+          .where("sd.current_version_id", "is not", null)
+          .select([
+            "sd.id as sheetId",
+            "sd.current_version_id as versionId",
+            "gs.id as systemId",
+            "gs.visibility",
+            "gs.owner_id as systemOwnerId",
+          ])
+          .orderBy("sd.created_at", "asc")
+          .executeTakeFirst();
+
+        if (!sheet || !sheet.versionId) {
+          throw new AppError(
+            "NO_PUBLISHED_VERSION",
+            400,
+            "This system has no published character sheet version.",
+          );
+        }
+        resolvedVersionId = sheet.versionId;
+        resolvedSystemId = sheet.systemId;
+      }
+
+      const versionRow = await this.db
+        .selectFrom("sheet_versions as sv")
+        .innerJoin("sheet_definitions as sd", "sd.id", "sv.sheet_definition_id")
+        .innerJoin("game_systems as gs", "gs.id", "sd.system_id")
+        .where("sv.id", "=", resolvedVersionId!)
+        .select([
+          "sv.id",
+          "sv.fields",
+          "gs.id as systemId",
+          "gs.visibility",
+          "gs.owner_id as systemOwnerId",
+        ])
+        .executeTakeFirst();
+
+      if (!versionRow) {
+        throw new AppError("VERSION_NOT_FOUND", 404, "Published sheet version not found.");
+      }
+
+      if (versionRow.visibility !== "public" && versionRow.systemOwnerId !== actorId) {
+        throw new AppError("FORBIDDEN", 403, "Access to this game system sheet is restricted.");
+      }
+
+      resolvedSystemId = versionRow.systemId;
+
+      const parsedFields = versionRow.fields
+        ? typeof versionRow.fields === "string"
+          ? JSON.parse(versionRow.fields)
+          : versionRow.fields
+        : [];
+
+      const characterId = await this.db.transaction().execute(async (trx) => {
+        const created = await trx
+          .insertInto("characters")
+          .values({
+            owner_id: actorId,
+            name: input.name,
+            system_id: resolvedSystemId,
+            sheet_version_id: versionRow.id,
+            template_id: null,
+          })
+          .returning("id")
+          .executeTakeFirstOrThrow();
+
+        // Initialize default field values
+        for (const field of parsedFields) {
+          if (field.defaultValue !== undefined && field.defaultValue !== null) {
+            await trx
+              .insertInto("character_sheet_field_values")
+              .values({
+                character_id: created.id,
+                field_key: field.key,
+                value: JSON.stringify(field.defaultValue),
+                version: 1,
+                updated_by: actorId,
+              })
+              .execute();
+          }
+        }
+
+        const workspace = new WorkspaceService(trx);
+        await workspace.recordActivity(actorId, "character", created.id, {
+          markSeen: true,
+        });
+        if (resolvedSystemId) {
+          await workspace.recordActivity(actorId, "system", resolvedSystemId, {
+            markSeen: true,
+          });
+        }
+        return created.id;
+      });
+
+      return this.get(actorId, characterId);
+    }
+
+    if (!input.templateId) {
+      throw new AppError(
+        "VALIDATION_FAILED",
+        400,
+        "Either templateId, sheetVersionId, or systemId must be provided.",
+      );
+    }
+
     const template = await this.db
       .selectFrom("pdf_templates as template")
       .leftJoin("template_subscriptions as subscription", (join) =>
@@ -100,7 +285,7 @@ export class CharacterService {
       const created = await trx
         .insertInto("characters")
         .values({
-          template_id: input.templateId,
+          template_id: input.templateId!,
           owner_id: actorId,
           name: input.name,
         })
@@ -119,7 +304,7 @@ export class CharacterService {
               eb.val(0).as("version"),
               eb.val(actorId).as("updated_by"),
             ])
-            .where("template_id", "=", input.templateId)
+            .where("template_id", "=", input.templateId!)
             .where("is_enabled", "=", true),
         )
         .execute();
@@ -127,7 +312,7 @@ export class CharacterService {
       await workspace.recordActivity(actorId, "character", created.id, {
         markSeen: true,
       });
-      await workspace.recordActivity(actorId, "system", input.templateId, {
+      await workspace.recordActivity(actorId, "system", input.templateId!, {
         markSeen: true,
       });
       return created.id;
@@ -454,6 +639,8 @@ export class CharacterService {
       status: row.status,
       catalogStatus: row.catalogStatus,
       pageCount: row.pageCount,
+      sheetVersionId: row.sheetVersionId,
+      systemId: row.systemId,
       updatedAt: row.updatedAt.toISOString(),
       deletedAt: row.deletedAt?.toISOString() ?? null,
     };

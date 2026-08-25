@@ -1,110 +1,215 @@
 "use client";
 
 import { useRef, useState } from "react";
-import Link from "next/link";
-import { Check, FilePlus2, RefreshCw } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
+import { BookOpen, Check, FilePlus2, FileText, Loader2, RefreshCw } from "lucide-react";
+import Link from "next/link";
 import { Button, buttonClassName } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { cn } from "@/lib/utils";
 import { apiFetch } from "@/lib/api/client";
+import { cn } from "@/lib/utils";
 
-export interface CuratedTemplate {
-  id: string;
-  title: string;
-  gameSystem: string | null;
-  pageCount: number;
-  community?: boolean;
+export type CharacterCreationSource =
+  | {
+      type: "sheet";
+      id: string;
+      sheetVersionId: string;
+      systemId: string;
+      title: string;
+      systemTitle: string;
+      sheetTitle: string;
+      versionNumber: number;
+    }
+  | {
+      type: "template";
+      id: string;
+      templateId: string;
+      title: string;
+      systemTitle: string;
+      pageCount: number;
+      community?: boolean;
+    };
+
+interface CreateCharacterFormProps {
+  sources?: CharacterCreationSource[];
+  templates?: Array<{
+    id: string;
+    title: string;
+    pageCount: number;
+    gameSystem?: string | null;
+    community?: boolean;
+  }>;
+  publishedSheets?: Array<{
+    id: string;
+    sheetDefinitionId: string;
+    sheetTitle: string;
+    systemId: string;
+    systemTitle: string;
+    versionNumber: number;
+    kind: "standard" | "compact" | "npc" | "spellbook" | "vehicle";
+  }>;
+  initialSelectedId?: string;
 }
 
 export function CreateCharacterForm({
+  sources,
   templates = [],
-}: {
-  templates?: CuratedTemplate[];
-}) {
+  publishedSheets = [],
+  initialSelectedId,
+}: CreateCharacterFormProps) {
   const t = useTranslations("Create");
   const router = useRouter();
-  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(
-    templates[0]?.id ?? null,
+
+  const effectiveSources: CharacterCreationSource[] =
+    sources ?? [
+      ...(publishedSheets?.map((s) => ({
+        type: "sheet" as const,
+        id: s.id,
+        sheetVersionId: s.id,
+        sheetTitle: s.sheetTitle,
+        title: s.sheetTitle,
+        systemId: s.systemId,
+        systemTitle: s.systemTitle,
+        versionNumber: s.versionNumber,
+      })) ?? []),
+      ...(templates?.map((tpl) => ({
+        type: "template" as const,
+        id: tpl.id,
+        templateId: tpl.id,
+        title: tpl.title,
+        systemTitle: tpl.gameSystem ?? "PDF Template",
+        pageCount: tpl.pageCount,
+        community: tpl.community,
+      })) ?? []),
+    ];
+
+  const [selectedId, setSelectedId] = useState<string | null>(
+    initialSelectedId || effectiveSources[0]?.id || null,
   );
+  const [name, setName] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const submittingRef = useRef(false);
 
-  async function submit(formData: FormData) {
+  const selectedSource = effectiveSources.find((s) => s.id === selectedId);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
     if (submittingRef.current || pending) return;
-    const name = String(formData.get("name") ?? "").trim();
-    if (!name) {
+
+    const trimmedName = name.trim();
+    if (!trimmedName) {
       setError(t("enterName"));
       return;
     }
-    if (!selectedTemplateId) {
+    if (!selectedSource) {
       setError(t("selectTemplate"));
       return;
     }
+
     submittingRef.current = true;
     setPending(true);
     setError(null);
+
     try {
+      const payload =
+        selectedSource.type === "sheet"
+          ? {
+              name: trimmedName,
+              sheetVersionId: selectedSource.sheetVersionId,
+              systemId: selectedSource.systemId,
+            }
+          : {
+              name: trimmedName,
+              templateId: selectedSource.templateId,
+            };
+
       const result = await apiFetch<{ id: string }>("/api/characters", {
         method: "POST",
-        body: JSON.stringify({
-          name,
-          templateId: selectedTemplateId,
-        }),
+        body: JSON.stringify(payload),
       });
-      router.push(`/characters/${result.id}`);
-    } catch (reason) {
+
+      if (result?.id) {
+        router.push(`/characters/${result.id}`);
+      } else {
+        throw new Error("No character ID returned.");
+      }
+    } catch (reason: unknown) {
       submittingRef.current = false;
-      setError(reason instanceof Error ? reason.message : t("createFailed"));
+      setError(
+        reason instanceof Error
+          ? reason.message
+          : t("createFailed"),
+      );
       setPending(false);
     }
   }
 
   return (
-    <form action={submit} className="space-y-6">
-      <label className="block space-y-2 text-sm font-semibold">
-        <span>{t("name")}</span>
+    <form onSubmit={handleSubmit} className="space-y-6">
+      <div>
+        <label htmlFor="character-name" className="block text-sm font-semibold text-[var(--foreground)]">
+          {t("name")} *
+        </label>
         <Input
-          name="name"
+          id="character-name"
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
           required
-          maxLength={120}
-          placeholder="Arven Nightwind"
+          autoFocus
+          disabled={pending}
+          className="mt-2 text-base"
         />
-      </label>
+      </div>
 
       <div>
-        <span className="text-sm font-semibold">{t("template")}</span>
-        {templates.length ? (
-          <div className="mt-2 grid gap-2 sm:grid-cols-2">
-            {templates.map((template) => {
-              const selected = template.id === selectedTemplateId;
+        <span className="block text-sm font-semibold text-[var(--foreground)]">
+          {t("template")} *
+        </span>
+        {effectiveSources.length ? (
+          <div className="mt-2.5 grid gap-3 sm:grid-cols-2">
+            {effectiveSources.map((source) => {
+              const isSelected = source.id === selectedId;
               return (
                 <button
-                  key={template.id}
+                  key={source.id}
                   type="button"
                   disabled={pending}
-                  onClick={() => setSelectedTemplateId(template.id)}
+                  onClick={() => setSelectedId(source.id)}
                   className={cn(
-                    "relative rounded-[var(--radius-control)] border border-[var(--border)] bg-[var(--surface)] p-4 text-left transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]",
-                    selected &&
-                      "border-[var(--brand)] bg-[var(--brand-soft)] ring-1 ring-[var(--brand)]",
+                    "relative flex items-start gap-3 rounded-[var(--radius-control)] border border-[var(--border)] bg-[var(--surface)] p-4 text-left transition-all focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]",
+                    isSelected
+                      ? "border-[var(--brand)] bg-[var(--brand-soft)] ring-1 ring-[var(--brand)]"
+                      : "hover:border-[var(--brand)]/30",
                   )}
                 >
-                  <strong className="block pr-7">{template.title}</strong>
-                  <span className="mt-1 block text-xs text-[var(--muted)]">
-                    {template.gameSystem ?? t("rpg")} · {template.pageCount}
-                  </span>
-                  {template.community && (
-                    <span className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-emerald-800">
-                      <RefreshCw className="size-3.5" />
-                      {t("communitySynced")}
+                  <div className="grid size-9 shrink-0 place-items-center rounded-[var(--radius-control)] bg-[var(--surface-strong)] text-[var(--brand)]">
+                    {source.type === "sheet" ? (
+                      <BookOpen className="size-4" />
+                    ) : (
+                      <FileText className="size-4" />
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1 pr-6">
+                    <strong className="block truncate text-sm font-bold text-[var(--foreground)]">
+                      {source.type === "sheet" ? source.sheetTitle : source.title}
+                    </strong>
+                    <span className="mt-0.5 block truncate text-xs text-[var(--muted)]">
+                      {source.systemTitle}
+                      {source.type === "sheet" ? ` · v${source.versionNumber}` : ` · ${source.pageCount} pages`}
                     </span>
-                  )}
-                  {selected && (
-                    <span className="absolute top-3 right-3 grid size-6 place-items-center rounded-full bg-[var(--brand)] text-white">
-                      <Check className="size-4" />
+                    {source.type === "template" && source.community && (
+                      <span className="mt-1.5 flex items-center gap-1 text-[11px] font-semibold text-emerald-800">
+                        <RefreshCw className="size-3" />
+                        {t("communitySynced")}
+                      </span>
+                    )}
+                  </div>
+                  {isSelected && (
+                    <span className="absolute top-3 right-3 grid size-5 place-items-center rounded-full bg-[var(--brand)] text-white">
+                      <Check className="size-3.5" />
                     </span>
                   )}
                 </button>
@@ -112,41 +217,52 @@ export function CreateCharacterForm({
             })}
           </div>
         ) : (
-          <div className="mt-2 rounded-[var(--radius-card)] border border-dashed bg-[var(--surface)] p-6 text-center">
+          <div className="mt-2 rounded-[var(--radius-card)] border border-dashed bg-[var(--surface-subtle)] p-6 text-center">
             <FilePlus2 className="mx-auto size-8 text-[var(--brand)]" />
-            <p className="mt-3 font-semibold">{t("noTemplates")}</p>
-            <p className="mt-1 text-sm leading-6 text-[var(--muted)]">
+            <p className="mt-3 font-semibold text-sm">{t("noTemplates")}</p>
+            <p className="mt-1 text-xs text-[var(--muted)]">
               {t("noTemplatesText")}
             </p>
           </div>
         )}
       </div>
 
-      <Link
-        href="/dashboard/systems/new"
-        className={cn(
-          buttonClassName({ variant: "secondary", size: "md" }),
-          "w-full",
-        )}
-      >
-        <FilePlus2 className="size-4" />
-        {t("createTemplate")}
-      </Link>
+      <div className="flex items-center gap-3">
+        <Link
+          href="/dashboard/systems/new"
+          className={cn(
+            buttonClassName({ variant: "secondary", size: "md" }),
+            "w-full",
+          )}
+        >
+          <FilePlus2 className="size-4" />
+          {t("createTemplate")}
+        </Link>
+      </div>
 
       {error && (
-        <p
+        <div
           role="alert"
-          className="rounded-[var(--radius-control)] bg-red-50 p-3 text-sm text-red-700"
+          className="rounded-[var(--radius-control)] border border-[var(--danger)]/30 bg-[var(--danger)]/10 px-4 py-3 text-sm text-[var(--danger)]"
         >
           {error}
-        </p>
+        </div>
       )}
+
       <Button
+        type="submit"
         className="w-full"
         size="lg"
-        disabled={pending || !selectedTemplateId}
+        disabled={pending || !selectedId || !name.trim()}
       >
-        {pending ? t("creating") : t("create")}
+        {pending ? (
+          <>
+            <Loader2 className="size-4 animate-spin mr-2" />
+            {t("creating")}
+          </>
+        ) : (
+          t("create")
+        )}
       </Button>
     </form>
   );

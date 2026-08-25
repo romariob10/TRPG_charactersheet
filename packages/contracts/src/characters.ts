@@ -4,10 +4,21 @@ import { publicAuthorSchema } from "./profiles.js";
 export const characterIdSchema = z.string().uuid();
 export const characterNameSchema = z.string().trim().min(1).max(120);
 
-export const createCharacterRequestSchema = z.object({
-  templateId: z.string().uuid(),
-  name: characterNameSchema,
-});
+export const createCharacterRequestSchema = z
+  .object({
+    name: characterNameSchema,
+    templateId: z.string().uuid().optional(),
+    sheetVersionId: z.string().uuid().optional(),
+    systemId: z.string().uuid().optional(),
+  })
+  .refine(
+    (data) => Boolean(data.templateId || data.sheetVersionId || data.systemId),
+    { message: "Either templateId, sheetVersionId, or systemId must be provided." },
+  )
+  .refine(
+    (data) => !(data.templateId && (data.sheetVersionId || data.systemId)),
+    { message: "Cannot specify both templateId and sheetVersionId/systemId." },
+  );
 
 export const updateCharacterRequestSchema = z.object({
   name: characterNameSchema.optional(),
@@ -34,6 +45,7 @@ export type InviteUserRequest = z.infer<typeof inviteUserRequestSchema>;
 
 export const fieldValueSchema = z.union([
   z.string().max(20_000),
+  z.number(),
   z.boolean(),
   z.array(z.string().max(2_000)).max(200),
   z.null(),
@@ -71,6 +83,8 @@ export const characterSummarySchema = z.object({
   pageCount: z.number().int().min(1).max(20),
   updatedAt: z.string(),
   deletedAt: z.string().nullable(),
+  sheetVersionId: z.string().uuid().nullable().optional(),
+  systemId: z.string().uuid().nullable().optional(),
 });
 
 export type CharacterSummary = z.infer<typeof characterSummarySchema>;
@@ -92,7 +106,7 @@ export interface PublicCharacterSummary {
   likedByMe: boolean;
 }
 
-export type FieldValue = string | boolean | string[] | null;
+export type FieldValue = string | number | boolean | string[] | null;
 export type FieldKind =
   | "text"
   | "multiline"
@@ -142,9 +156,13 @@ export interface CharacterEditorData {
   name: string;
   role: "owner" | "editor";
   revision: number;
-  templateId: string;
+  templateId: string | null;
+  sheetVersionId?: string | null;
+  systemId?: string | null;
   catalogStatus: CharacterSummary["catalogStatus"];
   fields: CharacterField[];
   pdfUrl: string;
   currentUserId: string;
+  sheetVersion?: import("./sheet-builder-api.js").SheetVersionDetails | null;
+  sheetFieldValues?: Record<string, FieldValue>;
 }

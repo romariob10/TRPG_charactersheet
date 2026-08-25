@@ -1,10 +1,10 @@
 {
   "name": "@mycharacter/web",
-  "version": "0.0.10",
+  "version": "0.0.11",
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "NODE_ENV=production next build",
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
@@ -21,6 +21,7 @@
     "@editorjs/image": "^2.10.3",
     "@editorjs/list": "^2.0.9",
     "@editorjs/quote": "^2.7.6",
+    "@fontsource/montserrat-alternates": "^5.2.10",
     "@fontsource/noto-sans": "^5.2.10",
     "@mycharacter/contracts": "workspace:*",
     "@mycharacter/pdf": "workspace:*",
