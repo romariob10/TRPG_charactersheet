@@ -39,6 +39,11 @@ export const workspacePostSchema = z.object({
 });
 export type WorkspacePost = z.infer<typeof workspacePostSchema>;
 
+import {
+  gameSystemSummarySchema,
+  workspaceSheetSummarySchema,
+} from "./game-systems.js";
+
 export const systemWorkspaceResponseSchema = z.object({
   system: z.object({
     id: z.string().uuid(),
@@ -49,9 +54,22 @@ export const systemWorkspaceResponseSchema = z.object({
   characters: z.array(workspaceCharacterSchema),
   posts: z.array(workspacePostSchema),
   materials: z.array(systemMaterialSchema),
+  sheets: z.array(workspaceSheetSummarySchema).default([]),
 });
 export type SystemWorkspaceResponse = z.infer<
   typeof systemWorkspaceResponseSchema
+>;
+
+export const unifiedGameSystemWorkspaceSchema = z.object({
+  system: gameSystemSummarySchema,
+  sheets: z.array(workspaceSheetSummarySchema).default([]),
+  characters: z.array(workspaceCharacterSchema).default([]),
+  materials: z.array(systemMaterialSchema).default([]),
+  posts: z.array(workspacePostSchema).default([]),
+  isOwner: z.boolean(),
+});
+export type UnifiedGameSystemWorkspace = z.infer<
+  typeof unifiedGameSystemWorkspaceSchema
 >;
 
 export const filePostRequestSchema = z.object({

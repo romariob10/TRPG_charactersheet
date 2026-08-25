@@ -27,7 +27,13 @@ const nextConfig: NextConfig = {
   // the server import into a Next.js chunk breaks that relative lookup.
   serverExternalPackages: ["@napi-rs/canvas", "pdfjs-dist", "tesseract.js"],
   webpack(config) {
+    config.resolve = config.resolve || {};
+    config.resolve.alias = config.resolve.alias || {};
     config.resolve.alias.canvas = false;
+    config.resolve.extensionAlias = {
+      ".js": [".ts", ".tsx", ".js"],
+      ".jsx": [".tsx", ".jsx"],
+    };
     return config;
   },
 };

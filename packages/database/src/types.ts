@@ -169,7 +169,7 @@ export interface TemplateCommentsTable {
 
 export interface CharactersTable {
   id: Uuid;
-  template_id: string;
+  template_id: string | null;
   owner_id: string;
   name: string;
   slug: Generated<string>;
@@ -182,6 +182,8 @@ export interface CharactersTable {
   remix_source_id: Generated<string | null>;
   status: CharacterStatus;
   revision: string;
+  sheet_version_id: string | null;
+  system_id: string | null;
   deleted_at: Timestamp | null;
   created_at: Timestamp;
   updated_at: Timestamp;
@@ -308,6 +310,7 @@ export interface PostsTable {
   updated_at: Timestamp;
   deleted_at: Timestamp | null;
   system_id: string | null;
+  game_system_id: string | null;
 }
 
 export interface PostImagesTable {
@@ -452,13 +455,170 @@ export interface WorkspaceItemsTable {
 
 export interface SystemMaterialsTable {
   id: Uuid;
-  template_id: string;
+  template_id: string | null;
   uploader_id: string | null;
   title: string;
   storage_path: string;
   file_type: string;
   size_bytes: number;
+  system_id: string | null;
   created_at: Timestamp;
+}
+
+export interface GameSystemsTable {
+  id: Uuid;
+  owner_id: string | null;
+  title: string;
+  slug: string;
+  description: string;
+  family: string | null;
+  edition: string | null;
+  visibility: "private" | "public";
+  legacy_template_id: string | null;
+  deleted_at: Timestamp | null;
+  created_at: Timestamp;
+  updated_at: Timestamp;
+}
+
+export interface SheetDefinitionsTable {
+  id: Uuid;
+  system_id: string;
+  owner_id: string | null;
+  title: string;
+  slug: string;
+  kind: "character" | "npc" | "vehicle" | "organization" | "custom";
+  description: string;
+  current_version_id: string | null;
+  deleted_at: Timestamp | null;
+  created_at: Timestamp;
+  updated_at: Timestamp;
+}
+
+export interface SheetFieldsTable {
+  id: Uuid;
+  sheet_definition_id: string;
+  key: string;
+  label: string;
+  kind: string;
+  default_value: Json | null;
+  options: Json;
+  min_value: number | null;
+  max_value: number | null;
+  read_only: boolean;
+  description: string | null;
+  created_at: Timestamp;
+  updated_at: Timestamp;
+}
+
+export interface SheetDraftsTable {
+  id: Uuid;
+  sheet_definition_id: string;
+  schema_version: number;
+  revision: number;
+  layouts: Json;
+  fields: Json;
+  updated_by: string | null;
+  updated_at: Timestamp;
+}
+
+export interface SheetVersionsTable {
+  id: Uuid;
+  sheet_definition_id: string;
+  version_number: number;
+  schema_version: number;
+  layouts: Json;
+  fields: Json;
+  dependencies: Json;
+  changelog: string;
+  published_by: string;
+  created_at: Timestamp;
+}
+
+export interface ComponentDefinitionsTable {
+  id: Uuid;
+  author_id: string;
+  system_id: string | null;
+  slug: string;
+  name: string;
+  description: string;
+  scope: "personal" | "system" | "public" | "curated";
+  tags: string[];
+  thumbnail_url: string | null;
+  current_version_id: string | null;
+  usage_count: number;
+  moderation_state: "approved" | "pending" | "rejected";
+  deleted_at: Timestamp | null;
+  created_at: Timestamp;
+  updated_at: Timestamp;
+}
+
+export interface ComponentDraftsTable {
+  id: Uuid;
+  component_id: string;
+  schema_version: number;
+  revision: number;
+  layouts: Json;
+  exposed_properties: Json;
+  dependencies: Json;
+  updated_by: string | null;
+  updated_at: Timestamp;
+}
+
+export interface ComponentVersionsTable {
+  id: Uuid;
+  component_id: string;
+  version_number: number;
+  schema_version: number;
+  layouts: Json;
+  exposed_properties: Json;
+  dependencies: Json;
+  changelog: string;
+  author_id: string;
+  created_at: Timestamp;
+}
+
+export interface ComponentDependenciesTable {
+  parent_version_id: string;
+  child_version_id: string;
+}
+
+export interface CharacterRepeaterRowsTable {
+  id: Uuid;
+  character_id: string;
+  repeater_key: string;
+  position: number;
+  version: number;
+  created_at: Timestamp;
+  updated_at: Timestamp;
+  updated_by: string | null;
+}
+
+export interface CharacterRepeaterValuesTable {
+  row_id: string;
+  slot_id: string;
+  value: Json | null;
+  updated_at: Timestamp;
+}
+
+export interface CharacterRepeaterMutationsTable {
+  id: Uuid;
+  character_id: string;
+  client_mutation_id: string;
+  repeater_key: string;
+  row_id: string | null;
+  action: string;
+  payload: Json | null;
+  version: number;
+  created_at: Timestamp;
+}
+
+export interface CharacterSheetFieldValuesTable {
+  character_id: string;
+  field_key: string;
+  value: Json | null;
+  version: number;
+  updated_by: string | null;
+  updated_at: Timestamp;
 }
 
 export interface Database {
@@ -501,4 +661,17 @@ export interface Database {
   template_reviews: TemplateReviewsTable;
   workspace_items: WorkspaceItemsTable;
   system_materials: SystemMaterialsTable;
+  game_systems: GameSystemsTable;
+  sheet_definitions: SheetDefinitionsTable;
+  sheet_fields: SheetFieldsTable;
+  sheet_drafts: SheetDraftsTable;
+  sheet_versions: SheetVersionsTable;
+  component_definitions: ComponentDefinitionsTable;
+  component_drafts: ComponentDraftsTable;
+  component_versions: ComponentVersionsTable;
+  component_dependencies: ComponentDependenciesTable;
+  character_repeater_rows: CharacterRepeaterRowsTable;
+  character_repeater_values: CharacterRepeaterValuesTable;
+  character_repeater_mutations: CharacterRepeaterMutationsTable;
+  character_sheet_field_values: CharacterSheetFieldValuesTable;
 }
