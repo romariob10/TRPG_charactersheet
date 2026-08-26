@@ -116,4 +116,83 @@ describe("official game systems", () => {
     expect(response.statusCode).toBe(409);
     expect(response.json().error.code).toBe("OFFICIAL_SYSTEM_MUST_BE_PUBLIC");
   });
+
+  it("restores visibility for official systems removed before this fix", async () => {
+    await testDb.db
+      .updateTable("game_systems")
+      .set({ deleted_at: new Date() })
+      .where("id", "=", systemId)
+      .execute();
+
+    const mine = await app.inject({
+      method: "GET",
+      url: "/api/game-systems?scope=mine",
+      cookies: { mycharacter_session: userCookie },
+    });
+    expect(mine.json()).toEqual([]);
+
+    const official = await app.inject({
+      method: "GET",
+      url: "/api/game-systems?scope=official",
+      cookies: { mycharacter_session: userCookie },
+    });
+    expect(official.statusCode).toBe(200);
+    expect(official.json()).toEqual([
+      expect.objectContaining({ id: systemId, isOwner: false }),
+    ]);
+
+    const workspace = await app.inject({
+      method: "GET",
+      url: `/api/game-systems/${systemId}/workspace`,
+      cookies: { mycharacter_session: userCookie },
+    });
+    expect(workspace.statusCode).toBe(200);
+
+    await testDb.db
+      .updateTable("game_systems")
+      .set({ deleted_at: null })
+      .where("id", "=", systemId)
+      .execute();
+  });
+
+  it("keeps an official system available after its owner removes it", async () => {
+    const removed = await app.inject({
+      method: "DELETE",
+      url: `/api/game-systems/${systemId}`,
+      cookies: { mycharacter_session: userCookie },
+    });
+    expect(removed.statusCode).toBe(204);
+
+    const mine = await app.inject({
+      method: "GET",
+      url: "/api/game-systems?scope=mine",
+      cookies: { mycharacter_session: userCookie },
+    });
+    expect(mine.statusCode).toBe(200);
+    expect(mine.json()).toEqual([]);
+
+    const official = await app.inject({
+      method: "GET",
+      url: "/api/game-systems?scope=official",
+      cookies: { mycharacter_session: userCookie },
+    });
+    expect(official.statusCode).toBe(200);
+    expect(official.json()).toEqual([
+      expect.objectContaining({
+        id: systemId,
+        isOfficial: true,
+        isOwner: false,
+      }),
+    ]);
+
+    const workspace = await app.inject({
+      method: "GET",
+      url: `/api/game-systems/${systemId}/workspace`,
+      cookies: { mycharacter_session: userCookie },
+    });
+    expect(workspace.statusCode).toBe(200);
+    expect(workspace.json().system).toEqual(
+      expect.objectContaining({ id: systemId, isOfficial: true }),
+    );
+  });
 });

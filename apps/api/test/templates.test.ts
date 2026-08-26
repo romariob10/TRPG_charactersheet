@@ -100,6 +100,32 @@ describe("template visibility and subscriptions", () => {
     expect(community.json().items.map((item: { id: string }) => item.id)).toEqual([communityTemplateId]);
   });
 
+  it("offers an official linked template for character creation without a subscription", async () => {
+    await testDb.db
+      .insertInto("game_systems")
+      .values({
+        owner_id: owner.userId,
+        title: "Official rules",
+        slug: "official-rules",
+        visibility: "public",
+        is_official: true,
+        legacy_template_id: communityTemplateId,
+      })
+      .execute();
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/templates?scope=creation",
+      cookies: { mycharacter_session: stranger.cookie },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().items).toEqual([
+      expect.objectContaining({ id: communityTemplateId }),
+    ]);
+    expect(response.json().items[0]).not.toHaveProperty("subscribed");
+  });
+
   it("hides a previously subscribed template after its owner unpublishes it", async () => {
     await testDb.db
       .updateTable("pdf_templates")

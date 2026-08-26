@@ -23,9 +23,17 @@ export default async function NewCharacterPage({ searchParams }: PageProps) {
   ]);
 
   const ownedSystems = ownedSystemsRes.data ?? [];
+  const allOfficialSystems = officialSystemsRes.data ?? [];
   const ownedSystemIds = new Set(ownedSystems.map((system) => system.id));
-  const officialSystems = (officialSystemsRes.data ?? []).filter(
+  const officialSystems = allOfficialSystems.filter(
     (system) => !ownedSystemIds.has(system.id),
+  );
+  const officialTemplateGroups = new Map(
+    allOfficialSystems.flatMap((system) =>
+      system.legacyTemplateId
+        ? [[system.legacyTemplateId, system.isOwner ? "mine" : "official"] as const]
+        : [],
+    ),
   );
   const templates = templatesRes.data?.items ?? [];
 
@@ -74,9 +82,8 @@ export default async function NewCharacterPage({ searchParams }: PageProps) {
       type: "template",
       group: template.subscribed
         ? "saved"
-        : template.author
-          ? "mine"
-          : "official",
+        : officialTemplateGroups.get(template.id) ??
+          (template.author ? "mine" : "official"),
       id: template.id,
       templateId: template.id,
       title: template.title,

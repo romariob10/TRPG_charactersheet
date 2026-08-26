@@ -817,7 +817,7 @@
     "mySystems": "My systems",
     "selectSheet": "Select character sheet",
     "selectSystem": "Select system",
-    "sendHint": "Enter to send, Shift+Enter for new line",
+    "sendHint": "Enter to send, Shift+Enter for new line · /roll x rolls from 1 to x",
     "uploadingImage": "Uploading image…",
     "imageUploadFailed": "Failed to upload image"
   },

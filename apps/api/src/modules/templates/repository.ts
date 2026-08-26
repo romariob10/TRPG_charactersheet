@@ -144,6 +144,18 @@ export async function listTemplates(
             eb("template.is_public", "=", true),
             eb("subscription.user_id", "=", actorId),
           ]),
+          eb.exists(
+            eb
+              .selectFrom("game_systems as official_system")
+              .select("official_system.id")
+              .whereRef(
+                "official_system.legacy_template_id",
+                "=",
+                "template.id",
+              )
+              .where("official_system.is_official", "=", true)
+              .where("official_system.visibility", "=", "public"),
+          ),
         ]),
       );
   }

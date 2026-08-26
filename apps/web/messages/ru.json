@@ -817,7 +817,7 @@
     "mySystems": "Мои системы",
     "selectSheet": "Выберите лист персонажа",
     "selectSystem": "Выберите систему",
-    "sendHint": "Enter — отправить, Shift+Enter — новая строка",
+    "sendHint": "Enter — отправить, Shift+Enter — новая строка · /roll x — бросок от 1 до x",
     "uploadingImage": "Загрузка изображения…",
     "imageUploadFailed": "Не удалось загрузить изображение"
   },
