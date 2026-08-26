@@ -3,6 +3,7 @@ import { publicAuthorSchema } from "./profiles.js";
 
 export const gameSystemIdSchema = z.string().uuid();
 export const gameSystemSlugSchema = z.string().trim().min(1).max(160);
+export const gameSystemScopeSchema = z.enum(["all", "mine", "official"]);
 
 export const createGameSystemRequestSchema = z.object({
   title: z.string().trim().min(1).max(160),
@@ -38,6 +39,13 @@ export type UpdateGameSystemRequest = z.infer<
   typeof updateGameSystemRequestSchema
 >;
 
+export const updateOfficialGameSystemRequestSchema = z.object({
+  isOfficial: z.boolean(),
+});
+export type UpdateOfficialGameSystemRequest = z.infer<
+  typeof updateOfficialGameSystemRequestSchema
+>;
+
 export const gameSystemSummarySchema = z.object({
   id: gameSystemIdSchema,
   slug: gameSystemSlugSchema,
@@ -46,6 +54,7 @@ export const gameSystemSummarySchema = z.object({
   family: z.string().nullable().optional(),
   edition: z.string().nullable().optional(),
   visibility: z.enum(["private", "public"]),
+  isOfficial: z.boolean().default(false),
   legacyTemplateId: z.string().nullable().optional(),
   owner: publicAuthorSchema.optional(),
   isOwner: z.boolean().optional(),

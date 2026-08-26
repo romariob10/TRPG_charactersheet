@@ -16,43 +16,67 @@ export default async function NewCharacterPage({ searchParams }: PageProps) {
   const t = await getTranslations("Create");
   const params = await searchParams;
 
-  const [systemsRes, templatesRes] = await Promise.all([
-    apiFetch<GameSystemSummary[]>("/api/game-systems").catch(() => ({ data: [] as GameSystemSummary[] })),
+  const [ownedSystemsRes, officialSystemsRes, templatesRes] = await Promise.all([
+    apiFetch<GameSystemSummary[]>("/api/game-systems?scope=mine").catch(() => ({ data: [] as GameSystemSummary[] })),
+    apiFetch<GameSystemSummary[]>("/api/game-systems?scope=official").catch(() => ({ data: [] as GameSystemSummary[] })),
     apiFetch<{ items: TemplateSummary[] }>("/api/templates?scope=creation").catch(() => ({ data: { items: [] as TemplateSummary[] } })),
   ]);
 
-  const systems = systemsRes.data ?? [];
+  const ownedSystems = ownedSystemsRes.data ?? [];
+  const ownedSystemIds = new Set(ownedSystems.map((system) => system.id));
+  const officialSystems = (officialSystemsRes.data ?? []).filter(
+    (system) => !ownedSystemIds.has(system.id),
+  );
   const templates = templatesRes.data?.items ?? [];
 
   // For each game system, fetch workspace to discover published sheets
   const sources: CharacterCreationSource[] = [];
 
-  for (const sys of systems) {
-    try {
-      const ws = await apiFetch<UnifiedGameSystemWorkspace>(`/api/game-systems/${sys.id}/workspace`);
-      if (ws.data?.sheets) {
-        for (const sheet of ws.data.sheets) {
-          if (sheet.currentVersionId) {
-            sources.push({
-              type: "sheet",
-              id: sheet.currentVersionId,
-              sheetVersionId: sheet.currentVersionId,
-              systemId: sys.id,
-              title: `${sys.title} — ${sheet.title}`,
-              systemTitle: sys.title,
-              sheetTitle: sheet.title,
-              versionNumber: sheet.currentVersionNumber ?? 1,
-            });
-          }
+  const systemGroups = [
+    { systems: ownedSystems, group: "mine" as const },
+    { systems: officialSystems, group: "official" as const },
+  ];
+  for (const { systems, group } of systemGroups) {
+    const workspaces = await Promise.all(
+      systems.map(async (system) => {
+        try {
+          const workspace = await apiFetch<UnifiedGameSystemWorkspace>(
+            `/api/game-systems/${system.id}/workspace`,
+          );
+          return { system, workspace: workspace.data };
+        } catch {
+          return null;
         }
+      }),
+    );
+    for (const item of workspaces) {
+      if (!item) continue;
+      for (const sheet of item.workspace.sheets) {
+        if (!sheet.currentVersionId) continue;
+        sources.push({
+          type: "sheet",
+          group,
+          id: sheet.currentVersionId,
+          sheetVersionId: sheet.currentVersionId,
+          systemId: item.system.id,
+          title: `${item.system.title} — ${sheet.title}`,
+          systemTitle: item.system.title,
+          sheetTitle: sheet.title,
+          versionNumber: sheet.currentVersionNumber ?? 1,
+        });
       }
-    } catch {}
+    }
   }
 
   // Add legacy templates
   for (const template of templates) {
     sources.push({
       type: "template",
+      group: template.subscribed
+        ? "saved"
+        : template.author
+          ? "mine"
+          : "official",
       id: template.id,
       templateId: template.id,
       title: template.title,

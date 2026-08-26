@@ -303,6 +303,12 @@
     "zoomOut": "Zoom out",
     "retry": "Retry",
     "mySystems": "My systems",
+    "officialSystems": "Official",
+    "officialTitle": "Official TTRPG systems",
+    "officialSubtitle": "Verified systems and sheets selected by the MyCharacter administration.",
+    "officialBadge": "Official",
+    "officialEmpty": "No official systems yet",
+    "officialEmptyText": "They will appear here after an administrator reviews and marks them.",
     "exploreCommunity": "Explore Community",
     "communitySubtitle": "Ready-to-use mappings from the community. Added templates stay linked to their source and receive fixes automatically.",
     "publishCommunity": "Publish to the community library",
@@ -411,7 +417,13 @@
     "or": "OR",
     "rpg": "TTRPG",
     "megabytes": "{size} MB",
-    "communitySynced": "Community · auto-updates"
+    "communitySynced": "Community · auto-updates",
+    "pages": "{count, plural, one {# page} other {# pages}}",
+    "sourceGroup": {
+      "mine": "My templates",
+      "saved": "Saved",
+      "official": "Official"
+    }
   },
   "Editor": {
     "fields": "Fields",
@@ -752,7 +764,16 @@
       "aiDesc": "Configured provider for character assistant and PDF cataloging.",
       "aiDescNone": "No API key configured. Configure provider in the AI Settings tab.",
       "statusOk": "Healthy",
-      "statusWarning": "Action Required"
+      "statusWarning": "Action Required",
+      "officialSystemsTitle": "Official TTRPG systems",
+      "officialSystemsSubtitle": "Marked systems become public and are offered to every user when creating a character.",
+      "officialMark": "Mark official",
+      "officialMarked": "Official",
+      "officialUpdateFailed": "Could not update the system's official status.",
+      "officialSystemsEmpty": "There are no active game systems yet.",
+      "officialSystemWithoutOwner": "No owner",
+      "officialSystemPublic": "Public",
+      "officialSystemPrivate": "Private"
     }
   },
   "Search": {
