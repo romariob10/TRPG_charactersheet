@@ -18,6 +18,7 @@ await access(new URL("../dist/migrations/202607270001_initial.js", import.meta.u
 await access(new URL("../dist/migrations/202607270002_indexes.js", import.meta.url));
 await access(new URL("../dist/migrations/202608180002_social_posts.js", import.meta.url));
 await access(new URL("../dist/migrations/202608180013_template_reviews.js", import.meta.url));
+await access(new URL("../dist/migrations/202608260001_official_game_systems.js", import.meta.url));
 const rootDb = createDatabase(databaseUrl);
 let db;
 

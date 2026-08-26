@@ -303,6 +303,12 @@
     "zoomOut": "Уменьшить",
     "retry": "Повторить",
     "mySystems": "Мои системы",
+    "officialSystems": "Официальные",
+    "officialTitle": "Официальные системы НРИ",
+    "officialSubtitle": "Проверенные системы и листы, отмеченные администрацией MyCharacter.",
+    "officialBadge": "Официальная",
+    "officialEmpty": "Официальных систем пока нет",
+    "officialEmptyText": "Они появятся здесь после проверки и отметки администратором.",
     "exploreCommunity": "Explore Community",
     "communitySubtitle": "Готовые проверенные разметки от сообщества. Добавленный шаблон остаётся связан с оригиналом и получает исправления автоматически.",
     "publishCommunity": "Опубликовать в библиотеке сообщества",
@@ -628,7 +634,16 @@
       "aiDesc": "Настроен провайдер для ассистента и разметки PDF.",
       "aiDescNone": "API-ключ не задан. Настройте провайдер во вкладке «Настройки AI».",
       "statusOk": "Исправно",
-      "statusWarning": "Требует внимания"
+      "statusWarning": "Требует внимания",
+      "officialSystemsTitle": "Официальные системы НРИ",
+      "officialSystemsSubtitle": "Отмеченные системы становятся публичными и предлагаются всем пользователям при создании персонажа.",
+      "officialMark": "Сделать официальной",
+      "officialMarked": "Официальная",
+      "officialUpdateFailed": "Не удалось изменить официальный статус системы.",
+      "officialSystemsEmpty": "Активных игровых систем пока нет.",
+      "officialSystemWithoutOwner": "Без владельца",
+      "officialSystemPublic": "Публичная",
+      "officialSystemPrivate": "Приватная"
     }
   },
   "Create": {
@@ -653,7 +668,13 @@
     "or": "ИЛИ",
     "rpg": "НРИ",
     "megabytes": "{size} МБ",
-    "communitySynced": "Community · автообновление"
+    "communitySynced": "Community · автообновление",
+    "pages": "{count, plural, one {# страница} few {# страницы} many {# страниц} other {# страницы}}",
+    "sourceGroup": {
+      "mine": "Мои шаблоны",
+      "saved": "Сохранённые",
+      "official": "Официальные"
+    }
   },
   "Editor": {
     "fields": "Поля",

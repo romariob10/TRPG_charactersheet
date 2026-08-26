@@ -25,7 +25,7 @@ export default async function SystemsPage() {
   ]);
 
   const [systemsRes, templatesRes] = await Promise.all([
-    apiFetch<GameSystemSummary[]>("/api/game-systems").catch(() => ({ data: [] as GameSystemSummary[] })),
+    apiFetch<GameSystemSummary[]>("/api/game-systems?scope=mine").catch(() => ({ data: [] as GameSystemSummary[] })),
     apiFetch<{ items: TemplateSummary[] }>("/api/templates?scope=mine").catch(() => ({ data: { items: [] as TemplateSummary[] } })),
   ]);
 

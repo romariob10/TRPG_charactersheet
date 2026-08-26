@@ -466,11 +466,13 @@ export type {
 export {
   createGameSystemRequestSchema,
   createGameSystemResponseSchema,
+  gameSystemScopeSchema,
   gameSystemIdSchema,
   gameSystemSlugSchema,
   gameSystemSummarySchema,
   sheetKindSchema,
   updateGameSystemRequestSchema,
+  updateOfficialGameSystemRequestSchema,
   workspaceSheetSummarySchema,
 } from "./game-systems.js";
 export type {
@@ -479,6 +481,7 @@ export type {
   GameSystemSummary,
   SheetKind,
   UpdateGameSystemRequest,
+  UpdateOfficialGameSystemRequest,
   WorkspaceSheetSummary,
 } from "./game-systems.js";
 export {

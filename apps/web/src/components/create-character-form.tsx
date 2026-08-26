@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 export type CharacterCreationSource =
   | {
       type: "sheet";
+      group: "mine" | "saved" | "official";
       id: string;
       sheetVersionId: string;
       systemId: string;
@@ -23,6 +24,7 @@ export type CharacterCreationSource =
     }
   | {
       type: "template";
+      group: "mine" | "saved" | "official";
       id: string;
       templateId: string;
       title: string;
@@ -65,6 +67,7 @@ export function CreateCharacterForm({
     sources ?? [
       ...(publishedSheets?.map((s) => ({
         type: "sheet" as const,
+        group: "mine" as const,
         id: s.id,
         sheetVersionId: s.id,
         sheetTitle: s.sheetTitle,
@@ -75,6 +78,7 @@ export function CreateCharacterForm({
       })) ?? []),
       ...(templates?.map((tpl) => ({
         type: "template" as const,
+        group: tpl.community ? ("saved" as const) : ("mine" as const),
         id: tpl.id,
         templateId: tpl.id,
         title: tpl.title,
@@ -93,6 +97,7 @@ export function CreateCharacterForm({
   const submittingRef = useRef(false);
 
   const selectedSource = effectiveSources.find((s) => s.id === selectedId);
+  const sourceGroups = ["mine", "saved", "official"] as const;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -169,50 +174,70 @@ export function CreateCharacterForm({
           {t("template")} *
         </span>
         {effectiveSources.length ? (
-          <div className="mt-2.5 grid gap-3 sm:grid-cols-2">
-            {effectiveSources.map((source) => {
-              const isSelected = source.id === selectedId;
+          <div className="mt-2.5 space-y-5">
+            {sourceGroups.map((group) => {
+              const groupedSources = effectiveSources.filter(
+                (source) => source.group === group,
+              );
+              if (groupedSources.length === 0) return null;
               return (
-                <button
-                  key={source.id}
-                  type="button"
-                  disabled={pending}
-                  onClick={() => setSelectedId(source.id)}
-                  className={cn(
-                    "relative flex items-start gap-3 rounded-[var(--radius-control)] border border-[var(--border)] bg-[var(--surface)] p-4 text-left transition-all focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]",
-                    isSelected
-                      ? "border-[var(--brand)] bg-[var(--brand-soft)] ring-1 ring-[var(--brand)]"
-                      : "hover:border-[var(--brand)]/30",
-                  )}
-                >
-                  <div className="grid size-9 shrink-0 place-items-center rounded-[var(--radius-control)] bg-[var(--surface-strong)] text-[var(--brand)]">
-                    {source.type === "sheet" ? (
-                      <BookOpen className="size-4" />
-                    ) : (
-                      <FileText className="size-4" />
-                    )}
+                <section key={group} aria-labelledby={`source-group-${group}`}>
+                  <h3
+                    id={`source-group-${group}`}
+                    className="mb-2 text-xs font-bold tracking-wide text-[var(--muted)] uppercase"
+                  >
+                    {t(`sourceGroup.${group}`)}
+                  </h3>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {groupedSources.map((source) => {
+                      const isSelected = source.id === selectedId;
+                      return (
+                        <button
+                          key={source.id}
+                          type="button"
+                          disabled={pending}
+                          onClick={() => setSelectedId(source.id)}
+                          className={cn(
+                            "relative flex items-start gap-3 rounded-[var(--radius-control)] border border-[var(--border)] bg-[var(--surface)] p-4 text-left transition-all focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]",
+                            isSelected
+                              ? "border-[var(--brand)] bg-[var(--brand-soft)] ring-1 ring-[var(--brand)]"
+                              : "hover:border-[var(--brand)]/30",
+                          )}
+                        >
+                          <div className="grid size-9 shrink-0 place-items-center rounded-[var(--radius-control)] bg-[var(--surface-strong)] text-[var(--brand)]">
+                            {source.type === "sheet" ? (
+                              <BookOpen className="size-4" />
+                            ) : (
+                              <FileText className="size-4" />
+                            )}
+                          </div>
+                          <div className="min-w-0 flex-1 pr-6">
+                            <strong className="block truncate text-sm font-bold text-[var(--foreground)]">
+                              {source.type === "sheet" ? source.sheetTitle : source.title}
+                            </strong>
+                            <span className="mt-0.5 block truncate text-xs text-[var(--muted)]">
+                              {source.systemTitle}
+                              {source.type === "sheet"
+                                ? ` · v${source.versionNumber}`
+                                : ` · ${t("pages", { count: source.pageCount })}`}
+                            </span>
+                            {source.type === "template" && source.community && (
+                              <span className="mt-1.5 flex items-center gap-1 text-[11px] font-semibold text-emerald-800">
+                                <RefreshCw className="size-3" />
+                                {t("communitySynced")}
+                              </span>
+                            )}
+                          </div>
+                          {isSelected && (
+                            <span className="absolute top-3 right-3 grid size-5 place-items-center rounded-full bg-[var(--brand)] text-white">
+                              <Check className="size-3.5" />
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
                   </div>
-                  <div className="min-w-0 flex-1 pr-6">
-                    <strong className="block truncate text-sm font-bold text-[var(--foreground)]">
-                      {source.type === "sheet" ? source.sheetTitle : source.title}
-                    </strong>
-                    <span className="mt-0.5 block truncate text-xs text-[var(--muted)]">
-                      {source.systemTitle}
-                      {source.type === "sheet" ? ` · v${source.versionNumber}` : ` · ${source.pageCount} pages`}
-                    </span>
-                    {source.type === "template" && source.community && (
-                      <span className="mt-1.5 flex items-center gap-1 text-[11px] font-semibold text-emerald-800">
-                        <RefreshCw className="size-3" />
-                        {t("communitySynced")}
-                      </span>
-                    )}
-                  </div>
-                  {isSelected && (
-                    <span className="absolute top-3 right-3 grid size-5 place-items-center rounded-full bg-[var(--brand)] text-white">
-                      <Check className="size-3.5" />
-                    </span>
-                  )}
-                </button>
+                </section>
               );
             })}
           </div>

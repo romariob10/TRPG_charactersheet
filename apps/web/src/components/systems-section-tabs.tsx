@@ -1,12 +1,12 @@
 import Link from "next/link";
-import { Library, PanelsTopLeft, Trash2 } from "lucide-react";
+import { BadgeCheck, Library, PanelsTopLeft, Trash2 } from "lucide-react";
 import { getTranslations } from "next-intl/server";
 import { cn } from "@/lib/utils";
 
 export async function SystemsSectionTabs({
   active,
 }: {
-  active: "mine" | "community" | "trash";
+  active: "mine" | "official" | "community" | "trash";
 }) {
   const t = await getTranslations("Systems");
   const items = [
@@ -15,6 +15,12 @@ export async function SystemsSectionTabs({
       href: "/dashboard/systems",
       label: t("mySystems"),
       icon: PanelsTopLeft,
+    },
+    {
+      id: "official" as const,
+      href: "/dashboard/systems/official",
+      label: t("officialSystems"),
+      icon: BadgeCheck,
     },
     {
       id: "community" as const,

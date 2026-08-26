@@ -173,6 +173,7 @@ export class SheetBuilderService {
         "gs.slug as gsSlug",
         "gs.description as gsDescription",
         "gs.visibility as gsVisibility",
+        "gs.is_official as gsIsOfficial",
         "gs.owner_id as gsOwnerId",
         "gs.created_at as gsCreatedAt",
         "gs.updated_at as gsUpdatedAt",
@@ -275,6 +276,7 @@ export class SheetBuilderService {
         title: sheet.gsTitle,
         description: sheet.gsDescription ?? "",
         visibility: sheet.gsVisibility,
+        isOfficial: sheet.gsIsOfficial,
         isOwner,
         createdAt:
           sheet.gsCreatedAt instanceof Date
