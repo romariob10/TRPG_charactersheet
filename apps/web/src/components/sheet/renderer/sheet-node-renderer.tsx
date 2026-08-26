@@ -12,6 +12,7 @@ import {
   RenderNumberInput,
   RenderSelect,
   RenderSpacer,
+  RenderTable,
   RenderText,
   RenderTextarea,
 } from "./primitive-renderers";
@@ -125,16 +126,16 @@ export const SheetNodeRenderer: React.FC<{ node: LayoutNode }> = ({ node }) => {
 
   const widthClass =
     node.box.width.mode === "fill"
-      ? "w-full flex-1"
+      ? "w-full min-w-0 flex-1"
       : node.box.width.mode === "hug"
-      ? "w-auto"
+      ? "w-fit max-w-full"
       : "";
 
   const heightClass =
     node.box.height.mode === "fill"
-      ? "h-full flex-1"
+      ? "h-full min-h-0 flex-1"
       : node.box.height.mode === "hug"
-      ? "h-auto"
+      ? "h-fit"
       : "";
 
   const fillClass = FILL_MAP[node.box.fill] || "bg-transparent";
@@ -155,6 +156,8 @@ export const SheetNodeRenderer: React.FC<{ node: LayoutNode }> = ({ node }) => {
         return <RenderSelect node={node} />;
       case "image":
         return <RenderImage node={node} />;
+      case "table":
+        return <RenderTable node={node} />;
       case "divider":
         return <RenderDivider node={node} />;
       case "spacer":
@@ -169,6 +172,11 @@ export const SheetNodeRenderer: React.FC<{ node: LayoutNode }> = ({ node }) => {
         const alignClass = ALIGN_MAP[node.align] || "items-start";
         const justifyClass = JUSTIFY_MAP[node.justify] || "justify-start";
         const wrapClass = node.wrap ? "flex-wrap" : "flex-nowrap";
+        const collapseClass = node.collapseAdjacentStrokes
+          ? node.direction === "horizontal"
+            ? "[&>*+*]:-ml-px"
+            : "[&>*+*]:-mt-px"
+          : "";
 
         return (
           <FrameDecorator
@@ -189,9 +197,9 @@ export const SheetNodeRenderer: React.FC<{ node: LayoutNode }> = ({ node }) => {
             <div
               style={{
                 ...boxStyle,
-                gap: `${node.gap ?? 0}px`,
+                gap: `${node.collapseAdjacentStrokes ? 0 : (node.gap ?? 0)}px`,
               }}
-              className={`${directionClass} ${alignClass} ${justifyClass} ${wrapClass} ${widthClass} ${heightClass}`}
+              className={`${directionClass} ${alignClass} ${justifyClass} ${wrapClass} ${collapseClass} ${widthClass} ${heightClass}`}
             >
               {node.children.map((child) => (
                 <SheetNodeRenderer key={child.id} node={child} />

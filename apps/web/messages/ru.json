@@ -889,6 +889,7 @@
       "checkbox": "Флажок",
       "select": "Список",
       "image": "Изображение",
+      "table": "Таблица",
       "divider": "Разделитель",
       "spacer": "Отступ",
       "frame": "Фрейм"
@@ -1006,7 +1007,21 @@
     "defaultValue": "Значение по умолчанию",
     "defaultValuePlaceholder": "Необязательное значение",
     "cancel": "Отмена",
-    "saveAndBind": "Сохранить и привязать"
+    "saveAndBind": "Сохранить и привязать",
+    "showCheckboxBorder": "Показывать обводку флажка",
+    "imageSection": "Изображение",
+    "uploadingImage": "Загрузка изображения…",
+    "imageUploadFailed": "Не удалось загрузить изображение",
+    "imageFit": "Заполнение изображения",
+    "imageFitContain": "Вместить целиком",
+    "imageFitCover": "Заполнить с обрезкой",
+    "imageFitFill": "Растянуть",
+    "tableSection": "Таблица",
+    "tableRows": "Строки",
+    "tableColumns": "Столбцы",
+    "tableHeaderRows": "Строки-заголовки",
+    "tableHeaderColumns": "Столбцы-заголовки",
+    "tableLabels": "Подписи ячеек (столбцы разделяются |)"
   },
   "Palette": {
     "layoutFrames": "Фреймы",
@@ -1020,6 +1035,8 @@
     "dividerHint": "Линия границы",
     "spacer": "Отступ",
     "spacerHint": "Пустое пространство",
+    "table": "Таблица",
+    "tableHint": "Заполняемая сетка",
     "inputsAndFields": "Поля и элементы",
     "headerText": "Заголовок",
     "headerTextHint": "Текст заголовка",
@@ -1033,6 +1050,8 @@
     "textAreaHint": "Многострочный текст",
     "selectDropdown": "Выпадающий список",
     "selectDropdownHint": "Список вариантов",
+    "image": "Изображение",
+    "imageHint": "Загрузить PNG, JPEG или WebP",
     "repeatersAndCollections": "Повторители и коллекции",
     "dynamicList": "Динамический список",
     "dynamicListHint": "Игрок добавляет строки",
@@ -1094,6 +1113,9 @@
     "print": "Печать A4",
     "exportPdf": "Экспорт векторного PDF",
     "printAction": "Печать",
-    "noLayout": "Макет листа персонажа недоступен."
+    "noLayout": "Макет листа персонажа недоступен.",
+    "textareaFontSize": "Размер шрифта текстовой области",
+    "textareaFontSmaller": "Уменьшить шрифт этой текстовой области",
+    "textareaFontLarger": "Увеличить шрифт этой текстовой области"
   }
 }

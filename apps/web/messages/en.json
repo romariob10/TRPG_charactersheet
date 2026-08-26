@@ -889,6 +889,7 @@
       "checkbox": "Checkbox",
       "select": "Select",
       "image": "Image",
+      "table": "Table",
       "divider": "Divider",
       "spacer": "Spacer",
       "frame": "Frame"
@@ -1006,7 +1007,21 @@
     "defaultValue": "Default value",
     "defaultValuePlaceholder": "Optional default",
     "cancel": "Cancel",
-    "saveAndBind": "Save and bind"
+    "saveAndBind": "Save and bind",
+    "showCheckboxBorder": "Show checkbox outline",
+    "imageSection": "Image",
+    "uploadingImage": "Uploading image…",
+    "imageUploadFailed": "Could not upload image",
+    "imageFit": "Image fit",
+    "imageFitContain": "Contain",
+    "imageFitCover": "Cover",
+    "imageFitFill": "Stretch",
+    "tableSection": "Table",
+    "tableRows": "Rows",
+    "tableColumns": "Columns",
+    "tableHeaderRows": "Header rows",
+    "tableHeaderColumns": "Header columns",
+    "tableLabels": "Cell labels (columns separated with |)"
   },
   "Palette": {
     "layoutFrames": "Layout frames",
@@ -1020,6 +1035,8 @@
     "dividerHint": "Border line",
     "spacer": "Spacer",
     "spacerHint": "Empty spacing",
+    "table": "Table",
+    "tableHint": "Fillable grid",
     "inputsAndFields": "Inputs and fields",
     "headerText": "Header text",
     "headerTextHint": "Title display",
@@ -1033,6 +1050,8 @@
     "textAreaHint": "Multiline notes",
     "selectDropdown": "Select",
     "selectDropdownHint": "Options list",
+    "image": "Image",
+    "imageHint": "Upload PNG, JPEG or WebP",
     "repeatersAndCollections": "Repeaters and collections",
     "dynamicList": "Dynamic list",
     "dynamicListHint": "Player adds rows",
@@ -1094,6 +1113,9 @@
     "print": "A4 Print",
     "exportPdf": "Export Vector PDF",
     "printAction": "Print",
-    "noLayout": "No sheet blueprint layout available for this character."
+    "noLayout": "No sheet blueprint layout available for this character.",
+    "textareaFontSize": "Text area font size",
+    "textareaFontSmaller": "Decrease this text area's font size",
+    "textareaFontLarger": "Increase this text area's font size"
   }
 }

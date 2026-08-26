@@ -427,6 +427,7 @@ export {
   dividerNodeSchema,
   fieldInputNodeSchema,
   imageNodeSchema,
+  tableNodeSchema,
   layoutNodeSchema,
   normalizeFrameNode,
   normalizeLayoutNode,
@@ -460,6 +461,7 @@ export type {
   SheetFieldDefinition,
   SpacerNode,
   TargetLayoutMap,
+  TableNode,
   TextNode,
   TextareaNode,
 } from "./sheet-blueprints.js";

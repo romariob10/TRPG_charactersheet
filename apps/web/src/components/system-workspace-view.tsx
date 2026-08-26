@@ -184,7 +184,7 @@ export function SystemWorkspaceView({
             href={`/dashboard/new?systemId=${systemId}`}
             className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--brand)] hover:underline"
           >
-            <Plus className="size-3.5" /> {t("newCharacter") || "New Character"}
+            <Plus className="size-3.5" /> {t("createCharacter")}
           </Link>
         </div>
         {workspace.characters.length ? (

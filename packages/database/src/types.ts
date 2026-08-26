@@ -622,6 +622,18 @@ export interface CharacterSheetFieldValuesTable {
   updated_at: Timestamp;
 }
 
+export interface CharacterSheetFieldMutationsTable {
+  character_id: string;
+  client_mutation_id: string;
+  user_id: string;
+  field_key: string;
+  value: Json | null;
+  version: number;
+  revision: string;
+  overwritten_remote: boolean;
+  created_at: Timestamp;
+}
+
 export interface Database {
   users: UsersTable;
   profiles: ProfilesTable;
@@ -675,4 +687,5 @@ export interface Database {
   character_repeater_values: CharacterRepeaterValuesTable;
   character_repeater_mutations: CharacterRepeaterMutationsTable;
   character_sheet_field_values: CharacterSheetFieldValuesTable;
+  character_sheet_field_mutations: CharacterSheetFieldMutationsTable;
 }

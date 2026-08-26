@@ -28,6 +28,24 @@ function ensureBoundFieldDefinitions(
   const result = [...fields];
   const keys = new Set(result.map((field) => field.key));
   const visit = (node: LayoutNode): void => {
+    if (node.kind === "table") {
+      for (let row = 0; row < node.rows; row += 1) {
+        for (let column = 0; column < node.columns; column += 1) {
+          if (row < node.headerRows || column < node.headerColumns) continue;
+          const key = `${node.fieldBindingPrefix}_${row}_${column}`;
+          if (keys.has(key)) continue;
+          result.push({
+            id: crypto.randomUUID(),
+            key,
+            label: node.cellLabels[row * node.columns + column] || `${node.name || "Table"} ${row + 1}:${column + 1}`,
+            kind: "text",
+            options: [],
+            readOnly: node.readOnly,
+          });
+          keys.add(key);
+        }
+      }
+    }
     if ("fieldBinding" in node && !keys.has(node.fieldBinding)) {
       const kind = node.kind === "number-input" ? "number"
         : node.kind === "checkbox" ? "checkbox"

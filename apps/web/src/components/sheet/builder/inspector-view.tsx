@@ -10,6 +10,7 @@ import type {
   LayoutJustify,
   LayoutNode,
   SheetFieldDefinition,
+  SystemMaterial,
   SizingMode,
   StrokeToken,
   TargetLayoutKind,
@@ -27,6 +28,54 @@ interface InspectorViewProps {
   onSaveAsComponent: (node: LayoutNode) => void;
   draftFields?: SheetFieldDefinition[];
   onUpdateDraftFields?: (fields: SheetFieldDefinition[]) => void;
+  systemId: string;
+}
+
+function CommitNumberInput({
+  value,
+  onCommit,
+  min,
+  max,
+  step,
+  className,
+}: {
+  value: number;
+  onCommit: (value: number) => void;
+  min?: number;
+  max?: number;
+  step?: number;
+  className?: string;
+}) {
+  const commit = (input: HTMLInputElement) => {
+    const parsed = Number(input.value);
+    if (!input.value.trim() || !Number.isFinite(parsed)) {
+      input.value = String(value);
+      return;
+    }
+    const next = Math.min(max ?? Infinity, Math.max(min ?? -Infinity, parsed));
+    input.value = String(next);
+    if (next !== value) onCommit(next);
+  };
+
+  return (
+    <input
+      type="number"
+      key={value}
+      defaultValue={value}
+      min={min}
+      max={max}
+      step={step}
+      onBlur={(event) => commit(event.currentTarget)}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") event.currentTarget.blur();
+        if (event.key === "Escape") {
+          event.currentTarget.value = String(value);
+          event.currentTarget.blur();
+        }
+      }}
+      className={className}
+    />
+  );
 }
 
 export const InspectorView: React.FC<InspectorViewProps> = ({
@@ -35,6 +84,7 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
   onSaveAsComponent,
   draftFields = [],
   onUpdateDraftFields,
+  systemId,
 }) => {
   const t = useTranslations("Inspector");
   const [linkPadding, setLinkPadding] = useState(true);
@@ -45,6 +95,8 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
   const [newFieldLabel, setNewFieldLabel] = useState("");
   const [newFieldKind, setNewFieldKind] = useState<SheetFieldDefinition["kind"]>("text");
   const [newFieldDefault, setNewFieldDefault] = useState("");
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [imageUploadError, setImageUploadError] = useState<string | null>(null);
 
   if (!selectedNode) {
     return (
@@ -110,8 +162,31 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
     setShowNewFieldModal(false);
   };
 
+  const handleImageUpload = async (file: File) => {
+    if (selectedNode.kind !== "image") return;
+    setUploadingImage(true);
+    setImageUploadError(null);
+    const formData = new FormData();
+    formData.set("file", file);
+    formData.set("title", file.name);
+    try {
+      const response = await fetch(`/api/systems/${systemId}/materials`, {
+        method: "POST",
+        body: formData,
+      });
+      if (!response.ok) throw new Error(t("imageUploadFailed"));
+      const material = (await response.json()) as SystemMaterial;
+      if (material.fileType !== "image") throw new Error(t("imageUploadFailed"));
+      onUpdateNode({ ...selectedNode, url: material.url, alt: file.name });
+    } catch (error) {
+      setImageUploadError(error instanceof Error ? error.message : t("imageUploadFailed"));
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
   return (
-    <div className="flex flex-col gap-5 p-3 overflow-y-auto max-h-[calc(100vh-280px)] text-xs text-foreground">
+    <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto p-3 text-xs text-foreground">
       {/* Node Info & Name */}
       <div className="flex flex-col gap-2 pb-3 border-b border-border">
         <div className="flex items-center justify-between">
@@ -201,17 +276,11 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
               <label className="text-[10px] font-medium text-muted-foreground">{t("fontSize")}</label>
               <span className="text-[10px] text-muted-foreground">{selectedNode.fontSize || 14}px</span>
             </div>
-            <input
-              type="number"
-              min="6"
-              max="120"
+            <CommitNumberInput
+              min={6}
+              max={120}
               value={selectedNode.fontSize || 14}
-              onChange={(e) =>
-                onUpdateNode({
-                  ...selectedNode,
-                  fontSize: Math.max(6, Math.min(120, Number(e.target.value) || 14)),
-                })
-              }
+              onCommit={(fontSize) => onUpdateNode({ ...selectedNode, fontSize })}
               className="w-full mt-0.5 px-2 py-1 bg-background border border-border rounded"
             />
             <div className="flex items-center gap-1 mt-1.5 flex-wrap">
@@ -239,17 +308,12 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
                 <label className="text-[10px] font-medium text-muted-foreground">{t("trackingEm")}</label>
                 <span className="text-[10px] text-muted-foreground">{selectedNode.letterSpacing ?? 0}em</span>
               </div>
-              <input
-                type="number"
-                step="0.01"
-                min="-0.20"
-                max="0.20"
+              <CommitNumberInput
+                step={0.01}
+                min={-0.2}
+                max={0.2}
                 value={selectedNode.letterSpacing ?? 0}
-                onChange={(e) => {
-                  const val = parseFloat(e.target.value) || 0;
-                  const bounded = Math.max(-0.2, Math.min(0.2, val));
-                  onUpdateNode({ ...selectedNode, letterSpacing: bounded });
-                }}
+                onCommit={(letterSpacing) => onUpdateNode({ ...selectedNode, letterSpacing })}
                 className="w-full mt-0.5 px-2 py-1 bg-background border border-border rounded"
               />
               <div className="flex items-center gap-1 mt-1">
@@ -271,18 +335,12 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
                 <label className="text-[10px] font-medium text-muted-foreground">{t("lineHeight")}</label>
                 <span className="text-[10px] text-muted-foreground">{selectedNode.lineHeight ?? 1.2}</span>
               </div>
-              <input
-                type="number"
-                step="0.1"
-                min="0.8"
-                max="3"
+              <CommitNumberInput
+                step={0.1}
+                min={0.8}
+                max={2.5}
                 value={selectedNode.lineHeight ?? 1.2}
-                onChange={(e) =>
-                  onUpdateNode({
-                    ...selectedNode,
-                    lineHeight: Math.max(0.8, Math.min(3, parseFloat(e.target.value) || 1.2)),
-                  })
-                }
+                onCommit={(lineHeight) => onUpdateNode({ ...selectedNode, lineHeight })}
                 className="w-full mt-0.5 px-2 py-1 bg-background border border-border rounded"
               />
             </div>
@@ -331,14 +389,11 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
 
             <div>
               <label className="text-[10px] font-medium text-muted-foreground">{t("gap")}</label>
-              <input
-                type="number"
-                min="0"
-                max="200"
+              <CommitNumberInput
+                min={0}
+                max={200}
                 value={selectedNode.gap ?? 0}
-                onChange={(e) =>
-                  onUpdateNode({ ...selectedNode, gap: Number(e.target.value) || 0 })
-                }
+                onCommit={(gap) => onUpdateNode({ ...selectedNode, gap })}
                 className="w-full mt-0.5 px-2 py-1 bg-background border border-border rounded"
               />
             </div>
@@ -626,12 +681,11 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
               <div className="grid grid-cols-2 gap-2 bg-muted/20 p-2 rounded">
                 <div>
                   <label className="text-[10px] font-medium text-muted-foreground">{t("fontSize")}</label>
-                  <input
-                    type="number"
-                    min="6"
-                    max="48"
+                  <CommitNumberInput
+                    min={6}
+                    max={48}
                     value={selectedNode.topOrnament?.fontSize || 10}
-                    onChange={(e) =>
+                    onCommit={(fontSize) =>
                       onUpdateNode({
                         ...selectedNode,
                         topOrnament: {
@@ -640,7 +694,7 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
                           offset: selectedNode.topOrnament?.offset || 0,
                           text: selectedNode.topOrnament?.text || "",
                           fontFamily: selectedNode.topOrnament?.fontFamily || "Montserrat Alternates",
-                          fontSize: Number(e.target.value) || 10,
+                          fontSize,
                           fontWeight: selectedNode.topOrnament?.fontWeight || "medium",
                           letterSpacingPx: selectedNode.topOrnament?.letterSpacingPx ?? -0.9,
                         },
@@ -651,13 +705,12 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
                 </div>
                 <div>
                   <label className="text-[10px] font-medium text-muted-foreground">{t("letterSpacingPx")}</label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    min="-5"
-                    max="10"
+                  <CommitNumberInput
+                    step={0.1}
+                    min={-5}
+                    max={10}
                     value={selectedNode.topOrnament?.letterSpacingPx ?? -0.9}
-                    onChange={(e) =>
+                    onCommit={(letterSpacingPx) =>
                       onUpdateNode({
                         ...selectedNode,
                         topOrnament: {
@@ -668,7 +721,7 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
                           fontFamily: selectedNode.topOrnament?.fontFamily || "Montserrat Alternates",
                           fontSize: selectedNode.topOrnament?.fontSize || 10,
                           fontWeight: selectedNode.topOrnament?.fontWeight || "medium",
-                          letterSpacingPx: parseFloat(e.target.value) || -0.9,
+                          letterSpacingPx,
                         },
                       })
                     }
@@ -851,6 +904,120 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
         </div>
       )}
 
+      {selectedNode.kind === "checkbox" && (
+        <label className="flex items-center gap-1.5 border-b border-border pb-3 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={selectedNode.showBorder !== false}
+            onChange={(event) => onUpdateNode({ ...selectedNode, showBorder: event.target.checked })}
+            className="rounded"
+          />
+          <span className="text-[11px]">{t("showCheckboxBorder")}</span>
+        </label>
+      )}
+
+      {selectedNode.kind === "image" && (
+        <div className="flex flex-col gap-3 border-b border-border pb-3">
+          <h4 className="font-bold text-[11px] text-muted-foreground uppercase tracking-wider">
+            {t("imageSection")}
+          </h4>
+          <input
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            disabled={uploadingImage}
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) void handleImageUpload(file);
+              event.currentTarget.value = "";
+            }}
+            className="w-full text-[11px] file:mr-2 file:rounded file:border-0 file:bg-primary file:px-2 file:py-1 file:text-primary-foreground"
+          />
+          {uploadingImage && <span className="text-[11px] text-muted-foreground">{t("uploadingImage")}</span>}
+          {imageUploadError && <span className="text-[11px] text-destructive">{imageUploadError}</span>}
+          <div>
+            <label className="text-[10px] font-medium text-muted-foreground">{t("imageFit")}</label>
+            <select
+              value={selectedNode.fit}
+              onChange={(event) => onUpdateNode({ ...selectedNode, fit: event.target.value as "cover" | "contain" | "fill" })}
+              className="w-full mt-0.5 px-2 py-1 bg-background border border-border rounded"
+            >
+              <option value="contain">{t("imageFitContain")}</option>
+              <option value="cover">{t("imageFitCover")}</option>
+              <option value="fill">{t("imageFitFill")}</option>
+            </select>
+          </div>
+        </div>
+      )}
+
+      {selectedNode.kind === "table" && (
+        <div className="flex flex-col gap-3 border-b border-border pb-3">
+          <h4 className="font-bold text-[11px] text-muted-foreground uppercase tracking-wider">
+            {t("tableSection")}
+          </h4>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-[10px] font-medium text-muted-foreground">{t("tableRows")}</label>
+              <CommitNumberInput
+                value={selectedNode.rows}
+                min={1}
+                max={20}
+                onCommit={(rows) => onUpdateNode({ ...selectedNode, rows })}
+                className="w-full mt-0.5 px-2 py-1 bg-background border border-border rounded"
+              />
+            </div>
+            <div>
+              <label className="text-[10px] font-medium text-muted-foreground">{t("tableColumns")}</label>
+              <CommitNumberInput
+                value={selectedNode.columns}
+                min={1}
+                max={12}
+                onCommit={(columns) => onUpdateNode({ ...selectedNode, columns })}
+                className="w-full mt-0.5 px-2 py-1 bg-background border border-border rounded"
+              />
+            </div>
+            <div>
+              <label className="text-[10px] font-medium text-muted-foreground">{t("tableHeaderRows")}</label>
+              <CommitNumberInput
+                value={selectedNode.headerRows}
+                min={0}
+                max={Math.min(5, selectedNode.rows)}
+                onCommit={(headerRows) => onUpdateNode({ ...selectedNode, headerRows })}
+                className="w-full mt-0.5 px-2 py-1 bg-background border border-border rounded"
+              />
+            </div>
+            <div>
+              <label className="text-[10px] font-medium text-muted-foreground">{t("tableHeaderColumns")}</label>
+              <CommitNumberInput
+                value={selectedNode.headerColumns}
+                min={0}
+                max={Math.min(5, selectedNode.columns)}
+                onCommit={(headerColumns) => onUpdateNode({ ...selectedNode, headerColumns })}
+                className="w-full mt-0.5 px-2 py-1 bg-background border border-border rounded"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="text-[10px] font-medium text-muted-foreground">{t("tableLabels")}</label>
+            <textarea
+              rows={Math.min(8, selectedNode.rows)}
+              value={Array.from({ length: selectedNode.rows }, (_, row) =>
+                Array.from({ length: selectedNode.columns }, (_, column) =>
+                  selectedNode.cellLabels[row * selectedNode.columns + column] ?? "",
+                ).join(" | "),
+              ).join("\n")}
+              onChange={(event) => {
+                const cellLabels = event.target.value
+                  .split("\n")
+                  .flatMap((line) => line.split("|").map((cell) => cell.trim()))
+                  .slice(0, selectedNode.rows * selectedNode.columns);
+                onUpdateNode({ ...selectedNode, cellLabels });
+              }}
+              className="w-full mt-0.5 px-2 py-1 bg-background border border-border rounded font-mono text-[10px]"
+            />
+          </div>
+        </div>
+      )}
+
       {/* Sizing & Dimensions */}
       <div className="flex flex-col gap-3 pb-3 border-b border-border">
         <h4 className="font-bold text-[11px] text-muted-foreground uppercase tracking-wider">
@@ -879,15 +1046,10 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
           {selectedNode.box.width.mode === "fixed" && (
             <div>
               <label className="text-[10px] font-medium text-muted-foreground">{t("fixedWidth")}</label>
-              <input
-                type="number"
-                min="10"
+              <CommitNumberInput
+                min={10}
                 value={selectedNode.box.width.value}
-                onChange={(e) =>
-                  updateBox({
-                    width: { mode: "fixed", value: Number(e.target.value) || 10 },
-                  })
-                }
+                onCommit={(value) => updateBox({ width: { mode: "fixed", value } })}
                 className="w-full mt-0.5 px-2 py-1 bg-background border border-border rounded"
               />
             </div>
@@ -916,15 +1078,10 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
           {selectedNode.box.height.mode === "fixed" && (
             <div>
               <label className="text-[10px] font-medium text-muted-foreground">{t("fixedHeight")}</label>
-              <input
-                type="number"
-                min="10"
+              <CommitNumberInput
+                min={10}
                 value={selectedNode.box.height.value}
-                onChange={(e) =>
-                  updateBox({
-                    height: { mode: "fixed", value: Number(e.target.value) || 10 },
-                  })
-                }
+                onCommit={(value) => updateBox({ height: { mode: "fixed", value } })}
                 className="w-full mt-0.5 px-2 py-1 bg-background border border-border rounded"
               />
             </div>
@@ -944,12 +1101,10 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
             </button>
           </div>
           {linkPadding ? (
-            <input
-              type="number"
-              min="0"
+            <CommitNumberInput
+              min={0}
               value={selectedNode.box.padding.top}
-              onChange={(e) => {
-                const val = Number(e.target.value) || 0;
+              onCommit={(val) => {
                 updateBox({ padding: { top: val, right: val, bottom: val, left: val } });
               }}
               className="w-full px-2 py-1 bg-background border border-border rounded"
@@ -959,12 +1114,10 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
               {(["top", "right", "bottom", "left"] as const).map((side) => (
                 <div key={side}>
                   <span className="text-[9px] uppercase text-muted-foreground">{side[0]}</span>
-                  <input
-                    type="number"
-                    min="0"
+                  <CommitNumberInput
+                    min={0}
                     value={selectedNode.box.padding[side]}
-                    onChange={(e) => {
-                      const val = Number(e.target.value) || 0;
+                    onCommit={(val) => {
                       updateBox({
                         padding: { ...selectedNode.box.padding, [side]: val },
                       });
@@ -990,12 +1143,10 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
             </button>
           </div>
           {linkStroke ? (
-            <input
-              type="number"
-              min="0"
+            <CommitNumberInput
+              min={0}
               value={selectedNode.box.strokeWidth.top}
-              onChange={(e) => {
-                const val = Number(e.target.value) || 0;
+              onCommit={(val) => {
                 updateBox({ strokeWidth: { top: val, right: val, bottom: val, left: val } });
               }}
               className="w-full px-2 py-1 bg-background border border-border rounded"
@@ -1005,12 +1156,10 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
               {(["top", "right", "bottom", "left"] as const).map((side) => (
                 <div key={side}>
                   <span className="text-[9px] uppercase text-muted-foreground">{side[0]}</span>
-                  <input
-                    type="number"
-                    min="0"
+                  <CommitNumberInput
+                    min={0}
                     value={selectedNode.box.strokeWidth[side]}
-                    onChange={(e) => {
-                      const val = Number(e.target.value) || 0;
+                    onCommit={(val) => {
                       updateBox({
                         strokeWidth: { ...selectedNode.box.strokeWidth, [side]: val },
                       });
@@ -1036,12 +1185,10 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
             </button>
           </div>
           {linkRadius ? (
-            <input
-              type="number"
-              min="0"
+            <CommitNumberInput
+              min={0}
               value={selectedNode.box.cornerRadius.topLeft}
-              onChange={(e) => {
-                const val = Number(e.target.value) || 0;
+              onCommit={(val) => {
                 updateBox({ cornerRadius: { topLeft: val, topRight: val, bottomRight: val, bottomLeft: val } });
               }}
               className="w-full px-2 py-1 bg-background border border-border rounded"
@@ -1051,12 +1198,10 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
               {(["topLeft", "topRight", "bottomRight", "bottomLeft"] as const).map((c, idx) => (
                 <div key={c}>
                   <span className="text-[9px] uppercase text-muted-foreground">C{idx + 1}</span>
-                  <input
-                    type="number"
-                    min="0"
+                  <CommitNumberInput
+                    min={0}
                     value={selectedNode.box.cornerRadius[c]}
-                    onChange={(e) => {
-                      const val = Number(e.target.value) || 0;
+                    onCommit={(val) => {
                       updateBox({
                         cornerRadius: { ...selectedNode.box.cornerRadius, [c]: val },
                       });
@@ -1137,8 +1282,8 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
 
       {/* Modal for Creating New Semantic Field */}
       {showNewFieldModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-sm rounded-[var(--radius-card)] border border-border bg-card p-5 shadow-lg">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <div className="w-full max-w-sm rounded-[var(--radius-card)] border border-border bg-background p-5 shadow-2xl">
             <h3 className="text-sm font-bold">{t("newFieldTitle")}</h3>
             <form onSubmit={handleCreateField} className="mt-3 space-y-3">
               <div>

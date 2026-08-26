@@ -429,11 +429,11 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
     setSidebarWidth((width) => Math.max(220, Math.min(480, width + delta)));
   };
 
-  const canvasWidthClass = {
+  const canvasSizeClass = {
     mobile: "max-w-sm",
     tablet: "max-w-2xl",
     desktop: "max-w-4xl",
-    print: "max-w-[794px] min-h-[1123px] bg-white text-black shadow-2xl print-page",
+    print: "w-[794px] h-[1123px] max-w-none flex-none bg-white text-black shadow-2xl print-page",
   }[activeTarget];
 
   return (
@@ -679,7 +679,7 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
               transformOrigin: "top center",
               transition: "transform 0.1s ease-out",
             }}
-            className={`w-full ${canvasWidthClass} transition-all duration-200`}
+            className={`${activeTarget === "print" ? "" : "w-full"} ${canvasSizeClass} transition-all duration-200`}
           >
             <SheetRenderProvider
               value={{
@@ -703,6 +703,7 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
             </h3>
           </header>
           <InspectorView
+            systemId={systemId}
             selectedNode={selectedNode}
             onUpdateNode={(updated) => {
               setTargetLayout(updateNodeInTree(currentRoot, updated));
@@ -738,8 +739,8 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
 
       {/* Publish Version Modal */}
       {showPublishModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-md rounded-[var(--radius-card)] border border-border bg-card p-6 shadow-xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md rounded-[var(--radius-card)] border border-border bg-background p-6 shadow-2xl">
             <h3 className="text-lg font-bold text-foreground">
               {t("publishModalTitle")}
             </h3>

@@ -174,6 +174,8 @@ function renderNode(
       return renderSpacerNode(ctx, node, x, y, availableWidth);
     case "image":
       return renderImageNode(ctx, node, x, y, availableWidth);
+    case "table":
+      return renderTableNode(ctx, node, x, y, availableWidth);
     case "repeater":
       return renderRepeaterNode(ctx, node, x, y, availableWidth);
     case "component-instance":
@@ -214,6 +216,8 @@ function estimateNodeHeight(
       return node.size ?? 8;
     case "image":
       return 80;
+    case "table":
+      return node.rows * 22;
     case "frame":
     case "repeater":
     case "component-instance":
@@ -1094,7 +1098,7 @@ function renderCheckboxNode(
       xScale: size / 2,
       yScale: size / 2,
       borderColor: rgb(0.06, 0.24, 0.09),
-      borderWidth: 1.5,
+      borderWidth: node.showBorder === false ? 0 : 1.5,
       color: isChecked ? rgb(0.06, 0.24, 0.09) : rgb(1, 1, 1),
     });
   } else {
@@ -1104,7 +1108,7 @@ function renderCheckboxNode(
       width: size,
       height: size,
       borderColor: rgb(0.06, 0.24, 0.09),
-      borderWidth: 1.5,
+      borderWidth: node.showBorder === false ? 0 : 1.5,
       color: isChecked ? rgb(0.06, 0.24, 0.09) : rgb(1, 1, 1),
     });
   }
@@ -1231,6 +1235,68 @@ function renderImageNode(
   });
 
   return height + 6;
+}
+
+function renderTableNode(
+  ctx: PdfRenderContext,
+  node: LayoutNode & { kind: "table" },
+  x: number,
+  y: number,
+  availableWidth: number,
+): number {
+  const rowHeight = 22;
+  const tableHeight = node.rows * rowHeight;
+  const columnWidth = availableWidth / node.columns;
+  const bottom = y - tableHeight;
+  const lineColor = rgb(0.55, 0.57, 0.55);
+
+  ctx.page.drawRectangle({
+    x,
+    y: bottom,
+    width: availableWidth,
+    height: tableHeight,
+    borderColor: lineColor,
+    borderWidth: 1,
+  });
+
+  for (let row = 0; row < node.rows; row += 1) {
+    if (row > 0) {
+      const lineY = y - row * rowHeight;
+      ctx.page.drawLine({
+        start: { x, y: lineY },
+        end: { x: x + availableWidth, y: lineY },
+        color: lineColor,
+        thickness: 0.75,
+      });
+    }
+    for (let column = 0; column < node.columns; column += 1) {
+      if (row === 0 && column > 0) {
+        const lineX = x + column * columnWidth;
+        ctx.page.drawLine({
+          start: { x: lineX, y },
+          end: { x: lineX, y: bottom },
+          color: lineColor,
+          thickness: 0.75,
+        });
+      }
+      const isHeader = row < node.headerRows || column < node.headerColumns;
+      const label = node.cellLabels[row * node.columns + column] ?? "";
+      const fieldKey = `${node.fieldBindingPrefix}_${row}_${column}`;
+      const rawValue = ctx.fieldValues[fieldKey];
+      const text = isHeader ? label : typeof rawValue === "string" ? rawValue : "";
+      if (!text) continue;
+      ctx.page.drawText(text.slice(0, 60), {
+        x: x + column * columnWidth + 4,
+        y: y - row * rowHeight - 14,
+        size: 8,
+        font: isHeader ? ctx.fonts.bodyBoldFont : ctx.fonts.bodyFont,
+        color: rgb(0.1, 0.1, 0.1),
+        maxWidth: Math.max(1, columnWidth - 8),
+      });
+    }
+  }
+
+  return tableHeight + 6;
 }
 
 function renderRepeaterNode(

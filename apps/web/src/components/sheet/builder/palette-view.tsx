@@ -120,6 +120,7 @@ export const PaletteView: React.FC<PaletteViewProps> = ({
           fieldBinding,
           label: t("proficiency"),
           shape: "circle",
+          showBorder: true,
           readOnly: false,
           box: { ...defaultBoxProps, width: { mode: "hug" } },
         };
@@ -243,8 +244,36 @@ export const PaletteView: React.FC<PaletteViewProps> = ({
     });
   };
 
+  const createImage = () => {
+    onInsertNode({
+      id: crypto.randomUUID(),
+      kind: "image",
+      name: t("image"),
+      url: "",
+      alt: "",
+      fit: "contain",
+      box: { ...defaultBoxProps, height: { mode: "fixed", value: 160 } },
+    });
+  };
+
+  const createTable = () => {
+    onInsertNode({
+      id: crypto.randomUUID(),
+      kind: "table",
+      name: t("table"),
+      rows: 5,
+      columns: 6,
+      headerRows: 0,
+      headerColumns: 1,
+      cellLabels: ["+5", "", "", "", "", "", "+4", "", "", "", "", "", "+3", "", "", "", "", "", "+2", "", "", "", "", "", "+1"],
+      fieldBindingPrefix: `table_${Math.floor(Math.random() * 10000)}`,
+      readOnly: false,
+      box: { ...defaultBoxProps, width: { mode: "fill" } },
+    });
+  };
+
   return (
-    <div className="flex flex-col gap-4 p-3 overflow-y-auto max-h-[calc(100vh-280px)]">
+    <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-3">
       {/* Layout Primitives */}
       <div>
         <h4 className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-2">
@@ -308,6 +337,18 @@ export const PaletteView: React.FC<PaletteViewProps> = ({
             <div>
               <div className="text-xs font-semibold">{t("spacer")}</div>
               <div className="text-[10px] text-muted-foreground">{t("spacerHint")}</div>
+            </div>
+          </button>
+
+          <button
+            type="button"
+            onClick={createTable}
+            className="flex items-center gap-2 p-2 rounded border border-border bg-card hover:border-primary/50 text-left transition-colors"
+          >
+            <span className="text-sm">▦</span>
+            <div>
+              <div className="text-xs font-semibold">{t("table")}</div>
+              <div className="text-[10px] text-muted-foreground">{t("tableHint")}</div>
             </div>
           </button>
         </div>
@@ -388,6 +429,18 @@ export const PaletteView: React.FC<PaletteViewProps> = ({
             <div>
               <div className="text-xs font-semibold">{t("selectDropdown")}</div>
               <div className="text-[10px] text-muted-foreground">{t("selectDropdownHint")}</div>
+            </div>
+          </button>
+
+          <button
+            type="button"
+            onClick={createImage}
+            className="flex items-center gap-2 p-2 rounded border border-border bg-card hover:border-primary/50 text-left transition-colors"
+          >
+            <span className="text-sm">🖼️</span>
+            <div>
+              <div className="text-xs font-semibold">{t("image")}</div>
+              <div className="text-[10px] text-muted-foreground">{t("imageHint")}</div>
             </div>
           </button>
         </div>

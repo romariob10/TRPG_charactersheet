@@ -30,7 +30,7 @@ export default async function CharacterPage({
             fieldValues: character.sheetFieldValues ?? {},
           }}
           versionDetails={character.sheetVersion}
-          isOwner={character.role === "owner"}
+          canEdit={character.role === "owner" || character.role === "editor"}
         />
       </AppShell>
     );

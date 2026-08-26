@@ -44,6 +44,8 @@ describe("field transactions", () => {
   });
 
   beforeEach(async () => {
+    await testDb.db.deleteFrom("character_sheet_field_mutations").execute();
+    await testDb.db.deleteFrom("character_sheet_field_values").execute();
     await testDb.db.deleteFrom("character_mutations").execute();
     await testDb.db.deleteFrom("character_values").execute();
     await testDb.db.deleteFrom("character_members").execute();
@@ -217,6 +219,86 @@ describe("field transactions", () => {
     expect(results.map((item) => item.revision).sort()).toEqual([1, 2]);
     expect(await revision(characterId)).toBe("2");
     expect(await mutationCount()).toBe(2);
+  });
+
+  it("saves modular sheet fields with text keys and supports idempotent retries", async () => {
+    const system = await testDb.db
+      .insertInto("game_systems")
+      .values({
+        owner_id: owner.userId,
+        title: "Modular field test",
+        slug: `modular-${crypto.randomUUID().slice(0, 8)}`,
+        visibility: "private",
+      })
+      .returning("id")
+      .executeTakeFirstOrThrow();
+    const sheet = await testDb.db
+      .insertInto("sheet_definitions")
+      .values({
+        system_id: system.id,
+        owner_id: owner.userId,
+        title: "Sheet",
+        slug: `sheet-${crypto.randomUUID().slice(0, 8)}`,
+        kind: "character",
+      })
+      .returning("id")
+      .executeTakeFirstOrThrow();
+    const version = await testDb.db
+      .insertInto("sheet_versions")
+      .values({
+        sheet_definition_id: sheet.id,
+        version_number: 1,
+        layouts: JSON.stringify({}),
+        fields: JSON.stringify([
+          {
+            id: crypto.randomUUID(),
+            key: "character_name",
+            label: "Character name",
+            kind: "text",
+            options: [],
+            readOnly: false,
+          },
+        ]),
+        published_by: owner.userId,
+      })
+      .returning("id")
+      .executeTakeFirstOrThrow();
+    const modularCharacter = await testDb.db
+      .insertInto("characters")
+      .values({
+        sheet_version_id: version.id,
+        system_id: system.id,
+        owner_id: owner.userId,
+        name: "Modular",
+      })
+      .returning("id")
+      .executeTakeFirstOrThrow();
+    const clientMutationId = crypto.randomUUID();
+    const payload = { value: "Ada", expectedVersion: 0, clientMutationId };
+
+    const first = await app.inject({
+      method: "PUT",
+      url: `/api/characters/${modularCharacter.id}/sheet-fields/character_name`,
+      cookies: { mycharacter_session: owner.cookie },
+      payload,
+    });
+    const retry = await app.inject({
+      method: "PUT",
+      url: `/api/characters/${modularCharacter.id}/sheet-fields/character_name`,
+      cookies: { mycharacter_session: owner.cookie },
+      payload,
+    });
+
+    expect(first.statusCode).toBe(200);
+    expect(retry.statusCode).toBe(200);
+    expect(retry.json()).toEqual(first.json());
+    const stored = await testDb.db
+      .selectFrom("character_sheet_field_values")
+      .select(["value", "version"])
+      .where("character_id", "=", modularCharacter.id)
+      .where("field_key", "=", "character_name")
+      .executeTakeFirstOrThrow();
+    expect(stored).toMatchObject({ value: "Ada", version: 1 });
   });
 
   async function createTemplate(prefix: string): Promise<string> {

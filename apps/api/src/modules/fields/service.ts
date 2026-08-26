@@ -239,12 +239,13 @@ export class FieldService {
         throw new AppError("FIELD_READONLY", 403, `Field '${fieldKey}' is read-only.`);
       }
 
-      // Check idempotency with character_mutations
+      // Modular sheet keys are text, so they use a separate mutation log from
+      // legacy PDF fields whose mutation log is constrained to UUID field ids.
       const existing = await trx
-        .selectFrom("character_mutations")
+        .selectFrom("character_sheet_field_mutations")
         .select([
           "user_id as userId",
-          "field_id as fieldId",
+          "field_key as fieldKey",
           "value",
           "version",
           "revision",
@@ -256,7 +257,7 @@ export class FieldService {
         .executeTakeFirst();
 
       if (existing) {
-        if (existing.userId !== actorId || existing.fieldId !== fieldKey) {
+        if (existing.userId !== actorId || existing.fieldKey !== fieldKey) {
           throw new AppError(
             "CLIENT_MUTATION_REUSED",
             409,
@@ -335,11 +336,11 @@ export class FieldService {
         .executeTakeFirstOrThrow();
 
       await trx
-        .insertInto("character_mutations")
+        .insertInto("character_sheet_field_mutations")
         .values({
           character_id: characterId,
           client_mutation_id: input.clientMutationId,
-          field_id: fieldKey,
+          field_key: fieldKey,
           user_id: actorId,
           value: storedValue,
           version,

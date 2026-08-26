@@ -26,13 +26,13 @@ interface CharacterSheetPlayerProps {
     fieldValues?: Record<string, FieldValue>;
   };
   versionDetails?: SheetVersionDetails | null;
-  isOwner: boolean;
+  canEdit: boolean;
 }
 
 export const CharacterSheetPlayer: React.FC<CharacterSheetPlayerProps> = ({
   character,
   versionDetails,
-  isOwner,
+  canEdit,
 }) => {
   const t = useTranslations("Player");
   const [target, setTarget] = useState<TargetLayoutKind>("desktop");
@@ -340,14 +340,14 @@ export const CharacterSheetPlayer: React.FC<CharacterSheetPlayerProps> = ({
                 : target === "tablet"
                 ? "max-w-2xl"
                 : target === "print"
-                ? "max-w-[794px] min-h-[1123px] bg-white text-black p-8 shadow-2xl rounded-sm"
+                ? "w-[794px] h-[1123px] max-w-none flex-none bg-white text-black shadow-2xl rounded-sm"
                 : "max-w-5xl"
             }`}
           >
             <SheetRenderProvider
               value={{
                 target,
-                mode: isOwner ? "player" : "readonly",
+                mode: canEdit ? "player" : "readonly",
                 fieldValues,
                 onFieldValueChange: handleFieldValueChange,
                 repeaterRows,
