@@ -234,7 +234,7 @@ export function AppSidebar({
           })}
         </nav>
 
-        {!collapsed && <WorkspaceHistory collapsed={false} />}
+        {(!collapsed || mobileOpen) && <WorkspaceHistory collapsed={false} />}
 
         <div
           data-testid="sidebar-footer"
