@@ -97,6 +97,29 @@ describe("initial migration", () => {
     );
   });
 
+  it("stores official game systems with a public visibility invariant", async () => {
+    const columns = await sql<{ column_name: string; column_default: string | null }>`
+      select column_name, column_default
+      from information_schema.columns
+      where table_schema = ${testDb.schema}
+        and table_name = 'game_systems'
+        and column_name = 'is_official'
+    `.execute(testDb.db);
+    expect(columns.rows).toEqual([
+      expect.objectContaining({ column_name: "is_official" }),
+    ]);
+
+    const constraints = await sql<{ constraint_name: string }>`
+      select constraint_name
+      from information_schema.table_constraints
+      where table_schema = ${testDb.schema}
+        and table_name = 'game_systems'
+    `.execute(testDb.db);
+    expect(constraints.rows.map((row) => row.constraint_name)).toContain(
+      "game_systems_official_public_check",
+    );
+  });
+
   it("accepts every moderated account status", async () => {
     const user = await testDb.db
       .insertInto("users")

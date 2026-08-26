@@ -47,7 +47,9 @@ CMD ["pnpm", "--filter", "@mycharacter/web", "dev", "--hostname", "0.0.0.0"]
 FROM dependencies AS builder
 ENV NODE_ENV=production
 COPY . .
-RUN pnpm --filter @mycharacter/web build
+RUN pnpm --filter @mycharacter/contracts build \
+    && pnpm --filter @mycharacter/pdf build \
+    && pnpm --filter @mycharacter/web build
 
 FROM base AS production
 ENV NODE_ENV=production \

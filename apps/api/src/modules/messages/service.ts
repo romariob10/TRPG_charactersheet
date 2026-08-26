@@ -1,3 +1,4 @@
+import { randomInt } from "node:crypto";
 import type {
   DirectConversationSummary,
   DirectMessage,
@@ -9,6 +10,28 @@ import { AppError } from "../../errors.js";
 import { UserModerationService } from "../moderation/user-moderation-service.js";
 import { NotificationService } from "../notifications/service.js";
 import { WorkspaceService } from "../workspace/service.js";
+
+const MAX_ROLL_VALUE = 1_000_000;
+
+export function resolveRollCommand(
+  body: string,
+  fixedResult?: number,
+): string {
+  const trimmed = body.trim();
+  const match = /^\/roll\s+([1-9]\d*)$/i.exec(trimmed);
+  if (!match) return trimmed;
+
+  const maximum = Number(match[1]);
+  if (!Number.isSafeInteger(maximum) || maximum > MAX_ROLL_VALUE) {
+    return trimmed;
+  }
+
+  const result = fixedResult ?? randomInt(1, maximum + 1);
+  if (!Number.isInteger(result) || result < 1 || result > maximum) {
+    throw new RangeError("Roll result must be within the requested range.");
+  }
+  return `🎲 /roll ${maximum} → ${result}`;
+}
 
 export class DirectMessageService {
   private readonly db: Kysely<Database>;
@@ -225,6 +248,7 @@ export class DirectMessageService {
     body: string,
   ): Promise<DirectMessage> {
     await new UserModerationService(this.db).assertCanPost(userId);
+    const resolvedBody = resolveRollCommand(body);
 
     const row = await this.db.transaction().execute(async (trx) => {
       // Reading and sending both lock the conversation row. This makes the
@@ -251,7 +275,7 @@ export class DirectMessageService {
         .values({
           conversation_id: conversationId,
           sender_id: userId,
-          body: body.trim(),
+          body: resolvedBody,
         })
         .returning([
           "id",
@@ -276,7 +300,7 @@ export class DirectMessageService {
         targetType: "conversation",
         targetId: conversationId,
         title: "New private message",
-        body: body.trim().slice(0, 100),
+        body: resolvedBody.slice(0, 100),
         metadata: { conversationId },
       });
 

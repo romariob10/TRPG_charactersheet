@@ -10,9 +10,7 @@
     ],
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"],
-      "@mycharacter/contracts": ["../../packages/contracts/src/index.ts"],
-      "@mycharacter/contracts/*": ["../../packages/contracts/src/*"]
+      "@/*": ["./src/*"]
     }
   },
   "include": [

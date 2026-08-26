@@ -1,12 +1,12 @@
 {
   "name": "mycharacter",
-  "version": "0.0.10",
+  "version": "0.1.0",
   "private": true,
   "packageManager": "pnpm@11.7.0",
   "scripts": {
     "lint": "pnpm -r lint",
     "typecheck": "pnpm -r typecheck",
-    "test": "pnpm --filter @mycharacter/storage build && pnpm --filter @mycharacter/pdf build && pnpm -r test",
+    "test": "pnpm --filter @mycharacter/contracts build && pnpm --filter @mycharacter/database build && pnpm --filter @mycharacter/storage build && pnpm --filter @mycharacter/pdf build && pnpm -r test",
     "build": "pnpm -r build",
     "check": "pnpm lint && pnpm typecheck && pnpm test"
   }

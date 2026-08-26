@@ -1,4 +1,8 @@
 @import "tailwindcss";
+@import "@fontsource/montserrat-alternates/500.css";
+@import "@fontsource/montserrat-alternates/700.css";
+@import "@fontsource/noto-sans/400.css";
+@import "@fontsource/noto-sans/600.css";
 
 :root {
   --background: #fffefc;

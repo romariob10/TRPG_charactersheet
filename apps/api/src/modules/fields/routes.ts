@@ -26,6 +26,23 @@ export async function registerFieldRoutes(
       input.data,
     );
   });
+
+  app.put("/api/characters/:id/sheet-fields/:key", async (request) => {
+    const actor = requireActor(request);
+    const params = request.params as { id?: unknown; key?: unknown };
+    const id = characterIdSchema.safeParse(params.id);
+    if (!id.success || typeof params.key !== "string" || !params.key.trim()) {
+      throw validationError();
+    }
+    const input = fieldMutationRequestSchema.safeParse(request.body);
+    if (!input.success) throw validationError();
+    return service.saveCharacterSheetField(
+      actor.userId,
+      id.data,
+      params.key.trim(),
+      input.data,
+    );
+  });
 }
 
 function parseParams(value: unknown): { id: string; fieldId: string } {

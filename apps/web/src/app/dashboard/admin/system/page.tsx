@@ -1,11 +1,13 @@
 import { CheckCircle2, Cpu, Database, HardDrive, ShieldAlert, Sparkles } from "lucide-react";
 import { getTranslations } from "next-intl/server";
-import type { AdminOverviewResponse } from "@mycharacter/contracts";
+import type { AdminOverviewResponse, GameSystemSummary } from "@mycharacter/contracts";
+import { AdminOfficialSystems } from "@/components/admin-official-systems";
 import { apiFetch } from "@/lib/api/server";
 
 export default async function AdminSystemPage() {
-  const [overview, t] = await Promise.all([
+  const [overview, systems, t] = await Promise.all([
     apiFetch<AdminOverviewResponse>("/api/admin/overview"),
+    apiFetch<GameSystemSummary[]>("/api/admin/game-systems"),
     getTranslations("AdminConsole.system"),
   ]);
 
@@ -82,6 +84,8 @@ export default async function AdminSystemPage() {
           </p>
         </div>
       </div>
+
+      <AdminOfficialSystems initialSystems={systems.data} />
     </section>
   );
 }
