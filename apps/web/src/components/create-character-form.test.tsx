@@ -33,6 +33,50 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("CreateCharacterForm", () => {
+  it("groups own, saved, and official creation sources", () => {
+    render(
+      <CreateCharacterForm
+        sources={[
+          {
+            type: "template",
+            group: "mine",
+            id: "11111111-1111-4111-8111-111111111111",
+            templateId: "11111111-1111-4111-8111-111111111111",
+            title: "My PDF",
+            systemTitle: "Homebrew",
+            pageCount: 1,
+          },
+          {
+            type: "template",
+            group: "saved",
+            id: "22222222-2222-4222-8222-222222222222",
+            templateId: "22222222-2222-4222-8222-222222222222",
+            title: "Saved PDF",
+            systemTitle: "Community",
+            pageCount: 2,
+            community: true,
+          },
+          {
+            type: "sheet",
+            group: "official",
+            id: "33333333-3333-4333-8333-333333333333",
+            sheetVersionId: "33333333-3333-4333-8333-333333333333",
+            systemId: "44444444-4444-4444-8444-444444444444",
+            title: "Official — Character",
+            systemTitle: "Official",
+            sheetTitle: "Character",
+            versionNumber: 3,
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByRole("heading", { name: "sourceGroup.mine" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "sourceGroup.saved" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "sourceGroup.official" })).toBeVisible();
+    expect(screen.getByRole("button", { name: /Character/ })).toBeVisible();
+  });
+
   it("sends only one create request for rapid repeated submissions", async () => {
     apiFetch.mockImplementation(() => new Promise(() => undefined));
     render(

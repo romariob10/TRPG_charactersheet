@@ -22,6 +22,7 @@ interface GameSystemRow {
   family: string | null;
   edition: string | null;
   visibility: "private" | "public";
+  is_official: boolean;
   created_at: Date | string;
   updated_at: Date | string;
   owner_id: string | null;
@@ -39,13 +40,23 @@ export class GameSystemsService {
     this.db = db;
   }
 
-  async list(userId?: string): Promise<GameSystemSummary[]> {
+  async list(
+    userId?: string,
+    scope: "all" | "mine" | "official" = "all",
+  ): Promise<GameSystemSummary[]> {
     let query = this.db
       .selectFrom("game_systems as gs")
       .leftJoin("profiles as p", "p.id", "gs.owner_id")
       .where("gs.deleted_at", "is", null);
 
-    if (userId) {
+    if (scope === "official") {
+      query = query
+        .where("gs.visibility", "=", "public")
+        .where("gs.is_official", "=", true);
+    } else if (scope === "mine") {
+      if (!userId) return [];
+      query = query.where("gs.owner_id", "=", userId);
+    } else if (userId) {
       query = query.where((eb) =>
         eb.or([eb("gs.visibility", "=", "public"), eb("gs.owner_id", "=", userId)]),
       );
@@ -62,6 +73,7 @@ export class GameSystemsService {
         "gs.family",
         "gs.edition",
         "gs.visibility",
+        "gs.is_official",
         "gs.created_at",
         "gs.updated_at",
         "gs.owner_id",
@@ -74,6 +86,35 @@ export class GameSystemsService {
       .execute();
 
     return rows.map((r) => this.mapSummary(r, userId));
+  }
+
+  async listForAdmin(): Promise<GameSystemSummary[]> {
+    const rows = await this.db
+      .selectFrom("game_systems as gs")
+      .leftJoin("profiles as p", "p.id", "gs.owner_id")
+      .where("gs.deleted_at", "is", null)
+      .select([
+        "gs.id",
+        "gs.slug",
+        "gs.title",
+        "gs.description",
+        "gs.family",
+        "gs.edition",
+        "gs.visibility",
+        "gs.is_official",
+        "gs.created_at",
+        "gs.updated_at",
+        "gs.owner_id",
+        "p.username as author_username",
+        "p.display_name as author_display_name",
+        "p.site_role as author_site_role",
+        "p.is_admin as author_is_admin",
+      ])
+      .orderBy("gs.is_official", "desc")
+      .orderBy("gs.updated_at", "desc")
+      .execute();
+
+    return rows.map((row) => this.mapSummary(row));
   }
 
   async get(userId: string | null, idOrSlug: string): Promise<GameSystemSummary> {
@@ -90,6 +131,7 @@ export class GameSystemsService {
         "gs.family",
         "gs.edition",
         "gs.visibility",
+        "gs.is_official",
         "gs.created_at",
         "gs.updated_at",
         "gs.owner_id",
@@ -115,6 +157,7 @@ export class GameSystemsService {
           "gs.family",
           "gs.edition",
           "gs.visibility",
+          "gs.is_official",
           "gs.created_at",
           "gs.updated_at",
           "gs.owner_id",
@@ -230,7 +273,7 @@ export class GameSystemsService {
       .selectFrom("game_systems")
       .where("id", "=", systemId)
       .where("deleted_at", "is", null)
-      .select(["id", "owner_id"])
+      .select(["id", "owner_id", "is_official"])
       .executeTakeFirst();
 
     if (!system) {
@@ -239,6 +282,14 @@ export class GameSystemsService {
 
     if (system.owner_id !== userId) {
       throw new AppError("FORBIDDEN", 403, "Only the owner can modify this game system.");
+    }
+
+    if (system.is_official && input.visibility === "private") {
+      throw new AppError(
+        "OFFICIAL_SYSTEM_MUST_BE_PUBLIC",
+        409,
+        "An official game system must remain public.",
+      );
     }
 
     await this.db
@@ -255,6 +306,57 @@ export class GameSystemsService {
       .execute();
 
     return this.get(userId, systemId);
+  }
+
+  async setOfficial(
+    systemId: string,
+    isOfficial: boolean,
+  ): Promise<GameSystemSummary> {
+    const system = await this.db
+      .selectFrom("game_systems")
+      .where("id", "=", systemId)
+      .where("deleted_at", "is", null)
+      .select("id")
+      .executeTakeFirst();
+
+    if (!system) {
+      throw new AppError("SYSTEM_NOT_FOUND", 404, "Game system not found.");
+    }
+
+    await this.db
+      .updateTable("game_systems")
+      .set({
+        is_official: isOfficial,
+        ...(isOfficial ? { visibility: "public" as const } : {}),
+        updated_at: sql`now()`,
+      })
+      .where("id", "=", systemId)
+      .execute();
+
+    const updated = await this.db
+      .selectFrom("game_systems as gs")
+      .leftJoin("profiles as p", "p.id", "gs.owner_id")
+      .where("gs.id", "=", systemId)
+      .select([
+        "gs.id",
+        "gs.slug",
+        "gs.title",
+        "gs.description",
+        "gs.family",
+        "gs.edition",
+        "gs.visibility",
+        "gs.is_official",
+        "gs.created_at",
+        "gs.updated_at",
+        "gs.owner_id",
+        "p.username as author_username",
+        "p.display_name as author_display_name",
+        "p.site_role as author_site_role",
+        "p.is_admin as author_is_admin",
+      ])
+      .executeTakeFirstOrThrow();
+
+    return this.mapSummary(updated);
   }
 
   async delete(userId: string, systemId: string): Promise<void> {
@@ -435,6 +537,7 @@ export class GameSystemsService {
       family: row.family,
       edition: row.edition,
       visibility: row.visibility,
+      isOfficial: row.is_official,
       legacyTemplateId: row.legacy_template_id ?? undefined,
       isOwner: Boolean(currentUserId && row.owner_id === currentUserId),
       owner: row.owner_id && row.author_username

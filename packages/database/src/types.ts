@@ -474,6 +474,7 @@ export interface GameSystemsTable {
   family: string | null;
   edition: string | null;
   visibility: "private" | "public";
+  is_official: Generated<boolean>;
   legacy_template_id: string | null;
   deleted_at: Timestamp | null;
   created_at: Timestamp;

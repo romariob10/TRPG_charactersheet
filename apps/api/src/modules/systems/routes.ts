@@ -1,10 +1,14 @@
 import type { FastifyInstance } from "fastify";
 import {
   createGameSystemRequestSchema,
+  gameSystemIdSchema,
+  gameSystemScopeSchema,
   updateGameSystemRequestSchema,
+  updateOfficialGameSystemRequestSchema,
 } from "@mycharacter/contracts";
 import { AppError } from "../../errors.js";
-import { requireActor } from "../../plugins/auth.js";
+import { requireActor, requireAdmin } from "../../plugins/auth.js";
+import { AuditService } from "../audit/service.js";
 import { GameSystemsService } from "./service.js";
 
 export async function registerGameSystemRoutes(app: FastifyInstance): Promise<void> {
@@ -12,7 +16,40 @@ export async function registerGameSystemRoutes(app: FastifyInstance): Promise<vo
 
   app.get("/api/game-systems", async (request, reply) => {
     reply.header("Cache-Control", "private, no-cache");
-    return service.list(request.actor?.userId);
+    const parsed = gameSystemScopeSchema.safeParse(
+      (request.query as { scope?: unknown }).scope ?? "all",
+    );
+    if (!parsed.success) {
+      throw new AppError("VALIDATION_FAILED", 400, "Invalid game system scope.");
+    }
+    return service.list(request.actor?.userId, parsed.data);
+  });
+
+  app.get("/api/admin/game-systems", async (request, reply) => {
+    await requireAdmin(request, app.db);
+    reply.header("Cache-Control", "private, no-store");
+    return service.listForAdmin();
+  });
+
+  app.patch("/api/admin/game-systems/:id/official", async (request) => {
+    const actor = await requireAdmin(request, app.db);
+    const id = gameSystemIdSchema.safeParse(
+      (request.params as { id?: unknown }).id,
+    );
+    const body = updateOfficialGameSystemRequestSchema.safeParse(request.body);
+    if (!id.success || !body.success) {
+      throw new AppError("VALIDATION_FAILED", 400, "Invalid official system update.");
+    }
+    const updated = await service.setOfficial(id.data, body.data.isOfficial);
+    await new AuditService(app.db).log({
+      actorId: actor.userId,
+      actorRole: actor.role,
+      action: "set_official_game_system",
+      targetType: "game_system",
+      targetId: id.data,
+      metadata: { isOfficial: body.data.isOfficial },
+    });
+    return updated;
   });
 
   app.post("/api/game-systems", async (request, reply) => {
