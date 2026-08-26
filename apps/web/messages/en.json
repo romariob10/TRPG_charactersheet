@@ -421,8 +421,8 @@
     "pages": "{count, plural, one {# page} other {# pages}}",
     "sourceGroup": {
       "mine": "My templates",
-      "saved": "Saved",
-      "official": "Official"
+      "saved": "Saved templates",
+      "official": "Official templates"
     }
   },
   "Editor": {

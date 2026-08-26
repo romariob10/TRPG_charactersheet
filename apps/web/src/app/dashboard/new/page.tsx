@@ -31,7 +31,7 @@ export default async function NewCharacterPage({ searchParams }: PageProps) {
   const officialTemplateGroups = new Map(
     allOfficialSystems.flatMap((system) =>
       system.legacyTemplateId
-        ? [[system.legacyTemplateId, system.isOwner ? "mine" : "official"] as const]
+        ? [[system.legacyTemplateId, "official"] as const]
         : [],
     ),
   );
