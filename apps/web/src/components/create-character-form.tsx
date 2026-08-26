@@ -174,17 +174,28 @@ export function CreateCharacterForm({
           {t("template")} *
         </span>
         {effectiveSources.length ? (
-          <div className="mt-2.5 space-y-5">
+          <div className="mt-2.5 space-y-4">
             {sourceGroups.map((group) => {
               const groupedSources = effectiveSources.filter(
                 (source) => source.group === group,
               );
               if (groupedSources.length === 0) return null;
               return (
-                <section key={group} aria-labelledby={`source-group-${group}`}>
+                <section
+                  key={group}
+                  aria-labelledby={`source-group-${group}`}
+                  data-source-group={group}
+                  className={cn(
+                    "rounded-[var(--radius-control)] border border-[var(--border)] bg-[var(--surface-subtle)] p-3.5 sm:p-4",
+                    group === "official" && "border-[var(--brand)]/25",
+                  )}
+                >
                   <h3
                     id={`source-group-${group}`}
-                    className="mb-2 text-xs font-bold tracking-wide text-[var(--muted)] uppercase"
+                    className={cn(
+                      "mb-3 text-xs font-bold tracking-wide text-[var(--muted)] uppercase",
+                      group === "official" && "text-[var(--brand)]",
+                    )}
                   >
                     {t(`sourceGroup.${group}`)}
                   </h3>

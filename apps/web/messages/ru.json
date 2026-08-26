@@ -672,8 +672,8 @@
     "pages": "{count, plural, one {# страница} few {# страницы} many {# страниц} other {# страницы}}",
     "sourceGroup": {
       "mine": "Мои шаблоны",
-      "saved": "Сохранённые",
-      "official": "Официальные"
+      "saved": "Сохранённые шаблоны",
+      "official": "Официальные шаблоны"
     }
   },
   "Editor": {

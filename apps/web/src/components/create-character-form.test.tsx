@@ -74,6 +74,11 @@ describe("CreateCharacterForm", () => {
     expect(screen.getByRole("heading", { name: "sourceGroup.mine" })).toBeVisible();
     expect(screen.getByRole("heading", { name: "sourceGroup.saved" })).toBeVisible();
     expect(screen.getByRole("heading", { name: "sourceGroup.official" })).toBeVisible();
+    expect(document.querySelectorAll("[data-source-group]")).toHaveLength(3);
+    expect(document.querySelector('[data-source-group="mine"]')).toHaveClass("border");
+    expect(document.querySelector('[data-source-group="official"]')).toHaveClass(
+      "border-[var(--brand)]/25",
+    );
     expect(screen.getByRole("button", { name: /Character/ })).toBeVisible();
   });
 
