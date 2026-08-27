@@ -1,3 +1,4 @@
+import { createHash, randomUUID } from "node:crypto";
 import {
   sendMessageRequestSchema,
   startConversationRequestSchema,
@@ -70,6 +71,7 @@ export async function registerDirectMessageRoutes(app: FastifyInstance): Promise
 
   app.post(
     "/api/messages/conversations/:id/images",
+    { bodyLimit: 26 * 1024 * 1024 },
     async (request, reply) => {
       const actor = requireActor(request);
       globalRateLimiter.assertLimit(
@@ -260,4 +262,3 @@ function detectImage(
   }
   return null;
 }
-import { createHash, randomUUID } from "node:crypto";
