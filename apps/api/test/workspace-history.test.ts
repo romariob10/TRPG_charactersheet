@@ -199,6 +199,32 @@ describe("workspace history", () => {
     ).toBe(401);
   });
 
+  it("accepts message images larger than Fastify's default body limit", async () => {
+    const messages = new DirectMessageService(db);
+    const conversationId = await messages.getOrCreateConversation(
+      aliceId,
+      bobId,
+    );
+    const imageBytes = Buffer.alloc(1024 * 1024 + 64);
+    Buffer.from("89504e470d0a1a0a", "hex").copy(imageBytes);
+    const form = new FormData();
+    form.set(
+      "file",
+      new File([imageBytes], "large-map.png", { type: "image/png" }),
+    );
+    const encoded = new Response(form);
+    const uploaded = await app.inject({
+      method: "POST",
+      url: `/api/messages/conversations/${conversationId}/images`,
+      cookies: { mycharacter_session: aliceCookie },
+      headers: { "content-type": encoded.headers.get("content-type")! },
+      payload: Buffer.from(await encoded.arrayBuffer()),
+    });
+
+    expect(uploaded.statusCode, uploaded.body).toBe(201);
+    expect(uploaded.json().file.url).toMatch(/^\/api\/message-images\//);
+  });
+
   it("rejects unauthenticated access", async () => {
     const response = await app.inject({
       method: "GET",
