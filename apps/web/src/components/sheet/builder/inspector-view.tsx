@@ -18,9 +18,14 @@ import type {
 import {
   FILL_TOKENS,
   STROKE_TOKENS,
-  TARGET_LAYOUT_KINDS,
 } from "@mycharacter/contracts";
 import { Plus } from "lucide-react";
+
+const VISIBLE_TARGET_LAYOUT_KINDS = [
+  "mobile",
+  "desktop",
+  "print",
+] as const satisfies readonly TargetLayoutKind[];
 
 interface InspectorViewProps {
   selectedNode: LayoutNode | null;
@@ -1260,7 +1265,7 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
           {t("targetVisibility")}
         </h4>
         <div className="grid grid-cols-2 gap-2">
-          {TARGET_LAYOUT_KINDS.map((target) => {
+          {VISIBLE_TARGET_LAYOUT_KINDS.map((target) => {
             const isHidden = selectedNode.box.hiddenOnTargets?.includes(target);
             return (
               <label

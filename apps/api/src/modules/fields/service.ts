@@ -287,19 +287,6 @@ export class FieldService {
 
       const currentVersion = current?.version ?? 0;
 
-      // Optimistic concurrency check: if expectedVersion is provided and differs, throw 409
-      if (
-        input.expectedVersion !== undefined &&
-        input.expectedVersion !== null &&
-        input.expectedVersion !== currentVersion
-      ) {
-        throw new AppError(
-          "VERSION_CONFLICT",
-          409,
-          `Version conflict on field '${fieldKey}'. Expected version ${input.expectedVersion}, but current version is ${currentVersion}.`,
-        );
-      }
-
       const version = currentVersion + 1;
       const overwrittenRemote = currentVersion !== input.expectedVersion;
       const updatedAt = new Date();

@@ -292,13 +292,31 @@ describe("field transactions", () => {
     expect(first.statusCode).toBe(200);
     expect(retry.statusCode).toBe(200);
     expect(retry.json()).toEqual(first.json());
+
+    const staleAutosave = await app.inject({
+      method: "PUT",
+      url: `/api/characters/${modularCharacter.id}/sheet-fields/character_name`,
+      cookies: { mycharacter_session: owner.cookie },
+      payload: {
+        value: "Borin",
+        expectedVersion: 0,
+        clientMutationId: crypto.randomUUID(),
+      },
+    });
+    expect(staleAutosave.statusCode).toBe(200);
+    expect(staleAutosave.json()).toMatchObject({
+      value: "Borin",
+      version: 2,
+      overwrittenRemote: true,
+    });
+
     const stored = await testDb.db
       .selectFrom("character_sheet_field_values")
       .select(["value", "version"])
       .where("character_id", "=", modularCharacter.id)
       .where("field_key", "=", "character_name")
       .executeTakeFirstOrThrow();
-    expect(stored).toMatchObject({ value: "Ada", version: 1 });
+    expect(stored).toMatchObject({ value: "Borin", version: 2 });
   });
 
   async function createTemplate(prefix: string): Promise<string> {
