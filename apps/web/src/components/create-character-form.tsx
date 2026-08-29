@@ -7,6 +7,7 @@ import { BookOpen, Check, FilePlus2, FileText, ImageUp, Loader2, RefreshCw } fro
 import Link from "next/link";
 import { Button, buttonClassName } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PortraitCropDialog } from "@/components/sheet/player/portrait-crop-dialog";
 import { apiFetch } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
 
@@ -94,6 +95,8 @@ export function CreateCharacterForm({
   const [name, setName] = useState("");
   const [pending, setPending] = useState(false);
   const [portrait, setPortrait] = useState<File | null>(null);
+  const [portraitAspectRatio, setPortraitAspectRatio] = useState<number | null>(null);
+  const [portraitCropSource, setPortraitCropSource] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   const submittingRef = useRef(false);
   const createdCharacterIdRef = useRef<string | null>(null);
@@ -149,6 +152,21 @@ export function CreateCharacterForm({
             { method: "POST", body: formData },
           );
           if (!uploadResponse.ok) throw new Error(t("portraitUploadFailed"));
+          if (portraitAspectRatio) {
+            const metadataResponse = await fetch(
+              `/api/characters/${result.id}/sheet-fields/${encodeURIComponent("__image_aspect_ratio__:portrait")}`,
+              {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  value: portraitAspectRatio,
+                  expectedVersion: 0,
+                  clientMutationId: crypto.randomUUID(),
+                }),
+              },
+            );
+            if (!metadataResponse.ok) throw new Error(t("portraitUploadFailed"));
+          }
         }
         router.push(`/characters/${result.id}`);
       } else {
@@ -201,10 +219,26 @@ export function CreateCharacterForm({
             accept="image/png,image/jpeg"
             disabled={pending}
             className="sr-only"
-            onChange={(event) => setPortrait(event.currentTarget.files?.[0] ?? null)}
+            onChange={(event) => {
+              const file = event.currentTarget.files?.[0];
+              if (file) setPortraitCropSource(file);
+              event.currentTarget.value = "";
+            }}
           />
         </label>
       </div>}
+
+      {portraitCropSource && (
+        <PortraitCropDialog
+          source={portraitCropSource}
+          onCancel={() => setPortraitCropSource(null)}
+          onConfirm={(file, aspectRatio) => {
+            setPortrait(file);
+            setPortraitAspectRatio(aspectRatio);
+            setPortraitCropSource(null);
+          }}
+        />
+      )}
 
       <div>
         <span className="block text-sm font-semibold text-[var(--foreground)]">

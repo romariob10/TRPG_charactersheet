@@ -99,7 +99,7 @@ export const SheetNodeRenderer: React.FC<{
   parentDirection?: "horizontal" | "vertical";
 }> = ({ node, parentDirection }) => {
   const t = useTranslations("SheetBuilder");
-  const { target, mode, selectedNodeId, onSelectNode, resolvedComponents } =
+  const { target, mode, fieldValues, selectedNodeId, onSelectNode, resolvedComponents } =
     useSheetRender();
 
   // Hidden on current target?
@@ -145,6 +145,21 @@ export const SheetNodeRenderer: React.FC<{
     sizingStyle.flexShrink = 0;
   }
 
+  const savedImageAspectRatio =
+    node.kind === "image"
+      ? fieldValues?.[`__image_aspect_ratio__:${node.fieldBinding}`]
+      : undefined;
+  const followsSavedImageAspectRatio =
+    mode !== "builder" &&
+    node.kind === "image" &&
+    typeof savedImageAspectRatio === "number" &&
+    savedImageAspectRatio > 0;
+  if (followsSavedImageAspectRatio) {
+    sizingStyle.height = undefined;
+    sizingStyle.minHeight = undefined;
+    sizingStyle.maxHeight = undefined;
+  }
+
   const widthClass =
     node.box.width.mode === "fill"
       ? `w-full min-w-0 ${parentDirection === "horizontal" ? "flex-1" : ""}`
@@ -153,7 +168,9 @@ export const SheetNodeRenderer: React.FC<{
         : "";
 
   const heightClass =
-    node.box.height.mode === "fill"
+    followsSavedImageAspectRatio
+      ? ""
+      : node.box.height.mode === "fill"
       ? `${mode === "builder" ? "h-full" : ""} min-h-0 ${parentDirection === "vertical" ? "flex-1" : ""}`
       : node.box.height.mode === "hug"
         ? "h-fit"

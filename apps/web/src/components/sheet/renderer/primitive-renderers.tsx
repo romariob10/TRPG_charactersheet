@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useLayoutEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import Image from "next/image";
-import { ImageUp } from "lucide-react";
+import { Crop, ImageUp } from "lucide-react";
 import type {
   CheckboxNode,
   DividerNode,
@@ -17,6 +17,7 @@ import type {
   TextareaNode,
 } from "@mycharacter/contracts";
 import { useSheetRender } from "./sheet-render-context";
+import { PortraitCropDialog } from "../player/portrait-crop-dialog";
 
 const TEXT_VARIANTS = {
   body: "text-sm text-foreground",
@@ -70,7 +71,7 @@ export const RenderText: React.FC<{ node: TextNode }> = ({ node }) => {
 };
 
 export const RenderFieldInput: React.FC<{ node: FieldInputNode }> = ({ node }) => {
-  const { fieldValues, onFieldValueChange, mode } = useSheetRender();
+  const { fieldValues, onFieldValueChange, onFieldCommit, mode } = useSheetRender();
   const rawValue = fieldValues?.[node.fieldBinding];
   const value = typeof rawValue === "string" ? rawValue : "";
 
@@ -94,6 +95,7 @@ export const RenderFieldInput: React.FC<{ node: FieldInputNode }> = ({ node }) =
           placeholder={node.placeholder}
           disabled={isReadOnly}
           onChange={(e) => onFieldValueChange?.(node.fieldBinding, e.target.value)}
+          onBlur={() => onFieldCommit?.(node.fieldBinding)}
           className={`w-full px-2 py-1 text-sm bg-background/50 focus:outline-none focus:ring-1 focus:ring-primary ${
             node.variant === "underline"
               ? "border-b border-border rounded-none focus:border-primary"
@@ -193,23 +195,44 @@ export const RenderNumberInput: React.FC<{ node: NumberInputNode }> = ({ node })
 
 export const RenderTextarea: React.FC<{ node: TextareaNode }> = ({ node }) => {
   const t = useTranslations("Player");
-  const { fieldValues, onFieldValueChange, mode } = useSheetRender();
+  const { fieldValues, onFieldValueChange, onFieldCommit, mode } = useSheetRender();
   const rawValue = fieldValues?.[node.fieldBinding];
   const value = typeof rawValue === "string" ? rawValue : "";
   const isReadOnly = mode === "readonly" || mode === "print" || node.readOnly;
-  const [fontSize, setFontSize] = useState(14);
   const heightFieldKey = `__layout_height__:${node.fieldBinding}`;
+  const fontSizeFieldKey = `__layout_font_size__:${node.fieldBinding}`;
   const savedHeight = fieldValues?.[heightFieldKey];
+  const savedFontSize = fieldValues?.[fontSizeFieldKey];
   const textareaHeight =
     typeof savedHeight === "number" && savedHeight >= 48
-      ? Math.min(1200, savedHeight)
+      ? savedHeight
       : undefined;
+  const fontSize =
+    typeof savedFontSize === "number" && savedFontSize >= 8 && savedFontSize <= 32
+      ? savedFontSize
+      : 14;
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const pointerStartHeight = useRef<number | null>(null);
 
-  const persistHeight = (textarea: HTMLTextAreaElement) => {
+  useLayoutEffect(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    textarea.style.height = "auto";
+    textarea.style.height = `${Math.max(textareaHeight ?? 48, textarea.scrollHeight)}px`;
+  }, [fontSize, textareaHeight, value]);
+
+  const persistManualHeight = (textarea: HTMLTextAreaElement) => {
+    const startHeight = pointerStartHeight.current;
+    pointerStartHeight.current = null;
     const nextHeight = Math.round(textarea.getBoundingClientRect().height);
-    if (nextHeight >= 48 && nextHeight !== textareaHeight) {
+    if (startHeight !== null && Math.abs(nextHeight - startHeight) >= 2 && nextHeight >= 48) {
       onFieldValueChange?.(heightFieldKey, nextHeight);
     }
+  };
+
+  const updateFontSize = (nextSize: number) => {
+    onFieldValueChange?.(fontSizeFieldKey, nextSize);
+    onFieldCommit?.(fontSizeFieldKey);
   };
 
   return (
@@ -222,7 +245,7 @@ export const RenderTextarea: React.FC<{ node: TextareaNode }> = ({ node }) => {
       {isReadOnly ? (
         <div
           className="text-sm whitespace-pre-wrap text-foreground py-1"
-          style={{ minHeight: textareaHeight }}
+          style={{ minHeight: textareaHeight, fontSize }}
         >
           {value || "—"}
         </div>
@@ -232,7 +255,7 @@ export const RenderTextarea: React.FC<{ node: TextareaNode }> = ({ node }) => {
             <div className="absolute right-1 top-1 z-10 flex items-center overflow-hidden rounded border border-border bg-background/90 shadow-sm">
               <button
                 type="button"
-                onClick={() => setFontSize((size) => Math.max(8, size - 1))}
+                onClick={() => updateFontSize(Math.max(8, fontSize - 1))}
                 className="px-1.5 py-0.5 text-xs hover:bg-muted"
                 aria-label={t("textareaFontSmaller")}
                 title={t("textareaFontSmaller")}
@@ -244,7 +267,7 @@ export const RenderTextarea: React.FC<{ node: TextareaNode }> = ({ node }) => {
               </span>
               <button
                 type="button"
-                onClick={() => setFontSize((size) => Math.min(32, size + 1))}
+                onClick={() => updateFontSize(Math.min(32, fontSize + 1))}
                 className="px-1.5 py-0.5 text-xs hover:bg-muted"
                 aria-label={t("textareaFontLarger")}
                 title={t("textareaFontLarger")}
@@ -254,15 +277,19 @@ export const RenderTextarea: React.FC<{ node: TextareaNode }> = ({ node }) => {
             </div>
           )}
           <textarea
+            ref={textareaRef}
             rows={node.rows ?? 3}
             value={value}
             placeholder={node.placeholder}
             disabled={isReadOnly}
             onChange={(e) => onFieldValueChange?.(node.fieldBinding, e.target.value)}
-            onPointerUp={(event) => persistHeight(event.currentTarget)}
-            onBlur={(event) => persistHeight(event.currentTarget)}
-            style={{ fontSize, height: textareaHeight }}
-            className="min-h-12 w-full resize-y rounded-md border border-border bg-background/50 px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-primary"
+            onPointerDown={(event) => {
+              pointerStartHeight.current = event.currentTarget.getBoundingClientRect().height;
+            }}
+            onPointerUp={(event) => persistManualHeight(event.currentTarget)}
+            onBlur={() => onFieldCommit?.(node.fieldBinding)}
+            style={{ fontSize, minHeight: textareaHeight }}
+            className="min-h-12 w-full resize-y overflow-hidden rounded-md border border-border bg-background/50 px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-primary"
           />
         </>
       )}
@@ -357,9 +384,26 @@ export const RenderSpacer: React.FC<{ node: SpacerNode }> = ({ node }) => {
 export const RenderImage: React.FC<{ node: ImageNode }> = ({ node }) => {
   const t = useTranslations("Player");
   const { fieldValues, mode, onImageUpload } = useSheetRender();
+  const [cropSource, setCropSource] = useState<File | string | null>(null);
   const fieldValue = fieldValues?.[node.fieldBinding];
   const imageUrl = typeof fieldValue === "string" && fieldValue ? fieldValue : node.url;
+  const aspectRatioValue = fieldValues?.[`__image_aspect_ratio__:${node.fieldBinding}`];
+  const aspectRatio =
+    typeof aspectRatioValue === "number" && aspectRatioValue > 0
+      ? aspectRatioValue
+      : undefined;
   const editable = mode === "player" && Boolean(onImageUpload);
+
+  const cropDialog = cropSource ? (
+    <PortraitCropDialog
+      source={cropSource}
+      onCancel={() => setCropSource(null)}
+      onConfirm={async (file, ratio) => {
+        await onImageUpload?.(node.fieldBinding, file, ratio);
+        setCropSource(null);
+      }}
+    />
+  ) : null;
 
   if (!imageUrl) {
     if (!editable) {
@@ -370,7 +414,7 @@ export const RenderImage: React.FC<{ node: ImageNode }> = ({ node }) => {
         </div>
       );
     }
-    return (
+    return (<>
       <label className="flex h-full min-h-24 w-full cursor-pointer flex-col items-center justify-center gap-2 rounded bg-muted/40 text-xs text-muted-foreground hover:bg-muted/60">
         <ImageUp className="size-5" aria-hidden="true" />
         <span>{t("portraitPlaceholder")}</span>
@@ -380,16 +424,20 @@ export const RenderImage: React.FC<{ node: ImageNode }> = ({ node }) => {
           className="sr-only"
           onChange={(event) => {
             const file = event.currentTarget.files?.[0];
-            if (file) void onImageUpload?.(node.fieldBinding, file);
+            if (file) setCropSource(file);
             event.currentTarget.value = "";
           }}
         />
       </label>
-    );
+      {cropDialog}
+    </>);
   }
 
   return (
-    <div className="group relative h-full min-h-24 w-full overflow-hidden rounded">
+    <div
+      className="group relative min-h-24 w-full overflow-hidden rounded"
+      style={aspectRatio ? { aspectRatio } : { height: "100%" }}
+    >
       <Image
         src={imageUrl}
         alt={node.alt || t("portraitAlt")}
@@ -405,20 +453,26 @@ export const RenderImage: React.FC<{ node: ImageNode }> = ({ node }) => {
         }
       />
       {editable && (
-        <label className="absolute right-2 bottom-2 cursor-pointer rounded-md bg-background/90 px-2 py-1 text-[11px] font-semibold text-foreground opacity-0 shadow-sm transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
-          {t("replacePortrait")}
-          <input
-            type="file"
-            accept="image/png,image/jpeg"
-            className="sr-only"
-            onChange={(event) => {
-              const file = event.currentTarget.files?.[0];
-              if (file) void onImageUpload?.(node.fieldBinding, file);
-              event.currentTarget.value = "";
-            }}
-          />
-        </label>
+        <div className="absolute right-2 bottom-2 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+          <button type="button" onClick={() => setCropSource(imageUrl)} className="flex items-center gap-1 rounded-md bg-background/90 px-2 py-1 text-[11px] font-semibold text-foreground shadow-sm">
+            <Crop className="size-3" /> {t("cropPortrait")}
+          </button>
+          <label className="cursor-pointer rounded-md bg-background/90 px-2 py-1 text-[11px] font-semibold text-foreground shadow-sm">
+            {t("replacePortrait")}
+            <input
+              type="file"
+              accept="image/png,image/jpeg"
+              className="sr-only"
+              onChange={(event) => {
+                const file = event.currentTarget.files?.[0];
+                if (file) setCropSource(file);
+                event.currentTarget.value = "";
+              }}
+            />
+          </label>
+        </div>
       )}
+      {cropDialog}
     </div>
   );
 };

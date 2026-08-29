@@ -20,6 +20,21 @@ vi.mock("next-intl", () => ({
   useTranslations: () => (key: string) => key,
 }));
 
+vi.mock("./portrait-crop-dialog", () => ({
+  PortraitCropDialog: ({
+    onConfirm,
+  }: {
+    onConfirm: (file: File, aspectRatio: number) => void;
+  }) => (
+    <button
+      type="button"
+      onClick={() => onConfirm(new File(["cropped"], "portrait-cropped.png"), 0.75)}
+    >
+      applyCrop
+    </button>
+  ),
+}));
+
 const fetchMock = vi.fn();
 
 function matchMedia(matches: boolean): MediaQueryList {
@@ -225,6 +240,7 @@ describe("CharacterSheetPlayer", () => {
           file: {
             id: "44444444-4444-4444-8444-444444444444",
             url: "/api/characters/character-1/images/44444444-4444-4444-8444-444444444444",
+            fieldVersion: 1,
           },
         }),
         { status: 201, headers: { "content-type": "application/json" } },
@@ -257,6 +273,7 @@ describe("CharacterSheetPlayer", () => {
         files: [new File(["png"], "portrait.png", { type: "image/png" })],
       },
     });
+    fireEvent.click(screen.getByRole("button", { name: "applyCrop" }));
 
     await waitFor(() =>
       expect(fetchMock).toHaveBeenCalledWith(
@@ -300,7 +317,17 @@ describe("CharacterSheetPlayer", () => {
     );
 
     const textarea = screen.getByPlaceholderText("Notes");
-    vi.spyOn(textarea, "getBoundingClientRect").mockReturnValue({
+    vi.spyOn(textarea, "getBoundingClientRect").mockReturnValueOnce({
+      x: 0,
+      y: 0,
+      width: 300,
+      height: 100,
+      top: 0,
+      right: 300,
+      bottom: 100,
+      left: 0,
+      toJSON: () => ({}),
+    }).mockReturnValue({
       x: 0,
       y: 0,
       width: 300,
@@ -311,6 +338,7 @@ describe("CharacterSheetPlayer", () => {
       left: 0,
       toJSON: () => ({}),
     });
+    fireEvent.pointerDown(textarea);
     fireEvent.pointerUp(textarea);
 
     await waitFor(() =>

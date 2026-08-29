@@ -106,6 +106,7 @@ export async function registerCharacterRoutes(app: FastifyInstance): Promise<voi
         .execute();
 
       let oldImage: { fileId: string; storageKey: string } | undefined;
+      let fieldVersion = 1;
       try {
         await app.storage.put(storageKey, bytes);
         await app.db.transaction().execute(async (trx) => {
@@ -136,7 +137,7 @@ export async function registerCharacterRoutes(app: FastifyInstance): Promise<voi
               uploader_id: actor.userId,
             })
             .execute();
-          await trx
+          const savedField = await trx
             .insertInto("character_sheet_field_values")
             .values({
               character_id: characterId,
@@ -153,7 +154,9 @@ export async function registerCharacterRoutes(app: FastifyInstance): Promise<voi
                 updated_at: new Date(),
               }),
             )
-            .execute();
+            .returning("version")
+            .executeTakeFirstOrThrow();
+          fieldVersion = savedField.version;
           await trx
             .updateTable("object_files")
             .set({ state: "ready" })
@@ -182,7 +185,7 @@ export async function registerCharacterRoutes(app: FastifyInstance): Promise<voi
         }
       }
 
-      return reply.status(201).send({ file: { id: fileId, url: value } });
+      return reply.status(201).send({ file: { id: fileId, url: value, fieldVersion } });
     },
   );
 
