@@ -40,6 +40,20 @@ describe("Sheet Builder Contracts", () => {
     if (checkbox.kind === "checkbox") expect(checkbox.showBorder).toBe(false);
   });
 
+  it("treats template images as character portrait slots", () => {
+    const image = layoutNodeSchema.parse({
+      id: crypto.randomUUID(),
+      kind: "image",
+      url: "",
+      alt: "",
+      fit: "cover",
+      box: boxPropsSchema.parse({}),
+    });
+
+    expect(image.kind).toBe("image");
+    if (image.kind === "image") expect(image.fieldBinding).toBe("portrait");
+  });
+
   it("validates minimal valid Frame node", () => {
     const validFrame = {
       id: crypto.randomUUID(),

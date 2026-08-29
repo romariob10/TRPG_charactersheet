@@ -134,7 +134,14 @@ export const SheetNodeRenderer: React.FC<{
     sizingStyle.flexShrink = 0;
   }
   if (node.box.height.mode === "fixed") {
-    sizingStyle.height = `${node.box.height.value}px`;
+    if (mode === "builder") {
+      sizingStyle.height = `${node.box.height.value}px`;
+    } else {
+      sizingStyle.minHeight = Math.max(
+        node.box.minHeight ?? 0,
+        node.box.height.value,
+      );
+    }
     sizingStyle.flexShrink = 0;
   }
 
@@ -147,7 +154,7 @@ export const SheetNodeRenderer: React.FC<{
 
   const heightClass =
     node.box.height.mode === "fill"
-      ? `h-full min-h-0 ${parentDirection === "vertical" ? "flex-1" : ""}`
+      ? `${mode === "builder" ? "h-full" : ""} min-h-0 ${parentDirection === "vertical" ? "flex-1" : ""}`
       : node.box.height.mode === "hug"
         ? "h-fit"
         : "";

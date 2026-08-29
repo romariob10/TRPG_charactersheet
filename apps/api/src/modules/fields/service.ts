@@ -226,7 +226,10 @@ export class FieldService {
           ? JSON.parse(versionRow.fields)
           : (versionRow.fields ?? []);
 
-      const fieldDef = publishedFields.find((f) => f.key === fieldKey);
+      const layoutHeightFieldKey = parseLayoutHeightFieldKey(fieldKey);
+      const fieldDef = publishedFields.find(
+        (field) => field.key === (layoutHeightFieldKey ?? fieldKey),
+      );
       if (!fieldDef) {
         throw new AppError(
           "FIELD_NOT_FOUND",
@@ -237,6 +240,22 @@ export class FieldService {
 
       if (fieldDef.readOnly) {
         throw new AppError("FIELD_READONLY", 403, `Field '${fieldKey}' is read-only.`);
+      }
+
+      if (layoutHeightFieldKey) {
+        if (
+          fieldDef.kind !== "multiline" ||
+          typeof input.value !== "number" ||
+          !Number.isFinite(input.value) ||
+          input.value < 48 ||
+          input.value > 1200
+        ) {
+          throw new AppError(
+            "VALIDATION_FAILED",
+            400,
+            "Textarea height must be between 48 and 1200 pixels.",
+          );
+        }
       }
 
       // Modular sheet keys are text, so they use a separate mutation log from
@@ -370,6 +389,13 @@ export class FieldService {
 
 function serializeJson(value: FieldValue): string {
   return JSON.stringify(value);
+}
+
+function parseLayoutHeightFieldKey(fieldKey: string): string | null {
+  const prefix = "__layout_height__:";
+  if (!fieldKey.startsWith(prefix)) return null;
+  const baseFieldKey = fieldKey.slice(prefix.length);
+  return baseFieldKey || null;
 }
 
 function normalizeValue(value: unknown): FieldValue {

@@ -2,6 +2,8 @@
 
 import React, { useState } from "react";
 import { useTranslations } from "next-intl";
+import Image from "next/image";
+import { ImageUp } from "lucide-react";
 import type {
   CheckboxNode,
   DividerNode,
@@ -196,17 +198,32 @@ export const RenderTextarea: React.FC<{ node: TextareaNode }> = ({ node }) => {
   const value = typeof rawValue === "string" ? rawValue : "";
   const isReadOnly = mode === "readonly" || mode === "print" || node.readOnly;
   const [fontSize, setFontSize] = useState(14);
-  const fillsHeight = node.box.height.mode === "fill";
+  const heightFieldKey = `__layout_height__:${node.fieldBinding}`;
+  const savedHeight = fieldValues?.[heightFieldKey];
+  const textareaHeight =
+    typeof savedHeight === "number" && savedHeight >= 48
+      ? Math.min(1200, savedHeight)
+      : undefined;
+
+  const persistHeight = (textarea: HTMLTextAreaElement) => {
+    const nextHeight = Math.round(textarea.getBoundingClientRect().height);
+    if (nextHeight >= 48 && nextHeight !== textareaHeight) {
+      onFieldValueChange?.(heightFieldKey, nextHeight);
+    }
+  };
 
   return (
-    <div className={`relative flex flex-col gap-1 w-full ${fillsHeight ? "h-full min-h-0" : ""}`}>
+    <div className="relative flex min-h-0 w-full flex-col gap-1">
       {node.label && (
         <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
           {node.label}
         </label>
       )}
       {isReadOnly ? (
-        <div className="text-sm whitespace-pre-wrap text-foreground py-1">
+        <div
+          className="text-sm whitespace-pre-wrap text-foreground py-1"
+          style={{ minHeight: textareaHeight }}
+        >
           {value || "—"}
         </div>
       ) : (
@@ -242,10 +259,10 @@ export const RenderTextarea: React.FC<{ node: TextareaNode }> = ({ node }) => {
             placeholder={node.placeholder}
             disabled={isReadOnly}
             onChange={(e) => onFieldValueChange?.(node.fieldBinding, e.target.value)}
-            style={{ fontSize }}
-            className={`w-full px-2 py-1.5 bg-background/50 border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary ${
-              fillsHeight ? "h-full min-h-0 flex-1 resize-none" : "resize-y"
-            }`}
+            onPointerUp={(event) => persistHeight(event.currentTarget)}
+            onBlur={(event) => persistHeight(event.currentTarget)}
+            style={{ fontSize, height: textareaHeight }}
+            className="min-h-12 w-full resize-y rounded-md border border-border bg-background/50 px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-primary"
           />
         </>
       )}
@@ -338,23 +355,71 @@ export const RenderSpacer: React.FC<{ node: SpacerNode }> = ({ node }) => {
 };
 
 export const RenderImage: React.FC<{ node: ImageNode }> = ({ node }) => {
-  if (!node.url) {
+  const t = useTranslations("Player");
+  const { fieldValues, mode, onImageUpload } = useSheetRender();
+  const fieldValue = fieldValues?.[node.fieldBinding];
+  const imageUrl = typeof fieldValue === "string" && fieldValue ? fieldValue : node.url;
+  const editable = mode === "player" && Boolean(onImageUpload);
+
+  if (!imageUrl) {
+    if (!editable) {
+      return (
+        <div className="flex h-full min-h-24 w-full flex-col items-center justify-center gap-2 rounded bg-muted/40 text-xs text-muted-foreground">
+          <ImageUp className="size-5" aria-hidden="true" />
+          <span>{t("portraitPlaceholder")}</span>
+        </div>
+      );
+    }
     return (
-      <div className="w-full h-24 bg-muted/40 rounded flex items-center justify-center text-xs text-muted-foreground">
-        No image
-      </div>
+      <label className="flex h-full min-h-24 w-full cursor-pointer flex-col items-center justify-center gap-2 rounded bg-muted/40 text-xs text-muted-foreground hover:bg-muted/60">
+        <ImageUp className="size-5" aria-hidden="true" />
+        <span>{t("portraitPlaceholder")}</span>
+        <input
+          type="file"
+          accept="image/png,image/jpeg"
+          className="sr-only"
+          onChange={(event) => {
+            const file = event.currentTarget.files?.[0];
+            if (file) void onImageUpload?.(node.fieldBinding, file);
+            event.currentTarget.value = "";
+          }}
+        />
+      </label>
     );
   }
 
   return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
-      src={node.url}
-      alt={node.alt || "Character Sheet Asset"}
-      className={`rounded w-full h-full ${
-        node.fit === "contain" ? "object-contain" : node.fit === "fill" ? "object-fill" : "object-cover"
-      }`}
-    />
+    <div className="group relative h-full min-h-24 w-full overflow-hidden rounded">
+      <Image
+        src={imageUrl}
+        alt={node.alt || t("portraitAlt")}
+        fill
+        unoptimized
+        sizes="(max-width: 767px) 100vw, 50vw"
+        className={
+          node.fit === "contain"
+            ? "object-contain"
+            : node.fit === "fill"
+              ? "object-fill"
+              : "object-cover"
+        }
+      />
+      {editable && (
+        <label className="absolute right-2 bottom-2 cursor-pointer rounded-md bg-background/90 px-2 py-1 text-[11px] font-semibold text-foreground opacity-0 shadow-sm transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+          {t("replacePortrait")}
+          <input
+            type="file"
+            accept="image/png,image/jpeg"
+            className="sr-only"
+            onChange={(event) => {
+              const file = event.currentTarget.files?.[0];
+              if (file) void onImageUpload?.(node.fieldBinding, file);
+              event.currentTarget.value = "";
+            }}
+          />
+        </label>
+      )}
+    </div>
   );
 };
 

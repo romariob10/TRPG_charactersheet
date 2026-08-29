@@ -249,6 +249,7 @@ export const PaletteView: React.FC<PaletteViewProps> = ({
       id: crypto.randomUUID(),
       kind: "image",
       name: t("image"),
+      fieldBinding: "portrait",
       url: "",
       alt: "",
       fit: "contain",

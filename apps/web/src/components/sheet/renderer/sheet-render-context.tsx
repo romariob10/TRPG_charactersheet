@@ -15,6 +15,7 @@ export interface SheetRenderContextValue {
   mode: SheetRenderMode;
   fieldValues?: Record<string, FieldValue>;
   onFieldValueChange?: (fieldBinding: string, value: FieldValue) => void;
+  onImageUpload?: (fieldBinding: string, file: File) => Promise<void>;
   repeaterRows?: Record<string, CharacterRepeaterRow[]>;
   onAddRepeaterRow?: (repeaterKey: string) => Promise<void> | void;
   onUpdateRepeaterRowField?: (

@@ -258,6 +258,14 @@ describe("field transactions", () => {
             options: [],
             readOnly: false,
           },
+          {
+            id: crypto.randomUUID(),
+            key: "notes",
+            label: "Notes",
+            kind: "multiline",
+            options: [],
+            readOnly: false,
+          },
         ]),
         published_by: owner.userId,
       })
@@ -317,6 +325,31 @@ describe("field transactions", () => {
       .where("field_key", "=", "character_name")
       .executeTakeFirstOrThrow();
     expect(stored).toMatchObject({ value: "Borin", version: 2 });
+
+    const resized = await app.inject({
+      method: "PUT",
+      url: `/api/characters/${modularCharacter.id}/sheet-fields/__layout_height__%3Anotes`,
+      cookies: { mycharacter_session: owner.cookie },
+      payload: {
+        value: 180,
+        expectedVersion: 0,
+        clientMutationId: crypto.randomUUID(),
+      },
+    });
+    expect(resized.statusCode).toBe(200);
+    expect(resized.json()).toMatchObject({ value: 180, version: 1 });
+
+    const invalidResize = await app.inject({
+      method: "PUT",
+      url: `/api/characters/${modularCharacter.id}/sheet-fields/__layout_height__%3Acharacter_name`,
+      cookies: { mycharacter_session: owner.cookie },
+      payload: {
+        value: 180,
+        expectedVersion: 0,
+        clientMutationId: crypto.randomUUID(),
+      },
+    });
+    expect(invalidResize.statusCode).toBe(400);
   });
 
   async function createTemplate(prefix: string): Promise<string> {

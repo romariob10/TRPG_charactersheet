@@ -81,6 +81,23 @@ const versionDetails: SheetVersionDetails = {
   createdAt: "2026-08-29T00:00:00.000Z",
 };
 
+function versionWithNode(node: LayoutNode): SheetVersionDetails {
+  const makeLayout = (target: string): LayoutNode => {
+    const root = layout(target);
+    if (root.kind !== "frame") throw new Error("Expected a frame root.");
+    return { ...root, children: [node] };
+  };
+  return {
+    ...versionDetails,
+    layouts: {
+      mobile: makeLayout("mobile-custom"),
+      tablet: makeLayout("tablet-custom"),
+      desktop: makeLayout("desktop-custom"),
+      print: makeLayout("print-custom"),
+    },
+  };
+}
+
 beforeEach(() => {
   fetchMock.mockReset();
   vi.stubGlobal("fetch", fetchMock);
@@ -199,5 +216,111 @@ describe("CharacterSheetPlayer", () => {
       ),
     );
     await waitFor(() => expect(downloadClick).toHaveBeenCalledTimes(1));
+  });
+
+  it("uploads a portrait into the image field owned by the character", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          file: {
+            id: "44444444-4444-4444-8444-444444444444",
+            url: "/api/characters/character-1/images/44444444-4444-4444-8444-444444444444",
+          },
+        }),
+        { status: 201, headers: { "content-type": "application/json" } },
+      ),
+    );
+    const imageNode: LayoutNode = {
+      id: "portrait-node",
+      kind: "image",
+      fieldBinding: "portrait",
+      url: "",
+      alt: "Portrait",
+      fit: "cover",
+      box: { ...defaultBoxProps, height: { mode: "fixed", value: 160 } },
+    };
+    render(
+      <CharacterSheetPlayer
+        character={{ id: "character-1", name: "Hero" }}
+        versionDetails={versionWithNode(imageNode)}
+        canEdit
+      />,
+    );
+
+    const input = screen
+      .getByText("portraitPlaceholder")
+      .closest("label")
+      ?.querySelector<HTMLInputElement>('input[type="file"]');
+    expect(input).toBeTruthy();
+    fireEvent.change(input!, {
+      target: {
+        files: [new File(["png"], "portrait.png", { type: "image/png" })],
+      },
+    });
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/characters/character-1/images?fieldKey=portrait",
+        expect.objectContaining({ method: "POST", body: expect.any(FormData) }),
+      ),
+    );
+  });
+
+  it("persists a manually resized textarea height for print and future sessions", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          value: 180,
+          version: 1,
+          revision: 1,
+          overwrittenRemote: false,
+          updatedAt: "2026-08-29T00:00:00.000Z",
+          updatedBy: "33333333-3333-4333-8333-333333333333",
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+    const textareaNode: LayoutNode = {
+      id: "notes-node",
+      kind: "textarea",
+      fieldBinding: "notes",
+      label: "Notes",
+      rows: 3,
+      placeholder: "Notes",
+      variant: "boxed",
+      readOnly: false,
+      box: { ...defaultBoxProps, height: { mode: "fill" } },
+    };
+    render(
+      <CharacterSheetPlayer
+        character={{ id: "character-1", name: "Hero" }}
+        versionDetails={versionWithNode(textareaNode)}
+        canEdit
+      />,
+    );
+
+    const textarea = screen.getByPlaceholderText("Notes");
+    vi.spyOn(textarea, "getBoundingClientRect").mockReturnValue({
+      x: 0,
+      y: 0,
+      width: 300,
+      height: 180,
+      top: 0,
+      right: 300,
+      bottom: 180,
+      left: 0,
+      toJSON: () => ({}),
+    });
+    fireEvent.pointerUp(textarea);
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/characters/character-1/sheet-fields/__layout_height__%3Anotes",
+        expect.objectContaining({
+          method: "PUT",
+          body: expect.stringContaining('"value":180'),
+        }),
+      ),
+    );
   });
 });

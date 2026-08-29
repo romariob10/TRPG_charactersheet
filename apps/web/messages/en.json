@@ -398,6 +398,10 @@
   "Create": {
     "title": "New character",
     "name": "Character name",
+    "portrait": "Character portrait",
+    "portraitChoose": "Choose an image",
+    "portraitHint": "Optional · PNG or JPEG up to 8 MB",
+    "portraitUploadFailed": "The character was created, but the portrait could not be uploaded. Try the upload again.",
     "upload": "Upload PDF",
     "template": "Choose a template",
     "drop": "Drop a PDF here or choose a file",
@@ -1011,6 +1015,8 @@
     "saveAndBind": "Save and bind",
     "showCheckboxBorder": "Show checkbox outline",
     "imageSection": "Image",
+    "characterImageHint": "This defines an image slot. The character portrait is uploaded when a user creates or fills in the character.",
+    "imageFieldBinding": "Character image field key",
     "uploadingImage": "Uploading image…",
     "imageUploadFailed": "Could not upload image",
     "imageFit": "Image fit",
@@ -1120,6 +1126,10 @@
     "noLayout": "No sheet blueprint layout available for this character.",
     "textareaFontSize": "Text area font size",
     "textareaFontSmaller": "Decrease this text area's font size",
-    "textareaFontLarger": "Increase this text area's font size"
+    "textareaFontLarger": "Increase this text area's font size",
+    "portraitPlaceholder": "Upload character portrait",
+    "portraitAlt": "Character portrait",
+    "replacePortrait": "Replace portrait",
+    "imageUploadFailed": "Could not upload the portrait"
   }
 }
