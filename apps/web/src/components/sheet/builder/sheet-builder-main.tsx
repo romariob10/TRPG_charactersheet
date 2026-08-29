@@ -1,16 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import {
-  FileText,
-  Layers,
-  Monitor,
-  Plus,
-  Redo2,
-  Smartphone,
-  Tablet,
-  Undo2,
-} from "lucide-react";
+import { Layers, Plus, Redo2, Undo2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import type {
   ComponentSummary,
@@ -38,6 +29,11 @@ import { SheetNodeRenderer } from "../renderer/sheet-node-renderer";
 import { SheetRenderProvider } from "../renderer/sheet-render-context";
 import { ComponentLibraryBrowser } from "../library/component-library-browser";
 import { SaveComponentModal } from "../library/save-component-modal";
+import { SheetViewSwitcher, type SheetViewMode } from "../sheet-view-switcher";
+
+const PRINT_CANVAS_WIDTH = 595;
+const PRINT_CANVAS_HEIGHT = 874;
+const MOBILE_LAYOUT_QUERY = "(max-width: 767px)";
 
 interface SheetBuilderMainProps {
   initialData: SheetEditorDataResponse;
@@ -72,7 +68,9 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
   const [draftFields, setDraftFields] = useState<SheetFieldDefinition[]>(
     initialData.draft.fields ?? [],
   );
-  const [activeTarget, setActiveTarget] = useState<TargetLayoutKind>("desktop");
+  const [viewMode, setViewMode] = useState<SheetViewMode>("adaptive");
+  const [adaptiveTarget, setAdaptiveTarget] =
+    useState<Extract<TargetLayoutKind, "mobile" | "desktop">>("desktop");
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [revision, setRevision] = useState(initialData.draft.revision);
   const [saveStatus, setSaveStatus] = useState<
@@ -83,6 +81,18 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
   const [sidebarWidth, setSidebarWidth] = useState(280);
   const isResizingRef = useRef(false);
   const resizeStartRef = useRef({ pointerX: 0, width: 280 });
+
+  useEffect(() => {
+    const media = window.matchMedia(MOBILE_LAYOUT_QUERY);
+    const updateTarget = () =>
+      setAdaptiveTarget(media.matches ? "mobile" : "desktop");
+    updateTarget();
+    media.addEventListener("change", updateTarget);
+    return () => media.removeEventListener("change", updateTarget);
+  }, []);
+
+  const activeTarget: TargetLayoutKind =
+    viewMode === "print" ? "print" : adaptiveTarget;
 
   // Expansion state per target layout (non-persistent, does not trigger autosave)
   const [expandedNodesByTarget, setExpandedNodesByTarget] = useState<
@@ -114,7 +124,9 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
   >(() => {
     const map = new Map<string, ComponentVersionDetails>();
     if (initialData.resolvedComponents) {
-      for (const [id, details] of Object.entries(initialData.resolvedComponents)) {
+      for (const [id, details] of Object.entries(
+        initialData.resolvedComponents,
+      )) {
         map.set(id, details);
       }
     }
@@ -160,8 +172,11 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target;
-      if (target instanceof HTMLElement &&
-          (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))) {
+      if (
+        target instanceof HTMLElement &&
+        (target.isContentEditable ||
+          ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))
+      ) {
         return;
       }
       if ((e.metaKey || e.ctrlKey) && e.key === "z" && !e.shiftKey) {
@@ -291,52 +306,90 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
     setSaveStatus("idle");
   };
 
-  // Autosave mechanism
+  // Autosave is serialized so a second edit cannot race the revision returned
+  // by the request that is already in flight.
   const autosaveTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const saveInFlightRef = useRef(false);
+  const pendingSaveRef = useRef(false);
+  const revisionRef = useRef(revision);
+  const latestDraftRef = useRef({ layouts, fields: draftFields });
+  const observedDraftRef = useRef({ layouts, fields: draftFields });
 
   useEffect(() => {
-    if (saveStatus !== "idle") return;
+    latestDraftRef.current = { layouts, fields: draftFields };
+  }, [layouts, draftFields]);
 
-    if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+  const flushAutosave = useCallback(async () => {
+    if (saveInFlightRef.current) {
+      pendingSaveRef.current = true;
+      return;
+    }
 
-    autosaveTimerRef.current = setTimeout(async () => {
-      setSaveStatus("saving");
-      try {
-        const res = await fetch(
-          `/api/sheet-definitions/${initialData.sheetDefinition.id}/draft`,
-          {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              expectedRevision: revision,
-              layouts,
-              fields: draftFields,
-            }),
-          },
-        );
+    saveInFlightRef.current = true;
+    pendingSaveRef.current = false;
+    setSaveStatus("saving");
+    const draft = latestDraftRef.current;
 
-        if (res.status === 409) {
-          setSaveStatus("conflict");
-          return;
-        }
+    try {
+      const res = await fetch(
+        `/api/sheet-definitions/${initialData.sheetDefinition.id}/draft`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            expectedRevision: revisionRef.current,
+            layouts: draft.layouts,
+            fields: draft.fields,
+          }),
+        },
+      );
 
-        if (!res.ok) {
-          setSaveStatus("error");
-          return;
-        }
-
-        const data = await res.json();
-        setRevision(data.revision);
-        setSaveStatus("saved");
-      } catch {
-        setSaveStatus("error");
+      if (res.status === 409) {
+        pendingSaveRef.current = false;
+        setSaveStatus("conflict");
+        return;
       }
-    }, 1500);
+
+      if (!res.ok) {
+        setSaveStatus("error");
+        return;
+      }
+
+      const data = (await res.json()) as { revision: number };
+      revisionRef.current = data.revision;
+      setRevision(data.revision);
+      if (!pendingSaveRef.current) setSaveStatus("saved");
+    } catch {
+      setSaveStatus("error");
+    } finally {
+      saveInFlightRef.current = false;
+      if (pendingSaveRef.current) {
+        autosaveTimerRef.current = setTimeout(() => {
+          void flushAutosave();
+        }, 150);
+      }
+    }
+  }, [initialData.sheetDefinition.id]);
+
+  useEffect(() => {
+    const observed = observedDraftRef.current;
+    if (observed.layouts === layouts && observed.fields === draftFields) {
+      return;
+    }
+    observedDraftRef.current = { layouts, fields: draftFields };
+
+    pendingSaveRef.current = true;
+    setSaveStatus("idle");
+    if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+    if (saveInFlightRef.current) return;
+    autosaveTimerRef.current = setTimeout(() => {
+      void flushAutosave();
+    }, 500);
 
     return () => {
       if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
     };
-  }, [layouts, draftFields, revision, saveStatus, initialData.sheetDefinition.id]);
+  }, [layouts, draftFields, flushAutosave]);
 
   // Insert component instance from library
   const handleInsertComponent = (
@@ -388,9 +441,7 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
       alert(t("publishSucceeded"));
       window.location.reload();
     } catch (err: unknown) {
-      setPublishError(
-        err instanceof Error ? err.message : t("publishFailed"),
-      );
+      setPublishError(err instanceof Error ? err.message : t("publishFailed"));
     } finally {
       setPublishing(false);
     }
@@ -433,7 +484,8 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
     mobile: "max-w-sm",
     tablet: "max-w-2xl",
     desktop: "max-w-4xl",
-    print: "w-[794px] h-[1123px] max-w-none flex-none bg-white text-black shadow-2xl print-page",
+    print:
+      "h-[874px] w-[595px] max-w-none flex-none bg-white text-black shadow-2xl",
   }[activeTarget];
 
   return (
@@ -457,56 +509,12 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
         </div>
 
         {/* Target Switcher */}
-        <div className="flex items-center gap-1 bg-muted p-1 rounded-lg">
-          <button
-            type="button"
-            onClick={() => setActiveTarget("mobile")}
-            className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors flex items-center gap-1.5 ${
-              activeTarget === "mobile"
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <Smartphone className="size-3.5" />
-            <span>{t("targetMobile")}</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTarget("tablet")}
-            className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors flex items-center gap-1.5 ${
-              activeTarget === "tablet"
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <Tablet className="size-3.5" />
-            <span>{t("targetTablet")}</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTarget("desktop")}
-            className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors flex items-center gap-1.5 ${
-              activeTarget === "desktop"
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <Monitor className="size-3.5" />
-            <span>{t("targetDesktop")}</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTarget("print")}
-            className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors flex items-center gap-1.5 ${
-              activeTarget === "print"
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <FileText className="size-3.5" />
-            <span>{t("targetPrint")}</span>
-          </button>
-        </div>
+        <SheetViewSwitcher
+          value={viewMode}
+          onChange={setViewMode}
+          adaptiveLabel={t("targetAdaptive")}
+          printLabel={t("targetPrint")}
+        />
 
         {/* Actions & Status */}
         <div className="flex items-center gap-3">
@@ -674,24 +682,38 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
           onClick={() => setSelectedNodeId(null)}
         >
           <div
-            style={{
-              transform: `scale(${zoom})`,
-              transformOrigin: "top center",
-              transition: "transform 0.1s ease-out",
-            }}
-            className={`${activeTarget === "print" ? "" : "w-full"} ${canvasSizeClass} transition-all duration-200`}
+            className={activeTarget === "print" ? "flex-none" : "w-full"}
+            style={
+              activeTarget === "print"
+                ? {
+                    width: PRINT_CANVAS_WIDTH * zoom,
+                    height: PRINT_CANVAS_HEIGHT * zoom,
+                  }
+                : undefined
+            }
           >
-            <SheetRenderProvider
-              value={{
-                mode: "builder",
-                target: activeTarget,
-                selectedNodeId,
-                onSelectNode: selectNode,
-                resolvedComponents,
+            <div
+              data-sheet-page
+              data-sheet-target={activeTarget}
+              style={{
+                transform: `scale(${zoom})`,
+                transformOrigin: "top center",
+                transition: "transform 0.1s ease-out",
               }}
+              className={`${activeTarget === "print" ? "" : "w-full"} ${canvasSizeClass} transition-all duration-200`}
             >
-              <SheetNodeRenderer node={currentRoot} />
-            </SheetRenderProvider>
+              <SheetRenderProvider
+                value={{
+                  mode: "builder",
+                  target: activeTarget,
+                  selectedNodeId,
+                  onSelectNode: selectNode,
+                  resolvedComponents,
+                }}
+              >
+                <SheetNodeRenderer node={currentRoot} />
+              </SheetRenderProvider>
+            </div>
           </div>
         </main>
 
