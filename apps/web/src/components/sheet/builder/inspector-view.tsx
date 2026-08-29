@@ -10,7 +10,6 @@ import type {
   LayoutJustify,
   LayoutNode,
   SheetFieldDefinition,
-  SystemMaterial,
   SizingMode,
   StrokeToken,
   TargetLayoutKind,
@@ -33,7 +32,6 @@ interface InspectorViewProps {
   onSaveAsComponent: (node: LayoutNode) => void;
   draftFields?: SheetFieldDefinition[];
   onUpdateDraftFields?: (fields: SheetFieldDefinition[]) => void;
-  systemId: string;
 }
 
 function CommitNumberInput({
@@ -89,7 +87,6 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
   onSaveAsComponent,
   draftFields = [],
   onUpdateDraftFields,
-  systemId,
 }) => {
   const t = useTranslations("Inspector");
   const [linkPadding, setLinkPadding] = useState(true);
@@ -100,8 +97,6 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
   const [newFieldLabel, setNewFieldLabel] = useState("");
   const [newFieldKind, setNewFieldKind] = useState<SheetFieldDefinition["kind"]>("text");
   const [newFieldDefault, setNewFieldDefault] = useState("");
-  const [uploadingImage, setUploadingImage] = useState(false);
-  const [imageUploadError, setImageUploadError] = useState<string | null>(null);
 
   if (!selectedNode) {
     return (
@@ -153,7 +148,7 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
     onUpdateDraftFields(updated);
 
     // Bind current node to this key
-    if ("fieldBinding" in selectedNode) {
+    if ("fieldBinding" in selectedNode && selectedNode.kind !== "image") {
       onUpdateNode({
         ...selectedNode,
         fieldBinding: key,
@@ -165,29 +160,6 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
     setNewFieldLabel("");
     setNewFieldDefault("");
     setShowNewFieldModal(false);
-  };
-
-  const handleImageUpload = async (file: File) => {
-    if (selectedNode.kind !== "image") return;
-    setUploadingImage(true);
-    setImageUploadError(null);
-    const formData = new FormData();
-    formData.set("file", file);
-    formData.set("title", file.name);
-    try {
-      const response = await fetch(`/api/systems/${systemId}/materials`, {
-        method: "POST",
-        body: formData,
-      });
-      if (!response.ok) throw new Error(t("imageUploadFailed"));
-      const material = (await response.json()) as SystemMaterial;
-      if (material.fileType !== "image") throw new Error(t("imageUploadFailed"));
-      onUpdateNode({ ...selectedNode, url: material.url, alt: file.name });
-    } catch (error) {
-      setImageUploadError(error instanceof Error ? error.message : t("imageUploadFailed"));
-    } finally {
-      setUploadingImage(false);
-    }
   };
 
   return (
@@ -926,19 +898,19 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
           <h4 className="font-bold text-[11px] text-muted-foreground uppercase tracking-wider">
             {t("imageSection")}
           </h4>
-          <input
-            type="file"
-            accept="image/png,image/jpeg,image/webp"
-            disabled={uploadingImage}
-            onChange={(event) => {
-              const file = event.target.files?.[0];
-              if (file) void handleImageUpload(file);
-              event.currentTarget.value = "";
-            }}
-            className="w-full text-[11px] file:mr-2 file:rounded file:border-0 file:bg-primary file:px-2 file:py-1 file:text-primary-foreground"
-          />
-          {uploadingImage && <span className="text-[11px] text-muted-foreground">{t("uploadingImage")}</span>}
-          {imageUploadError && <span className="text-[11px] text-destructive">{imageUploadError}</span>}
+          <p className="rounded-md bg-muted/50 px-2.5 py-2 text-[11px] leading-relaxed text-muted-foreground">
+            {t("characterImageHint")}
+          </p>
+          <div>
+            <label className="text-[10px] font-medium text-muted-foreground">{t("imageFieldBinding")}</label>
+            <input
+              type="text"
+              value={selectedNode.fieldBinding}
+              onChange={(event) => onUpdateNode({ ...selectedNode, fieldBinding: event.target.value })}
+              placeholder="portrait"
+              className="mt-0.5 w-full rounded border border-border bg-background px-2 py-1 font-mono text-[11px]"
+            />
+          </div>
           <div>
             <label className="text-[10px] font-medium text-muted-foreground">{t("imageFit")}</label>
             <select

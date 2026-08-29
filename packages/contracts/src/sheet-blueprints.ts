@@ -130,6 +130,7 @@ export type SelectNode = z.infer<typeof selectNodeSchema>;
 export const imageNodeSchema = z.object({
   ...baseNodeProps,
   kind: z.literal("image"),
+  fieldBinding: z.string().trim().min(1).max(64).default("portrait"),
   url: z.string().trim().max(1000).default(""),
   alt: z.string().trim().max(200).default(""),
   fit: imageFitSchema.default("cover"),

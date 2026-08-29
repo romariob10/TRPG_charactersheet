@@ -351,6 +351,29 @@ export const CharacterSheetPlayer: React.FC<CharacterSheetPlayerProps> = ({
     }
   };
 
+  const handleImageUpload = async (fieldBinding: string, file: File) => {
+    setActiveFieldSaves((count) => count + 1);
+    setSaveError(null);
+    const formData = new FormData();
+    formData.set("file", file);
+    try {
+      const response = await fetch(
+        `/api/characters/${character.id}/images?fieldKey=${encodeURIComponent(fieldBinding)}`,
+        { method: "POST", body: formData },
+      );
+      if (!response.ok) throw new Error(t("imageUploadFailed"));
+      const result = (await response.json()) as { file: { url: string } };
+      setFieldValues((previous) => ({
+        ...previous,
+        [fieldBinding]: result.file.url,
+      }));
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : t("imageUploadFailed"));
+    } finally {
+      setActiveFieldSaves((count) => Math.max(0, count - 1));
+    }
+  };
+
   const rootNode =
     versionDetails?.layouts[target] ?? versionDetails?.layouts.desktop;
 
@@ -442,6 +465,7 @@ export const CharacterSheetPlayer: React.FC<CharacterSheetPlayerProps> = ({
                       : "readonly",
                 fieldValues,
                 onFieldValueChange: handleFieldValueChange,
+                onImageUpload: canEdit ? handleImageUpload : undefined,
                 repeaterRows,
                 onAddRepeaterRow: handleAddRepeaterRow,
                 onUpdateRepeaterRowField: handleUpdateRepeaterRowField,

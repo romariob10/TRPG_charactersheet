@@ -33,7 +33,6 @@ import { SheetViewSwitcher, type SheetViewMode } from "../sheet-view-switcher";
 
 const PRINT_CANVAS_WIDTH = 595;
 const PRINT_CANVAS_HEIGHT = 874;
-const MOBILE_LAYOUT_QUERY = "(max-width: 767px)";
 
 interface SheetBuilderMainProps {
   initialData: SheetEditorDataResponse;
@@ -68,9 +67,7 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
   const [draftFields, setDraftFields] = useState<SheetFieldDefinition[]>(
     initialData.draft.fields ?? [],
   );
-  const [viewMode, setViewMode] = useState<SheetViewMode>("adaptive");
-  const [adaptiveTarget, setAdaptiveTarget] =
-    useState<Extract<TargetLayoutKind, "mobile" | "desktop">>("desktop");
+  const [viewMode, setViewMode] = useState<SheetViewMode>("desktop");
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [revision, setRevision] = useState(initialData.draft.revision);
   const [saveStatus, setSaveStatus] = useState<
@@ -82,17 +79,12 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
   const isResizingRef = useRef(false);
   const resizeStartRef = useRef({ pointerX: 0, width: 280 });
 
-  useEffect(() => {
-    const media = window.matchMedia(MOBILE_LAYOUT_QUERY);
-    const updateTarget = () =>
-      setAdaptiveTarget(media.matches ? "mobile" : "desktop");
-    updateTarget();
-    media.addEventListener("change", updateTarget);
-    return () => media.removeEventListener("change", updateTarget);
-  }, []);
-
   const activeTarget: TargetLayoutKind =
-    viewMode === "print" ? "print" : adaptiveTarget;
+    viewMode === "mobile"
+      ? "mobile"
+      : viewMode === "print"
+        ? "print"
+        : "desktop";
 
   // Expansion state per target layout (non-persistent, does not trigger autosave)
   const [expandedNodesByTarget, setExpandedNodesByTarget] = useState<
@@ -513,7 +505,10 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
           value={viewMode}
           onChange={setViewMode}
           adaptiveLabel={t("targetAdaptive")}
+          mobileLabel={t("targetMobile")}
+          desktopLabel={t("targetDesktop")}
           printLabel={t("targetPrint")}
+          kind="builder"
         />
 
         {/* Actions & Status */}
@@ -725,7 +720,6 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
             </h3>
           </header>
           <InspectorView
-            systemId={systemId}
             selectedNode={selectedNode}
             onUpdateNode={(updated) => {
               setTargetLayout(updateNodeInTree(currentRoot, updated));

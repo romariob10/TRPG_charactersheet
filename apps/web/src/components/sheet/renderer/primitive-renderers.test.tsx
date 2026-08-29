@@ -49,7 +49,7 @@ describe("sheet primitive inputs", () => {
     expect(onFieldValueChange).toHaveBeenCalledWith("stress", 14);
   });
 
-  it("locks manual resizing when a textarea fills its parent height", () => {
+  it("keeps manual resizing available when a textarea fills its parent height", () => {
     render(
       <SheetRenderProvider
         value={{ target: "desktop", mode: "player", fieldValues: { notes: "" } }}
@@ -70,6 +70,7 @@ describe("sheet primitive inputs", () => {
       </SheetRenderProvider>,
     );
 
-    expect(screen.getByRole("textbox")).toHaveClass("h-full", "resize-none");
+    expect(screen.getByRole("textbox")).toHaveClass("resize-y");
+    expect(screen.getByRole("textbox")).not.toHaveClass("resize-none");
   });
 });

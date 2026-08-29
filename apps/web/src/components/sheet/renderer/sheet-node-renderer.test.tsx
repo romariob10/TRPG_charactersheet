@@ -98,4 +98,22 @@ describe("SheetNodeRenderer sizing", () => {
     expect(wrapper).toHaveStyle({ height: "120px" });
     expect(wrapper?.firstElementChild).toHaveClass("h-full");
   });
+
+  it("uses the template height as a minimum in the player so resized text can grow its parent", () => {
+    const fixedFrame = frame("player-frame", "vertical", []);
+    fixedFrame.box = {
+      ...defaultBoxProps,
+      height: { mode: "fixed", value: 120 },
+    };
+
+    const { container } = render(
+      <SheetRenderProvider value={{ mode: "player", target: "desktop" }}>
+        <SheetNodeRenderer node={fixedFrame} />
+      </SheetRenderProvider>,
+    );
+
+    const wrapper = container.firstElementChild;
+    expect(wrapper).toHaveStyle({ minHeight: "120px" });
+    expect(wrapper).not.toHaveStyle({ height: "120px" });
+  });
 });
