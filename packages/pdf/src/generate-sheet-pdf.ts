@@ -284,10 +284,17 @@ function estimateNodeHeight(
       break;
     case "textarea": {
       const savedHeight = ctx.fieldValues[`__layout_height__:${node.fieldBinding}`];
+      const savedFontSize = ctx.fieldValues[`__layout_font_size__:${node.fieldBinding}`];
+      const fontSize = typeof savedFontSize === "number" ? savedFontSize : 14;
+      const value = ctx.fieldValues[node.fieldBinding];
+      const text = typeof value === "string" ? value : "";
+      const contentHeight = wrapText(ctx.fonts.bodyFont, text || " ", fontSize, availableWidth - 8).length * fontSize * 1.35 + 10;
       intrinsicHeight =
-        (typeof savedHeight === "number" && savedHeight >= 48
-          ? Math.min(savedHeight, 1200)
-          : (node.rows ?? 3) * 16 + 8) + (node.label ? 18 : 0);
+        Math.max(
+          typeof savedHeight === "number" && savedHeight >= 48 ? savedHeight : 0,
+          (node.rows ?? 3) * 16 + 8,
+          contentHeight,
+        ) + (node.label ? 18 : 0);
       break;
     }
     case "checkbox":
@@ -303,7 +310,13 @@ function estimateNodeHeight(
       intrinsicHeight = node.size ?? 8;
       break;
     case "image":
-      intrinsicHeight = 160;
+      {
+        const savedAspectRatio = ctx.fieldValues[`__image_aspect_ratio__:${node.fieldBinding}`];
+        intrinsicHeight =
+          typeof savedAspectRatio === "number" && savedAspectRatio > 0
+            ? availableWidth / savedAspectRatio
+            : 160;
+      }
       break;
     case "table":
       intrinsicHeight = node.rows * 22 + 6;
@@ -1211,6 +1224,8 @@ function renderTextareaNode(
   const val = ctx.fieldValues[node.fieldBinding] ?? "";
   const displayVal = typeof val === "string" ? val : String(val ?? "");
   const rows = node.rows ?? 3;
+  const savedFontSize = ctx.fieldValues[`__layout_font_size__:${node.fieldBinding}`];
+  const fontSize = typeof savedFontSize === "number" ? savedFontSize : 14;
   const totalHeight = estimateNodeHeight(ctx, node, availableWidth);
   const labelHeight = node.label ? 12 : 0;
   const boxHeight = Math.max(rows * 16 + 8, totalHeight - labelHeight - 6);
@@ -1240,23 +1255,23 @@ function renderTextareaNode(
   });
 
   if (displayVal) {
-    const lines = wrapText(font, displayVal, 9, availableWidth - 8);
-    let lineY = boxY + boxHeight - 12;
-    for (let i = 0; i < Math.min(lines.length, rows + 2); i++) {
+    const lines = wrapText(font, displayVal, fontSize, availableWidth - 8);
+    let lineY = boxY + boxHeight - fontSize - 3;
+    for (let i = 0; i < lines.length; i++) {
       ctx.page.drawText(lines[i]!, {
         x: x + 4,
         y: lineY,
-        size: 9,
+        size: fontSize,
         font,
         color: rgb(0.1, 0.1, 0.1),
       });
-      lineY -= 14;
+      lineY -= fontSize * 1.35;
     }
   } else if (node.placeholder) {
     ctx.page.drawText(node.placeholder, {
       x: x + 4,
       y: boxY + boxHeight - 12,
-      size: 9,
+      size: fontSize,
       font,
       color: rgb(0.65, 0.65, 0.65),
     });

@@ -1130,6 +1130,20 @@
     "portraitPlaceholder": "Upload character portrait",
     "portraitAlt": "Character portrait",
     "replacePortrait": "Replace portrait",
+    "cropPortrait": "Crop again",
     "imageUploadFailed": "Could not upload the portrait"
+  },
+  "PortraitCrop": {
+    "title": "Crop portrait",
+    "description": "Adjust the ratio, zoom, and position. The portrait height on the sheet will follow this crop.",
+    "ratio": "Aspect ratio",
+    "zoom": "Zoom",
+    "horizontal": "Horizontal position",
+    "vertical": "Vertical position",
+    "loading": "Loading image",
+    "loadFailed": "Could not open the image.",
+    "applyFailed": "Could not save the cropped portrait. Try again.",
+    "cancel": "Cancel",
+    "apply": "Apply crop"
   }
 }

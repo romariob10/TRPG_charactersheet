@@ -113,6 +113,7 @@ export const CharacterSheetPlayer: React.FC<CharacterSheetPlayerProps> = ({
       pendingFieldValues.current.delete(key);
       fieldsInFlight.current.add(key);
       setActiveFieldSaves((count) => count + 1);
+      let retryDelay = 0;
 
       try {
         const res = await fetch(
@@ -120,6 +121,7 @@ export const CharacterSheetPlayer: React.FC<CharacterSheetPlayerProps> = ({
           {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
+            keepalive: true,
             body: JSON.stringify({
               value,
               expectedVersion: fieldVersions.current[key] ?? 0,
@@ -133,6 +135,10 @@ export const CharacterSheetPlayer: React.FC<CharacterSheetPlayerProps> = ({
         fieldVersions.current[key] = saved.version;
         setSaveError(null);
       } catch (err: unknown) {
+        if (!pendingFieldValues.current.has(key)) {
+          pendingFieldValues.current.set(key, value);
+        }
+        retryDelay = 1_000;
         setSaveError(err instanceof Error ? err.message : t("saveFailed"));
       } finally {
         fieldsInFlight.current.delete(key);
@@ -141,7 +147,7 @@ export const CharacterSheetPlayer: React.FC<CharacterSheetPlayerProps> = ({
           const timer = setTimeout(() => {
             fieldSaveTimers.current.delete(key);
             void flushFieldValue(key);
-          }, 0);
+          }, retryDelay);
           fieldSaveTimers.current.set(key, timer);
         }
       }
@@ -162,13 +168,39 @@ export const CharacterSheetPlayer: React.FC<CharacterSheetPlayerProps> = ({
     fieldSaveTimers.current.set(key, timer);
   };
 
+  const handleFieldCommit = (key: string) => {
+    const timer = fieldSaveTimers.current.get(key);
+    if (timer) clearTimeout(timer);
+    fieldSaveTimers.current.delete(key);
+    void flushFieldValue(key);
+  };
+
   useEffect(() => {
     const timers = fieldSaveTimers.current;
+    const flushPendingValues = () => {
+      for (const [key, value] of pendingFieldValues.current) {
+        void fetch(
+          `/api/characters/${character.id}/sheet-fields/${encodeURIComponent(key)}`,
+          {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            keepalive: true,
+            body: JSON.stringify({
+              value,
+              expectedVersion: fieldVersions.current[key] ?? 0,
+              clientMutationId: crypto.randomUUID(),
+            }),
+          },
+        );
+      }
+    };
+    window.addEventListener("pagehide", flushPendingValues);
     return () => {
+      window.removeEventListener("pagehide", flushPendingValues);
       for (const timer of timers.values()) clearTimeout(timer);
       timers.clear();
     };
-  }, []);
+  }, [character.id]);
 
   // Repeater row handlers
   const handleAddRepeaterRow = async (repeaterKey: string) => {
@@ -351,7 +383,7 @@ export const CharacterSheetPlayer: React.FC<CharacterSheetPlayerProps> = ({
     }
   };
 
-  const handleImageUpload = async (fieldBinding: string, file: File) => {
+  const handleImageUpload = async (fieldBinding: string, file: File, aspectRatio: number) => {
     setActiveFieldSaves((count) => count + 1);
     setSaveError(null);
     const formData = new FormData();
@@ -362,13 +394,19 @@ export const CharacterSheetPlayer: React.FC<CharacterSheetPlayerProps> = ({
         { method: "POST", body: formData },
       );
       if (!response.ok) throw new Error(t("imageUploadFailed"));
-      const result = (await response.json()) as { file: { url: string } };
+      const result = (await response.json()) as { file: { url: string; fieldVersion: number } };
+      const aspectRatioKey = `__image_aspect_ratio__:${fieldBinding}`;
       setFieldValues((previous) => ({
         ...previous,
         [fieldBinding]: result.file.url,
+        [aspectRatioKey]: aspectRatio,
       }));
+      fieldVersions.current[fieldBinding] = result.file.fieldVersion;
+      handleFieldValueChange(aspectRatioKey, aspectRatio);
+      handleFieldCommit(aspectRatioKey);
     } catch (error) {
       setSaveError(error instanceof Error ? error.message : t("imageUploadFailed"));
+      throw error;
     } finally {
       setActiveFieldSaves((count) => Math.max(0, count - 1));
     }
@@ -465,6 +503,7 @@ export const CharacterSheetPlayer: React.FC<CharacterSheetPlayerProps> = ({
                       : "readonly",
                 fieldValues,
                 onFieldValueChange: handleFieldValueChange,
+                onFieldCommit: handleFieldCommit,
                 onImageUpload: canEdit ? handleImageUpload : undefined,
                 repeaterRows,
                 onAddRepeaterRow: handleAddRepeaterRow,

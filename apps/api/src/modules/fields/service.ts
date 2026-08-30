@@ -226,9 +226,9 @@ export class FieldService {
           ? JSON.parse(versionRow.fields)
           : (versionRow.fields ?? []);
 
-      const layoutHeightFieldKey = parseLayoutHeightFieldKey(fieldKey);
+      const layoutMetadata = parseLayoutMetadataFieldKey(fieldKey);
       const fieldDef = publishedFields.find(
-        (field) => field.key === (layoutHeightFieldKey ?? fieldKey),
+        (field) => field.key === (layoutMetadata?.baseFieldKey ?? fieldKey),
       );
       if (!fieldDef) {
         throw new AppError(
@@ -242,19 +242,32 @@ export class FieldService {
         throw new AppError("FIELD_READONLY", 403, `Field '${fieldKey}' is read-only.`);
       }
 
-      if (layoutHeightFieldKey) {
+      if (layoutMetadata) {
+        const numericValue = input.value;
+        if (typeof numericValue !== "number" || !Number.isFinite(numericValue)) {
+          throw new AppError("VALIDATION_FAILED", 400, "Layout metadata must be numeric.");
+        }
         if (
-          fieldDef.kind !== "multiline" ||
-          typeof input.value !== "number" ||
-          !Number.isFinite(input.value) ||
-          input.value < 48 ||
-          input.value > 1200
+          layoutMetadata.kind === "height" &&
+          (fieldDef.kind !== "multiline" || numericValue < 48 || numericValue > 10_000)
         ) {
           throw new AppError(
             "VALIDATION_FAILED",
             400,
-            "Textarea height must be between 48 and 1200 pixels.",
+            "Textarea height must be between 48 and 10000 pixels.",
           );
+        }
+        if (
+          layoutMetadata.kind === "fontSize" &&
+          (fieldDef.kind !== "multiline" || numericValue < 8 || numericValue > 32)
+        ) {
+          throw new AppError("VALIDATION_FAILED", 400, "Textarea font size must be between 8 and 32 pixels.");
+        }
+        if (
+          layoutMetadata.kind === "imageAspectRatio" &&
+          (fieldDef.kind !== "avatar" || numericValue < 0.4 || numericValue > 2.5)
+        ) {
+          throw new AppError("VALIDATION_FAILED", 400, "Image aspect ratio must be between 0.4 and 2.5.");
         }
       }
 
@@ -391,11 +404,21 @@ function serializeJson(value: FieldValue): string {
   return JSON.stringify(value);
 }
 
-function parseLayoutHeightFieldKey(fieldKey: string): string | null {
-  const prefix = "__layout_height__:";
-  if (!fieldKey.startsWith(prefix)) return null;
-  const baseFieldKey = fieldKey.slice(prefix.length);
-  return baseFieldKey || null;
+function parseLayoutMetadataFieldKey(fieldKey: string): {
+  kind: "height" | "fontSize" | "imageAspectRatio";
+  baseFieldKey: string;
+} | null {
+  const prefixes = [
+    ["__layout_height__:", "height"],
+    ["__layout_font_size__:", "fontSize"],
+    ["__image_aspect_ratio__:", "imageAspectRatio"],
+  ] as const;
+  for (const [prefix, kind] of prefixes) {
+    if (!fieldKey.startsWith(prefix)) continue;
+    const baseFieldKey = fieldKey.slice(prefix.length);
+    return baseFieldKey ? { kind, baseFieldKey } : null;
+  }
+  return null;
 }
 
 function normalizeValue(value: unknown): FieldValue {

@@ -266,6 +266,14 @@ describe("field transactions", () => {
             options: [],
             readOnly: false,
           },
+          {
+            id: crypto.randomUUID(),
+            key: "portrait",
+            label: "Portrait",
+            kind: "avatar",
+            options: [],
+            readOnly: false,
+          },
         ]),
         published_by: owner.userId,
       })
@@ -339,6 +347,32 @@ describe("field transactions", () => {
     expect(resized.statusCode).toBe(200);
     expect(resized.json()).toMatchObject({ value: 180, version: 1 });
 
+    const resizedFont = await app.inject({
+      method: "PUT",
+      url: `/api/characters/${modularCharacter.id}/sheet-fields/__layout_font_size__%3Anotes`,
+      cookies: { mycharacter_session: owner.cookie },
+      payload: {
+        value: 18,
+        expectedVersion: 0,
+        clientMutationId: crypto.randomUUID(),
+      },
+    });
+    expect(resizedFont.statusCode).toBe(200);
+    expect(resizedFont.json()).toMatchObject({ value: 18, version: 1 });
+
+    const portraitRatio = await app.inject({
+      method: "PUT",
+      url: `/api/characters/${modularCharacter.id}/sheet-fields/__image_aspect_ratio__%3Aportrait`,
+      cookies: { mycharacter_session: owner.cookie },
+      payload: {
+        value: 0.75,
+        expectedVersion: 0,
+        clientMutationId: crypto.randomUUID(),
+      },
+    });
+    expect(portraitRatio.statusCode).toBe(200);
+    expect(portraitRatio.json()).toMatchObject({ value: 0.75, version: 1 });
+
     const invalidResize = await app.inject({
       method: "PUT",
       url: `/api/characters/${modularCharacter.id}/sheet-fields/__layout_height__%3Acharacter_name`,
@@ -350,6 +384,18 @@ describe("field transactions", () => {
       },
     });
     expect(invalidResize.statusCode).toBe(400);
+
+    const invalidFont = await app.inject({
+      method: "PUT",
+      url: `/api/characters/${modularCharacter.id}/sheet-fields/__layout_font_size__%3Anotes`,
+      cookies: { mycharacter_session: owner.cookie },
+      payload: {
+        value: 60,
+        expectedVersion: 0,
+        clientMutationId: crypto.randomUUID(),
+      },
+    });
+    expect(invalidFont.statusCode).toBe(400);
   });
 
   async function createTemplate(prefix: string): Promise<string> {
