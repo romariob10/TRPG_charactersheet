@@ -464,7 +464,7 @@ export function CharacterEditor({
             )}
             {t(saveState)}
           </div>
-          <div className="ml-auto flex min-w-0 max-w-full flex-wrap items-center justify-end gap-1">
+          <div className="ml-auto flex w-full min-w-0 max-w-full flex-wrap items-center justify-end gap-1 sm:w-auto">
             <div
               className="mr-1 hidden items-center gap-1.5 rounded-[7px] px-2 py-1.5 text-xs text-[var(--muted)] sm:flex"
               title={t("onlineEditors", { count: onlineUsers })}
