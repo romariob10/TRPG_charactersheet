@@ -78,6 +78,7 @@
     "publish": "Publish",
     "publishing": "Publishing…",
     "publishFailed": "Could not publish the post.",
+    "moderationRejected": "Automatic moderation rejected the post. Check it for abuse, encouragement of self-harm, and link spam.",
     "empty": "Add at least one text block to the post.",
     "imageCaption": "Image caption",
     "chooseImage": "Choose an image",

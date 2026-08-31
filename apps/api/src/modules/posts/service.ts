@@ -16,6 +16,7 @@ import { AuditService } from "../audit/service.js";
 import { UserModerationService } from "../moderation/user-moderation-service.js";
 import { NotificationService } from "../notifications/service.js";
 import { WorkspaceService } from "../workspace/service.js";
+import { moderatePostText } from "./auto-moderation.js";
 
 const NO_ACTOR_UUID = "00000000-0000-0000-0000-000000000000";
 const REACTIONS = [
@@ -40,6 +41,18 @@ interface PostRow {
   authorDisplayName: string | null;
   commentCount: number;
   viewsCount: number;
+  reactionCount: number;
+  followedByMeCount: number;
+}
+
+export interface PostRecommendationSignals {
+  id: string;
+  authorId: string;
+  publishedAt: Date;
+  commentCount: number;
+  viewsCount: number;
+  reactionCount: number;
+  followedByMeCount: number;
 }
 
 export class PostService {
@@ -57,6 +70,7 @@ export class PostService {
     if (!plainText) {
       throw new AppError("POST_EMPTY", 400, "Post content cannot be empty.");
     }
+    assertPostPassesModeration(plainText);
     const title = postTitle(normalized);
     const postId = randomUUID();
     const slug = postSlug(title, postId);
@@ -116,6 +130,7 @@ export class PostService {
     if (!plainText) {
       throw new AppError("POST_EMPTY", 400, "Post content cannot be empty.");
     }
+    assertPostPassesModeration(plainText);
     const title = postTitle(normalized);
     const imageIds = uniqueIds(
       normalized.flatMap((block) =>
@@ -204,11 +219,15 @@ export class PostService {
   }
 
   async list(actorId: string, limit = 30): Promise<SocialPost[]> {
-    const rows = await this.basePostQuery()
+    const requestedLimit = Math.min(Math.max(limit, 1), 50);
+    const rows = await this.basePostQuery(actorId)
       .orderBy("post.published_at", "desc")
-      .limit(Math.min(Math.max(limit, 1), 50))
+      .limit(Math.min(Math.max(requestedLimit * 4, 60), 200))
       .execute();
-    return this.hydrate(rows, actorId);
+    return this.hydrate(
+      rankRecommendedPosts(rows, actorId).slice(0, requestedLimit),
+      actorId,
+    );
   }
 
   async getPublic(
@@ -408,7 +427,7 @@ export class PostService {
       .execute();
   }
 
-  private basePostQuery() {
+  private basePostQuery(actorId: string | null = null) {
     return this.db
       .selectFrom("posts as post")
       .innerJoin("profiles as author", "author.id", "post.author_id")
@@ -432,6 +451,19 @@ export class PostService {
             .whereRef("post_comments.post_id", "=", "post.id")
             .where("post_comments.deleted_at", "is", null)
             .as("commentCount"),
+        (eb) =>
+          eb
+            .selectFrom("post_reactions")
+            .select(sql<number>`count(*)::int`.as("count"))
+            .whereRef("post_reactions.post_id", "=", "post.id")
+            .as("reactionCount"),
+        (eb) =>
+          eb
+            .selectFrom("profile_follows")
+            .select(sql<number>`count(*)::int`.as("count"))
+            .where("profile_follows.follower_id", "=", actorId ?? NO_ACTOR_UUID)
+            .whereRef("profile_follows.following_id", "=", "post.author_id")
+            .as("followedByMeCount"),
       ])
       .where("author_user.status", "=", "active")
       .where("post.deleted_at", "is", null)
@@ -1030,6 +1062,57 @@ function embedListForBlocks(
 
 function uniqueIds(ids: string[]): string[] {
   return [...new Set(ids)];
+}
+
+export function rankRecommendedPosts<T extends PostRecommendationSignals>(
+  posts: T[],
+  actorId: string,
+  now = new Date(),
+): T[] {
+  return [...posts].sort((left, right) => {
+    const scoreDifference =
+      recommendationScore(right, actorId, now) -
+      recommendationScore(left, actorId, now);
+    if (scoreDifference !== 0) return scoreDifference;
+
+    const publishedDifference =
+      right.publishedAt.getTime() - left.publishedAt.getTime();
+    if (publishedDifference !== 0) return publishedDifference;
+    return left.id.localeCompare(right.id);
+  });
+}
+
+function recommendationScore(
+  post: PostRecommendationSignals,
+  actorId: string,
+  now: Date,
+): number {
+  const ageHours = Math.max(
+    0,
+    (now.getTime() - post.publishedAt.getTime()) / 3_600_000,
+  );
+  const freshness = 8 / (1 + ageHours / 24);
+  const engagement =
+    Math.log2(
+      1 +
+        post.reactionCount * 3 +
+        post.commentCount * 4 +
+        Math.min(post.viewsCount, 500) * 0.1,
+    ) * 2;
+  const followedAuthorBoost = post.followedByMeCount > 0 ? 5 : 0;
+  const ownPostPenalty = post.authorId === actorId ? 2 : 0;
+  return freshness + engagement + followedAuthorBoost - ownPostPenalty;
+}
+
+function assertPostPassesModeration(plainText: string): void {
+  const reason = moderatePostText(plainText);
+  if (!reason) return;
+  throw new AppError(
+    "POST_REJECTED_BY_MODERATION",
+    422,
+    "The post violates the community content rules.",
+    { reason },
+  );
 }
 
 function postNotFound(): AppError {
