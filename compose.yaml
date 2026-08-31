@@ -9,11 +9,6 @@ services:
       - "127.0.0.1:${OMNIROUTE_PORT:-20128}:20128"
     volumes:
       - omniroute_data:/app/data
-    healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:20128/v1/models').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"]
-      interval: 5s
-      timeout: 3s
-      retries: 30
 
   proxy:
     image: caddy:2.8-alpine
