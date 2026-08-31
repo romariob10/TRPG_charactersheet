@@ -87,11 +87,11 @@ jobs:
       - name: Pull and start production
         working-directory: /home/user/mycharacter
         run: |
-          docker compose -f compose.prod.yaml pull web api worker
-          docker compose -f compose.prod.yaml up -d --remove-orphans --wait --wait-timeout 180
-          docker compose -f compose.prod.yaml ps
+          docker compose --env-file .env.prod -f compose.prod.yaml pull web api worker
+          docker compose --env-file .env.prod -f compose.prod.yaml up -d --remove-orphans --wait --wait-timeout 180
+          docker compose --env-file .env.prod -f compose.prod.yaml ps
 
       # Rollback from /home/user/mycharacter by replacing <prev> with a retained
       # image tag, then verify health with `docker compose -f compose.prod.yaml ps`:
-      # MYCHARACTER_IMAGE_TAG=sha-<prev> docker compose -f compose.prod.yaml pull web api worker
-      # MYCHARACTER_IMAGE_TAG=sha-<prev> docker compose -f compose.prod.yaml up -d --no-deps web api worker
+      # MYCHARACTER_IMAGE_TAG=sha-<prev> docker compose --env-file .env.prod -f compose.prod.yaml pull web api worker
+      # MYCHARACTER_IMAGE_TAG=sha-<prev> docker compose --env-file .env.prod -f compose.prod.yaml up -d --no-deps web api worker
