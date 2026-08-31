@@ -445,7 +445,7 @@ export function CharacterEditor({
       <div className="flex h-[calc(100dvh-3.5rem)] w-full min-w-0 max-w-full flex-col bg-[var(--slate)]/45 lg:h-dvh">
         <header
           data-testid="character-editor-header"
-          className="z-30 flex min-h-16 flex-wrap items-center gap-2 border-b border-[var(--border)] bg-[var(--surface)] px-2 py-2 sm:gap-3 sm:px-4"
+          className="z-30 flex min-h-16 min-w-0 max-w-full flex-wrap items-center gap-2 border-b border-[var(--border)] bg-[var(--surface)] px-2 py-2 sm:gap-3 sm:px-4"
         >
           <Logo compact />
           <Link
