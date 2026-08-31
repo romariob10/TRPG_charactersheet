@@ -5,6 +5,8 @@ set -eu
 : "${STORAGE_ROOT:?STORAGE_ROOT is required}"
 : "${BACKUP_PATH:?BACKUP_PATH is required}"
 
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+
 if [ ! -f "$BACKUP_PATH/SHA256SUMS" ]; then
   echo "Backup is incomplete: SHA256SUMS is missing." >&2
   exit 66
@@ -34,6 +36,6 @@ tar -C "$STORAGE_ROOT" -xf "$BACKUP_PATH/storage.tar"
   cd "$STORAGE_ROOT"
   sha256sum --check "$BACKUP_PATH/storage.sha256"
 )
-node /app/scripts/verify-storage.mjs
+node "$script_dir/verify-storage.mjs"
 
 echo "Restore completed and verified."
