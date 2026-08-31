@@ -25,6 +25,12 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Build internal packages
+        run: |
+          pnpm --filter @mycharacter/contracts build
+          pnpm --filter @mycharacter/database build
+          pnpm --filter @mycharacter/storage build
+          pnpm --filter @mycharacter/pdf build
       - run: pnpm lint && pnpm typecheck
 
   unit-tests:
