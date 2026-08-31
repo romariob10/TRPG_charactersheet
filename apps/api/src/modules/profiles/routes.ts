@@ -22,6 +22,11 @@ export async function registerProfileRoutes(app: FastifyInstance): Promise<void>
     return { items: await service.listFriends(actor.userId) };
   });
 
+  app.get("/api/profiles/feed-authors", async (request) => {
+    const actor = requireActor(request);
+    return service.listFeedAuthors(actor.userId);
+  });
+
   app.patch("/api/profiles/me", async (request) => {
     const actor = requireActor(request);
     const input = updateMyProfileRequestSchema.safeParse(request.body);

@@ -59,7 +59,10 @@
     "createText": "Create a sheet or publish a system and it will appear in the community feed.",
     "newCharacter": "New character",
     "newSystem": "New system",
-    "people": "Creators in the feed"
+    "people": "Creators in the feed",
+    "popularAuthors": "Popular creators",
+    "subscriptions": "All subscriptions",
+    "subscriptionsEmpty": "You are not following anyone yet."
   },
   "Posts": {
     "startPost": "What is new in your game?",
