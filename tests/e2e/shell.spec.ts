@@ -159,11 +159,13 @@ test("authenticated product surfaces render through the public proxy", async ({
   await expect(page.locator("main")).toBeVisible();
   await expect(adaptiveViewButton).toBeVisible();
   await expect(pdfViewButton).toBeVisible();
-  expect(
-    await editorHeader.evaluate(
-      (element) => element.scrollWidth <= element.clientWidth,
-    ),
-  ).toBe(true);
+  await expect
+    .poll(() =>
+      editorHeader.evaluate(
+        (element) => element.scrollWidth <= element.clientWidth,
+      ),
+    )
+    .toBe(true);
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= window.innerWidth,
