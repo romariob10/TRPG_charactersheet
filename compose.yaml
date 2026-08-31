@@ -85,6 +85,7 @@ services:
     depends_on:
       omniroute:
         condition: service_healthy
+        required: false
       postgres:
         condition: service_healthy
       migrate:
