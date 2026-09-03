@@ -21,7 +21,11 @@ import { useSheetRender } from "./sheet-render-context";
 
 function applyComponentOverrides(
   root: LayoutNode,
-  exposedProperties: Array<{ propertyId: string; targetNodeId: string; targetPropPath: string }>,
+  exposedProperties: Array<{
+    propertyId: string;
+    targetNodeId: string;
+    targetPropPath: string;
+  }>,
   overrides: Record<string, string | number | boolean | null>,
 ): LayoutNode {
   const clone = structuredClone(root);
@@ -41,7 +45,10 @@ function applyComponentOverrides(
     const targetNode = findNode(clone, property.targetNodeId);
     if (!targetNode) continue;
     const parts = property.targetPropPath.split(".");
-    let target: Record<string, unknown> = targetNode as unknown as Record<string, unknown>;
+    let target: Record<string, unknown> = targetNode as unknown as Record<
+      string,
+      unknown
+    >;
     for (const part of parts.slice(0, -1)) {
       const next = target[part];
       if (!next || typeof next !== "object" || Array.isArray(next)) break;
@@ -87,9 +94,12 @@ const MASK_COLOR_MAP = {
   "accent-subtle": "var(--accent, #f3f4f6)",
 };
 
-export const SheetNodeRenderer: React.FC<{ node: LayoutNode }> = ({ node }) => {
+export const SheetNodeRenderer: React.FC<{
+  node: LayoutNode;
+  parentDirection?: "horizontal" | "vertical";
+}> = ({ node, parentDirection }) => {
   const t = useTranslations("SheetBuilder");
-  const { target, mode, selectedNodeId, onSelectNode, resolvedComponents } =
+  const { target, mode, fieldValues, selectedNodeId, onSelectNode, resolvedComponents } =
     useSheetRender();
 
   // Hidden on current target?
@@ -102,41 +112,69 @@ export const SheetNodeRenderer: React.FC<{ node: LayoutNode }> = ({ node }) => {
     mode === "builder" && node.box?.hiddenOnTargets?.includes(target);
 
   // Compute inline styles from box model
-  const boxStyle: React.CSSProperties = {
-    paddingTop: node.box.padding.top,
-    paddingRight: node.box.padding.right,
-    paddingBottom: node.box.padding.bottom,
-    paddingLeft: node.box.padding.left,
+  const sizingStyle: React.CSSProperties = {
     minWidth: node.box.minWidth,
     maxWidth: node.box.maxWidth,
     minHeight: node.box.minHeight,
     maxHeight: node.box.maxHeight,
+    boxSizing: "border-box",
+  };
+
+  const contentBoxStyle: React.CSSProperties = {
+    paddingTop: node.box.padding.top,
+    paddingRight: node.box.padding.right,
+    paddingBottom: node.box.padding.bottom,
+    paddingLeft: node.box.padding.left,
     overflow: node.box.overflow,
     boxSizing: "border-box",
   };
 
   if (node.box.width.mode === "fixed") {
-    boxStyle.width = `${node.box.width.value}px`;
-    boxStyle.flexShrink = 0;
+    sizingStyle.width = `${node.box.width.value}px`;
+    sizingStyle.flexShrink = 0;
   }
   if (node.box.height.mode === "fixed") {
-    boxStyle.height = `${node.box.height.value}px`;
-    boxStyle.flexShrink = 0;
+    if (mode === "builder") {
+      sizingStyle.height = `${node.box.height.value}px`;
+    } else {
+      sizingStyle.minHeight = Math.max(
+        node.box.minHeight ?? 0,
+        node.box.height.value,
+      );
+    }
+    sizingStyle.flexShrink = 0;
+  }
+
+  const savedImageAspectRatio =
+    node.kind === "image"
+      ? fieldValues?.[`__image_aspect_ratio__:${node.fieldBinding}`]
+      : undefined;
+  const followsSavedImageAspectRatio =
+    mode !== "builder" &&
+    node.kind === "image" &&
+    typeof savedImageAspectRatio === "number" &&
+    savedImageAspectRatio > 0;
+  if (followsSavedImageAspectRatio) {
+    sizingStyle.height = undefined;
+    sizingStyle.minHeight = undefined;
+    sizingStyle.maxHeight = undefined;
   }
 
   const widthClass =
     node.box.width.mode === "fill"
-      ? "w-full min-w-0 flex-1"
+      ? `w-full min-w-0 ${parentDirection === "horizontal" ? "flex-1" : ""}`
       : node.box.width.mode === "hug"
-      ? "w-fit max-w-full"
-      : "";
+        ? "w-fit max-w-full"
+        : "";
 
   const heightClass =
-    node.box.height.mode === "fill"
-      ? "h-full min-h-0 flex-1"
+    followsSavedImageAspectRatio
+      ? ""
+      : node.box.height.mode === "fill"
+      ? `${mode === "builder" ? "h-full" : ""} min-h-0 ${parentDirection === "vertical" ? "flex-1" : ""}`
       : node.box.height.mode === "hug"
-      ? "h-fit"
-      : "";
+        ? "h-fit"
+        : "";
 
   const fillClass = FILL_MAP[node.box.fill] || "bg-transparent";
 
@@ -166,9 +204,7 @@ export const SheetNodeRenderer: React.FC<{ node: LayoutNode }> = ({ node }) => {
         return <RepeaterRenderer node={node} />;
       case "frame": {
         const directionClass =
-          node.direction === "horizontal"
-            ? "flex flex-row"
-            : "flex flex-col";
+          node.direction === "horizontal" ? "flex flex-row" : "flex flex-col";
         const alignClass = ALIGN_MAP[node.align] || "items-start";
         const justifyClass = JUSTIFY_MAP[node.justify] || "justify-start";
         const wrapClass = node.wrap ? "flex-wrap" : "flex-nowrap";
@@ -192,17 +228,25 @@ export const SheetNodeRenderer: React.FC<{ node: LayoutNode }> = ({ node }) => {
             }
             titleDock={node.titleDock}
             footerDock={node.footerDock}
-            className={`${fillClass} ${widthClass} ${heightClass}`}
+            className={`${fillClass} w-full ${
+              node.box.height.mode === "hug" ? "" : "h-full min-h-0"
+            }`}
           >
             <div
               style={{
-                ...boxStyle,
+                ...contentBoxStyle,
                 gap: `${node.collapseAdjacentStrokes ? 0 : (node.gap ?? 0)}px`,
               }}
-              className={`${directionClass} ${alignClass} ${justifyClass} ${wrapClass} ${collapseClass} ${widthClass} ${heightClass}`}
+              className={`${directionClass} ${alignClass} ${justifyClass} ${wrapClass} ${collapseClass} w-full ${
+                node.box.height.mode === "hug" ? "" : "h-full min-h-0"
+              }`}
             >
               {node.children.map((child) => (
-                <SheetNodeRenderer key={child.id} node={child} />
+                <SheetNodeRenderer
+                  key={child.id}
+                  node={child}
+                  parentDirection={node.direction}
+                />
               ))}
               {node.children.length === 0 && mode === "builder" && (
                 <div className="w-full py-4 border border-dashed border-muted-foreground/30 rounded text-center text-xs text-muted-foreground italic select-none">
@@ -231,9 +275,7 @@ export const SheetNodeRenderer: React.FC<{ node: LayoutNode }> = ({ node }) => {
           node.propertyOverrides,
         );
 
-        return (
-          <SheetNodeRenderer node={overriddenRoot} />
-        );
+        return <SheetNodeRenderer node={overriddenRoot} />;
       }
       default:
         return null;
@@ -248,7 +290,11 @@ export const SheetNodeRenderer: React.FC<{ node: LayoutNode }> = ({ node }) => {
           e.stopPropagation();
           onSelectNode?.(node.id);
         }}
-        style={node.kind !== "frame" ? boxStyle : undefined}
+        style={
+          node.kind === "frame"
+            ? sizingStyle
+            : { ...sizingStyle, ...contentBoxStyle }
+        }
         className={`relative transition-all cursor-pointer ${widthClass} ${heightClass} ${
           isSelected
             ? "ring-2 ring-primary ring-offset-1 z-20"
@@ -267,7 +313,11 @@ export const SheetNodeRenderer: React.FC<{ node: LayoutNode }> = ({ node }) => {
 
   return (
     <div
-      style={node.kind !== "frame" ? boxStyle : undefined}
+      style={
+        node.kind === "frame"
+          ? sizingStyle
+          : { ...sizingStyle, ...contentBoxStyle }
+      }
       className={`${widthClass} ${heightClass}`}
     >
       {renderContent()}

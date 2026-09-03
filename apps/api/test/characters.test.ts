@@ -1,4 +1,7 @@
 import { createHash } from "node:crypto";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { FastifyInstance } from "fastify";
 import {
   createTestDatabase,
@@ -19,6 +22,7 @@ interface Identity {
 describe("character authorization and lifecycle", () => {
   let testDb: Awaited<ReturnType<typeof createTestDatabase>>;
   let app: FastifyInstance;
+  let storageRoot: string;
   let owner: Identity;
   let editor: Identity;
   let stranger: Identity;
@@ -28,12 +32,14 @@ describe("character authorization and lifecycle", () => {
 
   beforeAll(async () => {
     testDb = await createTestDatabase();
+    storageRoot = await mkdtemp(join(tmpdir(), "mycharacter-characters-"));
     app = await buildApp({
       database: testDb.db as unknown as Kysely<Database>,
       databaseUrl: testDb.databaseUrl,
       publicOrigin: "https://app.example.test",
       cookieSecure: false,
       allowMissingOriginForTests: true,
+      storageRoot,
     });
     owner = await register("owner.characters@example.com");
     editor = await register("editor.characters@example.com");
@@ -113,6 +119,7 @@ describe("character authorization and lifecycle", () => {
   afterAll(async () => {
     await app.close();
     await destroyTestDatabase(testDb);
+    await rm(storageRoot, { recursive: true, force: true });
   });
 
   it.each([
@@ -170,6 +177,120 @@ describe("character authorization and lifecycle", () => {
 
     expect(ownerResponse.statusCode).toBe(200);
     expect(editorResponse.statusCode).toBe(404);
+  });
+
+  it("stores a character portrait in its bound field and protects the image", async () => {
+    const system = await testDb.db
+      .insertInto("game_systems")
+      .values({
+        owner_id: owner.userId,
+        title: "Portrait system",
+        slug: `portrait-${crypto.randomUUID().slice(0, 8)}`,
+        visibility: "private",
+      })
+      .returning("id")
+      .executeTakeFirstOrThrow();
+    const sheet = await testDb.db
+      .insertInto("sheet_definitions")
+      .values({
+        system_id: system.id,
+        owner_id: owner.userId,
+        title: "Portrait sheet",
+        slug: `portrait-sheet-${crypto.randomUUID().slice(0, 8)}`,
+        kind: "character",
+      })
+      .returning("id")
+      .executeTakeFirstOrThrow();
+    const version = await testDb.db
+      .insertInto("sheet_versions")
+      .values({
+        sheet_definition_id: sheet.id,
+        version_number: 1,
+        layouts: JSON.stringify({}),
+        fields: JSON.stringify([
+          {
+            id: crypto.randomUUID(),
+            key: "portrait",
+            label: "Portrait",
+            kind: "avatar",
+            options: [],
+            readOnly: false,
+          },
+        ]),
+        published_by: owner.userId,
+      })
+      .returning("id")
+      .executeTakeFirstOrThrow();
+    const character = await testDb.db
+      .insertInto("characters")
+      .values({
+        sheet_version_id: version.id,
+        system_id: system.id,
+        owner_id: owner.userId,
+        name: "Portrait hero",
+      })
+      .returning("id")
+      .executeTakeFirstOrThrow();
+    await testDb.db
+      .insertInto("character_members")
+      .values({
+        character_id: character.id,
+        user_id: editor.userId,
+        role: "editor",
+      })
+      .execute();
+
+    const form = new FormData();
+    form.set(
+      "file",
+      new File(
+        [
+          Buffer.from(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Zl1sAAAAASUVORK5CYII=",
+            "base64",
+          ),
+        ],
+        "portrait.png",
+        { type: "image/png" },
+      ),
+    );
+    const encoded = new Response(form);
+    const uploaded = await app.inject({
+      method: "POST",
+      url: `/api/characters/${character.id}/images?fieldKey=portrait`,
+      cookies: { mycharacter_session: owner.cookie },
+      headers: { "content-type": encoded.headers.get("content-type")! },
+      payload: Buffer.from(await encoded.arrayBuffer()),
+    });
+
+    expect(uploaded.statusCode, uploaded.body).toBe(201);
+    const imageUrl = uploaded.json().file.url as string;
+    const stored = await testDb.db
+      .selectFrom("character_sheet_field_values")
+      .select("value")
+      .where("character_id", "=", character.id)
+      .where("field_key", "=", "portrait")
+      .executeTakeFirstOrThrow();
+    expect(stored.value).toBe(imageUrl);
+
+    const ownerImage = await app.inject({
+      method: "GET",
+      url: imageUrl,
+      cookies: { mycharacter_session: owner.cookie },
+    });
+    const editorImage = await app.inject({
+      method: "GET",
+      url: imageUrl,
+      cookies: { mycharacter_session: editor.cookie },
+    });
+    const strangerImage = await app.inject({
+      method: "GET",
+      url: imageUrl,
+      cookies: { mycharacter_session: stranger.cookie },
+    });
+    expect(ownerImage.statusCode).toBe(200);
+    expect(editorImage.statusCode).toBe(200);
+    expect(strangerImage.statusCode).toBe(404);
   });
 
   it("returns 410 for an expired invite", async () => {

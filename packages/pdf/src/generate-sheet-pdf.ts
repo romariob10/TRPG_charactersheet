@@ -1,9 +1,11 @@
 import { createRequire } from "node:module";
 import { readFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
 import fontkit from "@pdf-lib/fontkit";
 import {
   PDFDocument,
   PDFFont,
+  PDFImage,
   PDFPage,
   rgb,
   RGB,
@@ -30,12 +32,18 @@ export interface GenerateSheetPdfOptions {
   repeaterRows?: Record<string, CharacterRepeaterRow[]>;
   resolvedComponents?: Record<string, ComponentVersionDetails>;
   title?: string;
+  images?: Record<
+    string,
+    { bytes: Uint8Array; mediaType: "image/png" | "image/jpeg" }
+  >;
 }
 
 // A4 Dimensions in points: 595.28 x 841.89
 const PAGE_WIDTH = 595.28;
 const PAGE_HEIGHT = 841.89;
-const DEFAULT_MARGIN = 25;
+const DESIGN_WIDTH = 595;
+const DESIGN_HEIGHT = 874;
+const DEFAULT_MARGIN = 18;
 
 function parseColorToken(token?: string | null, fallback: RGB = rgb(0.13, 0.13, 0.13)): RGB | null {
   if (!token || token === "none" || token === "transparent") return null;
@@ -62,37 +70,25 @@ interface FontSet {
 
 async function loadBundledFonts(doc: PDFDocument): Promise<FontSet> {
   const require = createRequire(import.meta.url);
-  const montserratMediumPath = require.resolve(
-    "@fontsource/montserrat-alternates/files/montserrat-alternates-cyrillic-500-normal.woff",
-  );
-  const montserratBoldPath = require.resolve(
-    "@fontsource/montserrat-alternates/files/montserrat-alternates-cyrillic-700-normal.woff",
-  );
-  const notoRegularPath = require.resolve(
-    "@fontsource/noto-sans/files/noto-sans-cyrillic-400-normal.woff",
-  );
-  const notoBoldPath = require.resolve(
-    "@fontsource/noto-sans/files/noto-sans-cyrillic-600-normal.woff",
-  );
-
-  const [montserratMediumBytes, montserratBoldBytes, notoRegularBytes, notoBoldBytes] =
-    await Promise.all([
-      readFile(montserratMediumPath),
-      readFile(montserratBoldPath),
-      readFile(notoRegularPath),
-      readFile(notoBoldPath),
-    ]);
+  const pdfJsRoot = dirname(require.resolve("pdfjs-dist/package.json"));
+  const [regularBytes, boldBytes] = await Promise.all([
+    readFile(join(pdfJsRoot, "standard_fonts/LiberationSans-Regular.ttf")),
+    readFile(join(pdfJsRoot, "standard_fonts/LiberationSans-Bold.ttf")),
+  ]);
 
   doc.registerFontkit(fontkit);
 
-  const [titleFont, titleBoldFont, bodyFont, bodyBoldFont] = await Promise.all([
-    doc.embedFont(montserratMediumBytes, { subset: true }),
-    doc.embedFont(montserratBoldBytes, { subset: true }),
-    doc.embedFont(notoRegularBytes, { subset: true }),
-    doc.embedFont(notoBoldBytes, { subset: true }),
+  const [regularFont, boldFont] = await Promise.all([
+    doc.embedFont(regularBytes, { subset: true }),
+    doc.embedFont(boldBytes, { subset: true }),
   ]);
 
-  return { titleFont, titleBoldFont, bodyFont, bodyBoldFont };
+  return {
+    titleFont: regularFont,
+    titleBoldFont: boldFont,
+    bodyFont: regularFont,
+    bodyBoldFont: boldFont,
+  };
 }
 
 class PdfRenderContext {
@@ -102,13 +98,17 @@ class PdfRenderContext {
   public fieldValues: Record<string, FieldValue>;
   public repeaterRows: Record<string, CharacterRepeaterRow[]>;
   public resolvedComponents: Record<string, ComponentVersionDetails>;
+  public images: Record<string, PDFImage>;
   public currentY: number;
+  public pageHeight: number;
 
   constructor(
     doc: PDFDocument,
     page: PDFPage,
     fonts: FontSet,
     options: GenerateSheetPdfOptions,
+    images: Record<string, PDFImage>,
+    pageHeight: number,
   ) {
     this.doc = doc;
     this.page = page;
@@ -116,12 +116,14 @@ class PdfRenderContext {
     this.fieldValues = options.fieldValues ?? {};
     this.repeaterRows = options.repeaterRows ?? {};
     this.resolvedComponents = options.resolvedComponents ?? {};
-    this.currentY = PAGE_HEIGHT - DEFAULT_MARGIN;
+    this.images = images;
+    this.pageHeight = pageHeight;
+    this.currentY = pageHeight;
   }
 
   public addPage(): PDFPage {
-    this.page = this.doc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
-    this.currentY = PAGE_HEIGHT - DEFAULT_MARGIN;
+    this.page = this.doc.addPage([DESIGN_WIDTH, this.pageHeight]);
+    this.currentY = this.pageHeight;
     return this.page;
   }
 }
@@ -135,15 +137,87 @@ export async function generateA4SheetPdf(
   }
 
   const fonts = await loadBundledFonts(doc);
-  const initialPage = doc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
-  const ctx = new PdfRenderContext(doc, initialPage, fonts, options);
+  const images: Record<string, PDFImage> = {};
+  for (const [fieldKey, image] of Object.entries(options.images ?? {})) {
+    images[fieldKey] =
+      image.mediaType === "image/png"
+        ? await doc.embedPng(image.bytes)
+        : await doc.embedJpg(image.bytes);
+  }
 
-  const usableWidth = PAGE_WIDTH - DEFAULT_MARGIN * 2;
-  const layout = options.layout;
+  const measuringPage = doc.addPage([DESIGN_WIDTH, DESIGN_HEIGHT]);
+  const measuringContext = new PdfRenderContext(
+    doc,
+    measuringPage,
+    fonts,
+    options,
+    images,
+    DESIGN_HEIGHT,
+  );
+  const contentHeight = Math.max(
+    DESIGN_HEIGHT,
+    estimateNodeHeight(measuringContext, options.layout, DESIGN_WIDTH),
+  );
+  doc.removePage(0);
 
-  renderNode(ctx, layout, DEFAULT_MARGIN, ctx.currentY, usableWidth);
+  const sourceHeight = hasPopulatedRepeater(measuringContext, options.layout)
+    ? DESIGN_HEIGHT
+    : contentHeight;
+  const sourcePage = doc.addPage([DESIGN_WIDTH, sourceHeight]);
+  const ctx = new PdfRenderContext(
+    doc,
+    sourcePage,
+    fonts,
+    options,
+    images,
+    sourceHeight,
+  );
+  renderNode(ctx, options.layout, 0, sourceHeight, DESIGN_WIDTH);
 
-  return doc.save();
+  const sourceBytes = await doc.save();
+  const output = await PDFDocument.create();
+  if (options.title) output.setTitle(options.title);
+  const sheets = await output.embedPdf(
+    sourceBytes,
+    Array.from({ length: doc.getPageCount() }, (_, index) => index),
+  );
+  for (const sheet of sheets) {
+    const page = output.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
+    const scale = Math.min(
+      (PAGE_WIDTH - DEFAULT_MARGIN * 2) / sheet.width,
+      (PAGE_HEIGHT - DEFAULT_MARGIN * 2) / sheet.height,
+    );
+    const width = sheet.width * scale;
+    const height = sheet.height * scale;
+    page.drawPage(sheet, {
+      x: (PAGE_WIDTH - width) / 2,
+      y: (PAGE_HEIGHT - height) / 2,
+      width,
+      height,
+    });
+  }
+  return output.save();
+}
+
+function hasPopulatedRepeater(
+  ctx: PdfRenderContext,
+  node: LayoutNode,
+): boolean {
+  if (
+    node.kind === "repeater" &&
+    (ctx.repeaterRows[node.config.key]?.length ?? 0) > 0
+  ) {
+    return true;
+  }
+  if ("children" in node) {
+    return node.children.some((child) => hasPopulatedRepeater(ctx, child));
+  }
+  if (node.kind === "component-instance") {
+    const version = ctx.resolvedComponents[node.componentVersionId];
+    const root = version?.layouts.print ?? version?.layouts.desktop;
+    return root ? hasPopulatedRepeater(ctx, root) : false;
+  }
+  return false;
 }
 
 function renderNode(
@@ -192,39 +266,173 @@ function estimateNodeHeight(
   node: LayoutNode,
   availableWidth: number,
 ): number {
+  let intrinsicHeight: number;
   switch (node.kind) {
     case "text": {
       const fontSize = node.fontSize ?? (node.variant === "title" ? 16 : node.variant === "display" ? 22 : node.variant === "caption" ? 9 : 11);
       const isTitle = node.variant === "title" || node.variant === "display" || node.fontFamily === "Montserrat Alternates";
       const font = isTitle ? ctx.fonts.titleFont : ctx.fonts.bodyFont;
       const lines = wrapText(font, node.text || " ", fontSize, availableWidth);
-      return lines.length * fontSize * (node.lineHeight ?? 1.3) + 4;
+      intrinsicHeight = lines.length * fontSize * (node.lineHeight ?? 1.3) + 4;
+      break;
     }
     case "field-input":
-      return 36;
+      intrinsicHeight = 36;
+      break;
     case "number-input":
-      return 42;
-    case "textarea":
-      return (node.rows ?? 3) * 16 + 24;
+      intrinsicHeight = 42;
+      break;
+    case "textarea": {
+      const savedHeight = ctx.fieldValues[`__layout_height__:${node.fieldBinding}`];
+      const savedFontSize = ctx.fieldValues[`__layout_font_size__:${node.fieldBinding}`];
+      const fontSize = typeof savedFontSize === "number" ? savedFontSize : 14;
+      const value = ctx.fieldValues[node.fieldBinding];
+      const text = typeof value === "string" ? value : "";
+      const contentHeight = wrapText(ctx.fonts.bodyFont, text || " ", fontSize, availableWidth - 8).length * fontSize * 1.35 + 10;
+      intrinsicHeight =
+        Math.max(
+          typeof savedHeight === "number" && savedHeight >= 48 ? savedHeight : 0,
+          (node.rows ?? 3) * 16 + 8,
+          contentHeight,
+        ) + (node.label ? 18 : 0);
+      break;
+    }
     case "checkbox":
-      return 20;
+      intrinsicHeight = 20;
+      break;
     case "select":
-      return 36;
+      intrinsicHeight = 36;
+      break;
     case "divider":
-      return (node.strokeWidth ?? 1) + 8;
+      intrinsicHeight = (node.strokeWidth ?? 1) + 8;
+      break;
     case "spacer":
-      return node.size ?? 8;
+      intrinsicHeight = node.size ?? 8;
+      break;
     case "image":
-      return 80;
+      {
+        const savedAspectRatio = ctx.fieldValues[`__image_aspect_ratio__:${node.fieldBinding}`];
+        intrinsicHeight =
+          typeof savedAspectRatio === "number" && savedAspectRatio > 0
+            ? availableWidth / savedAspectRatio
+            : 160;
+      }
+      break;
     case "table":
-      return node.rows * 22;
-    case "frame":
-    case "repeater":
-    case "component-instance":
-      return 60;
+      intrinsicHeight = node.rows * 22 + 6;
+      break;
+    case "frame": {
+      const pad = node.box.padding;
+      const innerWidth = Math.max(10, availableWidth - pad.left - pad.right);
+      const gapTotal = Math.max(0, node.children.length - 1) * node.gap;
+      if (node.direction === "horizontal") {
+        const childWidths = resolveChildWidths(node.children, innerWidth, node.gap);
+        intrinsicHeight =
+          pad.top +
+          Math.max(
+            0,
+            ...node.children.map((child, index) =>
+              estimateNodeHeight(ctx, child, childWidths[index] ?? innerWidth),
+            ),
+          ) +
+          pad.bottom;
+      } else {
+        intrinsicHeight =
+          pad.top +
+          node.children.reduce(
+            (height, child) =>
+              height +
+              estimateNodeHeight(
+                ctx,
+                child,
+                resolveVerticalChildWidth(child, innerWidth),
+              ),
+            0,
+          ) +
+          gapTotal +
+          pad.bottom;
+      }
+      break;
+    }
+    case "repeater": {
+      const rows = ctx.repeaterRows[node.config.key] ?? [];
+      intrinsicHeight =
+        (node.name ? 18 : 0) +
+        Math.max(
+          20,
+          rows.length *
+            (estimateNodeHeight(ctx, node.rowTemplate, availableWidth) + 4),
+        );
+      break;
+    }
+    case "component-instance": {
+      const version = ctx.resolvedComponents[node.componentVersionId];
+      const root = version?.layouts.print ?? version?.layouts.desktop;
+      intrinsicHeight = root
+        ? estimateNodeHeight(ctx, root, availableWidth)
+        : 28;
+      break;
+    }
     default:
-      return 30;
+      intrinsicHeight = 30;
   }
+
+  const fixedHeight =
+    node.box.height.mode === "fixed" ? node.box.height.value : 0;
+  return Math.max(
+    intrinsicHeight,
+    fixedHeight,
+    node.box.minHeight ?? 0,
+  );
+}
+
+function resolveVerticalChildWidth(
+  node: LayoutNode,
+  availableWidth: number,
+): number {
+  const preferred =
+    node.box.width.mode === "fixed" ? node.box.width.value : availableWidth;
+  return Math.max(
+    node.box.minWidth ?? 1,
+    Math.min(node.box.maxWidth ?? availableWidth, preferred, availableWidth),
+  );
+}
+
+function resolveChildWidths(
+  children: LayoutNode[],
+  availableWidth: number,
+  gap: number,
+): number[] {
+  if (children.length === 0) return [];
+  const contentWidth = Math.max(
+    1,
+    availableWidth - Math.max(0, children.length - 1) * gap,
+  );
+  const fixedWidth = children.reduce(
+    (total, child) =>
+      total +
+      (child.box.width.mode === "fixed"
+        ? Math.min(child.box.width.value, contentWidth)
+        : 0),
+    0,
+  );
+  const flexibleCount = children.filter(
+    (child) => child.box.width.mode !== "fixed",
+  ).length;
+  const flexibleWidth = Math.max(
+    1,
+    (contentWidth - fixedWidth) / Math.max(1, flexibleCount),
+  );
+  return children.map((child) => {
+    const preferred =
+      child.box.width.mode === "fixed"
+        ? child.box.width.value
+        : flexibleWidth;
+    return Math.max(
+      child.box.minWidth ?? 1,
+      Math.min(child.box.maxWidth ?? contentWidth, preferred, contentWidth),
+    );
+  });
 }
 
 function drawCornerTurnbacksPdf(
@@ -720,25 +928,7 @@ function renderFrameNode(
   const startY = y;
   let contentY = y - pad.top;
 
-  // Precalculate children height
-  let estimatedChildrenHeight = 0;
-  if (node.direction === "horizontal" && node.children.length > 0) {
-    const totalGaps = gap * (node.children.length - 1);
-    const colWidth = Math.max(10, (innerWidth - totalGaps) / node.children.length);
-    for (const child of node.children) {
-      const h = estimateNodeHeight(ctx, child, colWidth);
-      if (h > estimatedChildrenHeight) estimatedChildrenHeight = h;
-    }
-  } else {
-    for (const child of node.children) {
-      estimatedChildrenHeight += estimateNodeHeight(ctx, child, innerWidth) + gap;
-    }
-  }
-
-  const estimatedTotalHeight = Math.max(
-    pad.top + estimatedChildrenHeight + pad.bottom,
-    node.box?.height?.mode === "fixed" ? node.box.height.value : 20,
-  );
+  const measuredHeight = estimateNodeHeight(ctx, node, availableWidth);
 
   // Background fill and border stroke drawn underneath
   const fillColor = parseColorToken(node.box?.fill ?? "transparent");
@@ -749,9 +939,9 @@ function renderFrameNode(
   if (fillColor) {
     ctx.page.drawRectangle({
       x,
-      y: startY - estimatedTotalHeight,
+      y: startY - measuredHeight,
       width: availableWidth,
-      height: estimatedTotalHeight,
+      height: measuredHeight,
       color: fillColor,
     });
   }
@@ -759,9 +949,9 @@ function renderFrameNode(
   if (strokeColor && strokeTop > 0) {
     ctx.page.drawRectangle({
       x,
-      y: startY - estimatedTotalHeight,
+      y: startY - measuredHeight,
       width: availableWidth,
-      height: estimatedTotalHeight,
+      height: measuredHeight,
       borderColor: strokeColor,
       borderWidth: strokeTop,
     });
@@ -769,20 +959,27 @@ function renderFrameNode(
 
   // Render children
   if (node.direction === "horizontal" && node.children.length > 0) {
-    const totalGaps = gap * (node.children.length - 1);
-    const colWidth = Math.max(10, (innerWidth - totalGaps) / node.children.length);
+    const childWidths = resolveChildWidths(node.children, innerWidth, gap);
     let maxChildHeight = 0;
 
     let childX = x + pad.left;
-    for (const child of node.children) {
-      const childHeight = renderNode(ctx, child, childX, contentY, colWidth);
+    for (let index = 0; index < node.children.length; index += 1) {
+      const child = node.children[index]!;
+      const childWidth = childWidths[index] ?? innerWidth;
+      const childHeight = renderNode(ctx, child, childX, contentY, childWidth);
       if (childHeight > maxChildHeight) maxChildHeight = childHeight;
-      childX += colWidth + gap;
+      childX += childWidth + gap;
     }
     contentY -= maxChildHeight;
   } else {
     for (const child of node.children) {
-      const childHeight = renderNode(ctx, child, x + pad.left, contentY, innerWidth);
+      const childHeight = renderNode(
+        ctx,
+        child,
+        x + pad.left,
+        contentY,
+        resolveVerticalChildWidth(child, innerWidth),
+      );
       contentY -= childHeight + gap;
     }
     if (node.children.length > 0) {
@@ -790,7 +987,7 @@ function renderFrameNode(
     }
   }
 
-  const finalHeight = Math.max(startY - contentY + pad.bottom, estimatedTotalHeight);
+  const finalHeight = Math.max(startY - contentY + pad.bottom, measuredHeight);
 
   // Draw Corner Ornaments (Fate turnbacks)
   const defaultCorners: CornerOrnaments = {
@@ -1027,7 +1224,11 @@ function renderTextareaNode(
   const val = ctx.fieldValues[node.fieldBinding] ?? "";
   const displayVal = typeof val === "string" ? val : String(val ?? "");
   const rows = node.rows ?? 3;
-  const boxHeight = rows * 16 + 8;
+  const savedFontSize = ctx.fieldValues[`__layout_font_size__:${node.fieldBinding}`];
+  const fontSize = typeof savedFontSize === "number" ? savedFontSize : 14;
+  const totalHeight = estimateNodeHeight(ctx, node, availableWidth);
+  const labelHeight = node.label ? 12 : 0;
+  const boxHeight = Math.max(rows * 16 + 8, totalHeight - labelHeight - 6);
 
   let curY = y;
   if (node.label) {
@@ -1054,29 +1255,29 @@ function renderTextareaNode(
   });
 
   if (displayVal) {
-    const lines = wrapText(font, displayVal, 9, availableWidth - 8);
-    let lineY = boxY + boxHeight - 12;
-    for (let i = 0; i < Math.min(lines.length, rows + 2); i++) {
+    const lines = wrapText(font, displayVal, fontSize, availableWidth - 8);
+    let lineY = boxY + boxHeight - fontSize - 3;
+    for (let i = 0; i < lines.length; i++) {
       ctx.page.drawText(lines[i]!, {
         x: x + 4,
         y: lineY,
-        size: 9,
+        size: fontSize,
         font,
         color: rgb(0.1, 0.1, 0.1),
       });
-      lineY -= 14;
+      lineY -= fontSize * 1.35;
     }
   } else if (node.placeholder) {
     ctx.page.drawText(node.placeholder, {
       x: x + 4,
       y: boxY + boxHeight - 12,
-      size: 9,
+      size: fontSize,
       font,
       color: rgb(0.65, 0.65, 0.65),
     });
   }
 
-  return (y - boxY) + 6;
+  return totalHeight;
 }
 
 function renderCheckboxNode(
@@ -1212,7 +1413,7 @@ function renderImageNode(
   y: number,
   availableWidth: number,
 ): number {
-  const height = 80;
+  const height = estimateNodeHeight(ctx, node, availableWidth);
   const boxY = y - height;
 
   ctx.page.drawRectangle({
@@ -1225,16 +1426,33 @@ function renderImageNode(
     color: rgb(0.96, 0.97, 0.96),
   });
 
-  const label = node.alt || "Image / Avatar";
-  ctx.page.drawText(label, {
-    x: x + 8,
-    y: boxY + height / 2 - 4,
-    size: 9,
-    font: ctx.fonts.bodyFont,
-    color: rgb(0.5, 0.55, 0.5),
-  });
+  const image = ctx.images[node.fieldBinding];
+  if (image) {
+    if (node.fit === "fill") {
+      ctx.page.drawImage(image, { x, y: boxY, width: availableWidth, height });
+    } else {
+      const scale = Math.min(availableWidth / image.width, height / image.height);
+      const width = image.width * scale;
+      const imageHeight = image.height * scale;
+      ctx.page.drawImage(image, {
+        x: x + (availableWidth - width) / 2,
+        y: boxY + (height - imageHeight) / 2,
+        width,
+        height: imageHeight,
+      });
+    }
+  } else {
+    const label = node.alt || "Character portrait";
+    ctx.page.drawText(label, {
+      x: x + 8,
+      y: boxY + height / 2 - 4,
+      size: 9,
+      font: ctx.fonts.bodyFont,
+      color: rgb(0.5, 0.55, 0.5),
+    });
+  }
 
-  return height + 6;
+  return height;
 }
 
 function renderTableNode(
@@ -1331,9 +1549,14 @@ function renderRepeaterNode(
     }
     ctx.fieldValues = rowFieldValues;
 
-    if (curY < DEFAULT_MARGIN + 50) {
+    const estimatedRowHeight = estimateNodeHeight(
+      ctx,
+      node.rowTemplate,
+      availableWidth,
+    );
+    if (curY - estimatedRowHeight < 0) {
       ctx.addPage();
-      curY = PAGE_HEIGHT - DEFAULT_MARGIN;
+      curY = ctx.pageHeight;
     }
 
     const rowHeight = renderNode(ctx, node.rowTemplate, x, curY, availableWidth);

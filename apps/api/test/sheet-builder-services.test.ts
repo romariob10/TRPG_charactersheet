@@ -114,7 +114,17 @@ describe("Sheet Builder & Component Library Services", () => {
       titleDock: { dock: "none" as const, variant: "none" as const },
       footerDock: { dock: "none" as const, variant: "none" as const },
       box: defaultBoxProps,
-      children: [],
+      children: [
+        {
+          id: crypto.randomUUID(),
+          kind: "image" as const,
+          fieldBinding: "portrait",
+          url: "",
+          alt: "",
+          fit: "cover" as const,
+          box: defaultBoxProps,
+        },
+      ],
     };
 
     const newLayouts = {
@@ -177,6 +187,11 @@ describe("Sheet Builder & Component Library Services", () => {
       pubRes.versionId,
     );
     expect(publishedVersion.layouts.print).not.toHaveProperty("ornamentStyle");
+    expect(publishedVersion.fields).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ key: "portrait", kind: "avatar", readOnly: false }),
+      ]),
+    );
   });
 
   it("handles component library, drafts, versioning, cycles and forks", async () => {

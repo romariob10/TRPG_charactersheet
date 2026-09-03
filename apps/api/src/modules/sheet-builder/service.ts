@@ -47,7 +47,8 @@ function ensureBoundFieldDefinitions(
       }
     }
     if ("fieldBinding" in node && !keys.has(node.fieldBinding)) {
-      const kind = node.kind === "number-input" ? "number"
+      const kind = node.kind === "image" ? "avatar"
+        : node.kind === "number-input" ? "number"
         : node.kind === "checkbox" ? "checkbox"
         : node.kind === "select" ? "select"
         : node.kind === "textarea" ? "multiline" : "text";
@@ -57,7 +58,7 @@ function ensureBoundFieldDefinitions(
         label: ("label" in node && node.label) || node.name || node.fieldBinding,
         kind,
         options: node.kind === "select" ? node.options.map((option) => option.value) : [],
-        readOnly: node.readOnly,
+        readOnly: node.kind === "image" ? false : node.readOnly,
       });
       keys.add(node.fieldBinding);
     }

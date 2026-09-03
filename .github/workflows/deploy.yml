@@ -1,0 +1,98 @@
+name: Deploy production
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  WEB_IMAGE: ghcr.io/romariob10/trpg-charactersheet-web
+  API_IMAGE: ghcr.io/romariob10/trpg-charactersheet-api
+  WORKER_IMAGE: ghcr.io/romariob10/trpg-charactersheet-worker
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Set image tag
+        id: image_tag
+        run: echo "short_sha=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push web image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.web
+          target: production
+          push: true
+          tags: |
+            ${{ env.WEB_IMAGE }}:main
+            ${{ env.WEB_IMAGE }}:sha-${{ steps.image_tag.outputs.short_sha }}
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,mode=max,scope=web
+      - name: Build and push API image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.backend
+          target: api-production
+          push: true
+          tags: |
+            ${{ env.API_IMAGE }}:main
+            ${{ env.API_IMAGE }}:sha-${{ steps.image_tag.outputs.short_sha }}
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,mode=max,scope=backend
+      - name: Build and push worker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.backend
+          target: worker-production
+          push: true
+          tags: |
+            ${{ env.WORKER_IMAGE }}:main
+            ${{ env.WORKER_IMAGE }}:sha-${{ steps.image_tag.outputs.short_sha }}
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,mode=max,scope=backend
+
+  deploy:
+    runs-on: [self-hosted, rodev]
+    needs: build
+    steps:
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Sync production checkout
+        working-directory: /home/user/mycharacter
+        run: |
+          git fetch origin
+          git checkout main
+          git reset --hard origin/main
+      - name: Pull and start production
+        working-directory: /home/user/mycharacter
+        run: |
+          docker compose --env-file .env.prod -f compose.prod.yaml pull web api worker
+          docker compose --env-file .env.prod -f compose.prod.yaml up -d --remove-orphans --wait --wait-timeout 180
+          docker compose --env-file .env.prod -f compose.prod.yaml ps
+
+      # Rollback from /home/user/mycharacter by replacing <prev> with a retained
+      # image tag, then verify health with `docker compose -f compose.prod.yaml ps`:
+      # MYCHARACTER_IMAGE_TAG=sha-<prev> docker compose --env-file .env.prod -f compose.prod.yaml pull web api worker
+      # MYCHARACTER_IMAGE_TAG=sha-<prev> docker compose --env-file .env.prod -f compose.prod.yaml up -d --no-deps web api worker

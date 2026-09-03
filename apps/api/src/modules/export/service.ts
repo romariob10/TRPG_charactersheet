@@ -67,6 +67,35 @@ export class ExportService {
       }
 
       const fieldValues = await loadCharacterSheetFieldValues(this.db, character.id);
+      const imageRows = await this.db
+        .selectFrom("character_images as image")
+        .innerJoin("object_files as file", "file.id", "image.file_id")
+        .select([
+          "image.field_key as fieldKey",
+          "file.storage_key as storageKey",
+          "file.media_type as mediaType",
+        ])
+        .where("image.character_id", "=", character.id)
+        .where("file.state", "=", "ready")
+        .execute();
+      const images: Record<
+        string,
+        { bytes: Uint8Array; mediaType: "image/png" | "image/jpeg" }
+      > = {};
+      for (const image of imageRows) {
+        if (
+          image.mediaType !== "image/png" &&
+          image.mediaType !== "image/jpeg"
+        ) {
+          continue;
+        }
+        const opened = await this.storage.open(image.storageKey).catch(() => null);
+        if (!opened) continue;
+        images[image.fieldKey] = {
+          bytes: await streamToBuffer(opened.stream),
+          mediaType: image.mediaType,
+        };
+      }
 
       // Load all repeater rows for this character
       const repeaterRowRecords = await this.db
@@ -131,6 +160,7 @@ export class ExportService {
         fieldValues,
         repeaterRows: repeaterRowsMap,
         resolvedComponents,
+        images,
         title: character.name,
       });
 

@@ -1,29 +1,30 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
-import {
-  Download,
-  FileText,
-  Monitor,
-  Printer,
-  Smartphone,
-  Tablet,
-} from "lucide-react";
+import { Download, Printer } from "lucide-react";
 import type {
   CharacterRepeaterRow,
+  FieldMutationResponse,
   FieldValue,
   SheetVersionDetails,
   TargetLayoutKind,
 } from "@mycharacter/contracts";
 import { SheetNodeRenderer } from "../renderer/sheet-node-renderer";
 import { SheetRenderProvider } from "../renderer/sheet-render-context";
+import { SheetViewSwitcher, type SheetViewMode } from "../sheet-view-switcher";
+
+const PRINT_CANVAS_WIDTH = 595;
+const PRINT_CANVAS_HEIGHT = 874;
+const MOBILE_LAYOUT_QUERY = "(max-width: 767px)";
+const FIELD_SAVE_DELAY_MS = 300;
 
 interface CharacterSheetPlayerProps {
   character: {
     id: string;
     name: string;
     fieldValues?: Record<string, FieldValue>;
+    fieldVersions?: Record<string, number>;
   };
   versionDetails?: SheetVersionDetails | null;
   canEdit: boolean;
@@ -35,92 +36,187 @@ export const CharacterSheetPlayer: React.FC<CharacterSheetPlayerProps> = ({
   canEdit,
 }) => {
   const t = useTranslations("Player");
-  const [target, setTarget] = useState<TargetLayoutKind>("desktop");
+  const [viewMode, setViewMode] = useState<SheetViewMode>("adaptive");
+  const [adaptiveTarget, setAdaptiveTarget] =
+    useState<Extract<TargetLayoutKind, "mobile" | "desktop">>("desktop");
   const [fieldValues, setFieldValues] = useState<Record<string, FieldValue>>(
     character.fieldValues ?? {},
   );
   const [repeaterRows, setRepeaterRows] = useState<
     Record<string, CharacterRepeaterRow[]>
   >({});
-  const [savingField, setSavingField] = useState(false);
+  const [activeFieldSaves, setActiveFieldSaves] = useState(0);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const fieldMutationIds = useRef<Record<string, string>>({});
+  const [pdfAction, setPdfAction] = useState<"export" | "print" | null>(null);
+  const fieldVersions = useRef<Record<string, number>>(
+    character.fieldVersions ?? {},
+  );
+  const pendingFieldValues = useRef(new Map<string, FieldValue>());
+  const fieldSaveTimers = useRef(
+    new Map<string, ReturnType<typeof setTimeout>>(),
+  );
+  const fieldsInFlight = useRef(new Set<string>());
+
+  useEffect(() => {
+    const media = window.matchMedia(MOBILE_LAYOUT_QUERY);
+    const updateTarget = () =>
+      setAdaptiveTarget(media.matches ? "mobile" : "desktop");
+    updateTarget();
+    media.addEventListener("change", updateTarget);
+    return () => media.removeEventListener("change", updateTarget);
+  }, []);
+
+  const target: TargetLayoutKind =
+    viewMode === "print" ? "print" : adaptiveTarget;
 
   useEffect(() => {
     if (!versionDetails) return;
     const keys = new Set<string>();
-    const visit = (node: (typeof versionDetails.layouts.desktop)): void => {
+    const visit = (node: typeof versionDetails.layouts.desktop): void => {
       if (node.kind === "repeater") keys.add(node.config.key);
-      if ("children" in node && Array.isArray(node.children)) node.children.forEach(visit);
+      if ("children" in node && Array.isArray(node.children))
+        node.children.forEach(visit);
       if ("rowTemplate" in node && node.rowTemplate) visit(node.rowTemplate);
     };
     Object.values(versionDetails.layouts).forEach(visit);
     const controller = new AbortController();
-    void Promise.all(Array.from(keys, async (key) => {
-      const response = await fetch(
-        `/api/characters/${character.id}/repeaters/${encodeURIComponent(key)}/rows`,
-        { signal: controller.signal },
-      );
-      if (!response.ok) throw new Error(t("saveFailed"));
-      return [key, await response.json()] as const;
-    })).then((entries) => setRepeaterRows(Object.fromEntries(entries)))
+    void Promise.all(
+      Array.from(keys, async (key) => {
+        const response = await fetch(
+          `/api/characters/${character.id}/repeaters/${encodeURIComponent(key)}/rows`,
+          { signal: controller.signal },
+        );
+        if (!response.ok) throw new Error(t("saveFailed"));
+        return [key, await response.json()] as const;
+      }),
+    )
+      .then((entries) => setRepeaterRows(Object.fromEntries(entries)))
       .catch((error: unknown) => {
-        if (!controller.signal.aborted) setSaveError(error instanceof Error ? error.message : t("saveFailed"));
+        if (!controller.signal.aborted)
+          setSaveError(
+            error instanceof Error ? error.message : t("saveFailed"),
+          );
       });
     return () => controller.abort();
   }, [character.id, t, versionDetails]);
 
-  // Field change handler with optimistic update and rollback
-  const handleFieldValueChange = async (key: string, value: FieldValue) => {
-    const prevValue = fieldValues[key];
-    const mutationId = crypto.randomUUID();
-    fieldMutationIds.current[key] = mutationId;
-    setFieldValues((prev) => ({ ...prev, [key]: value }));
-    setSavingField(true);
-    setSaveError(null);
+  const flushFieldValue = useCallback(
+    async (key: string) => {
+      if (
+        fieldsInFlight.current.has(key) ||
+        !pendingFieldValues.current.has(key)
+      ) {
+        return;
+      }
 
-    try {
-      const res = await fetch(
-        `/api/characters/${character.id}/sheet-fields/${encodeURIComponent(key)}`,
-        {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            value,
-            clientMutationId: mutationId,
-          }),
-        },
-      );
+      const value = pendingFieldValues.current.get(key) ?? null;
+      pendingFieldValues.current.delete(key);
+      fieldsInFlight.current.add(key);
+      setActiveFieldSaves((count) => count + 1);
+      let retryDelay = 0;
 
-      if (!res.ok) {
-        if (res.status === 409) {
-          throw new Error(t("versionConflict"));
+      try {
+        const res = await fetch(
+          `/api/characters/${character.id}/sheet-fields/${encodeURIComponent(key)}`,
+          {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            keepalive: true,
+            body: JSON.stringify({
+              value,
+              expectedVersion: fieldVersions.current[key] ?? 0,
+              clientMutationId: crypto.randomUUID(),
+            }),
+          },
+        );
+
+        if (!res.ok) throw new Error(t("saveFailed"));
+        const saved = (await res.json()) as FieldMutationResponse;
+        fieldVersions.current[key] = saved.version;
+        setSaveError(null);
+      } catch (err: unknown) {
+        if (!pendingFieldValues.current.has(key)) {
+          pendingFieldValues.current.set(key, value);
         }
-        throw new Error(t("saveFailed"));
+        retryDelay = 1_000;
+        setSaveError(err instanceof Error ? err.message : t("saveFailed"));
+      } finally {
+        fieldsInFlight.current.delete(key);
+        setActiveFieldSaves((count) => Math.max(0, count - 1));
+        if (pendingFieldValues.current.has(key)) {
+          const timer = setTimeout(() => {
+            fieldSaveTimers.current.delete(key);
+            void flushFieldValue(key);
+          }, retryDelay);
+          fieldSaveTimers.current.set(key, timer);
+        }
       }
-    } catch (err: unknown) {
-      // Rollback on error
-      if (fieldMutationIds.current[key] === mutationId) {
-        setFieldValues((prev) => ({ ...prev, [key]: prevValue }));
-      }
-      setSaveError(err instanceof Error ? err.message : t("saveFailed"));
-    } finally {
-      setSavingField(false);
-    }
+    },
+    [character.id, t],
+  );
+
+  const handleFieldValueChange = (key: string, value: FieldValue) => {
+    setFieldValues((prev) => ({ ...prev, [key]: value }));
+    setSaveError(null);
+    pendingFieldValues.current.set(key, value);
+    const previousTimer = fieldSaveTimers.current.get(key);
+    if (previousTimer) clearTimeout(previousTimer);
+    const timer = setTimeout(() => {
+      fieldSaveTimers.current.delete(key);
+      void flushFieldValue(key);
+    }, FIELD_SAVE_DELAY_MS);
+    fieldSaveTimers.current.set(key, timer);
   };
+
+  const handleFieldCommit = (key: string) => {
+    const timer = fieldSaveTimers.current.get(key);
+    if (timer) clearTimeout(timer);
+    fieldSaveTimers.current.delete(key);
+    void flushFieldValue(key);
+  };
+
+  useEffect(() => {
+    const timers = fieldSaveTimers.current;
+    const flushPendingValues = () => {
+      for (const [key, value] of pendingFieldValues.current) {
+        void fetch(
+          `/api/characters/${character.id}/sheet-fields/${encodeURIComponent(key)}`,
+          {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            keepalive: true,
+            body: JSON.stringify({
+              value,
+              expectedVersion: fieldVersions.current[key] ?? 0,
+              clientMutationId: crypto.randomUUID(),
+            }),
+          },
+        );
+      }
+    };
+    window.addEventListener("pagehide", flushPendingValues);
+    return () => {
+      window.removeEventListener("pagehide", flushPendingValues);
+      for (const timer of timers.values()) clearTimeout(timer);
+      timers.clear();
+    };
+  }, [character.id]);
 
   // Repeater row handlers
   const handleAddRepeaterRow = async (repeaterKey: string) => {
     try {
-      const res = await fetch(`/api/characters/${character.id}/repeaters/rows`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          repeaterKey,
-          clientMutationId: crypto.randomUUID(),
-          initialValues: {},
-        }),
-      });
+      const res = await fetch(
+        `/api/characters/${character.id}/repeaters/rows`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            repeaterKey,
+            clientMutationId: crypto.randomUUID(),
+            initialValues: {},
+          }),
+        },
+      );
       if (!res.ok) throw new Error(t("saveFailed"));
       const newRow: CharacterRepeaterRow = await res.json();
       setRepeaterRows((prev) => ({
@@ -139,7 +235,9 @@ export const CharacterSheetPlayer: React.FC<CharacterSheetPlayerProps> = ({
     value: unknown,
     expectedVersion: number,
   ) => {
-    const previousRow = (repeaterRows[repeaterKey] ?? []).find((row) => row.id === rowId);
+    const previousRow = (repeaterRows[repeaterKey] ?? []).find(
+      (row) => row.id === rowId,
+    );
     const rowVal = Array.isArray(value)
       ? value.join(", ")
       : (value as string | number | boolean | null);
@@ -168,11 +266,25 @@ export const CharacterSheetPlayer: React.FC<CharacterSheetPlayerProps> = ({
           }),
         },
       );
-      if (!res.ok) throw new Error(res.status === 409 ? t("versionConflict") : t("saveFailed"));
+      if (!res.ok)
+        throw new Error(
+          res.status === 409 ? t("versionConflict") : t("saveFailed"),
+        );
       const updatedRow: CharacterRepeaterRow = await res.json();
-      setRepeaterRows((prev) => ({ ...prev, [repeaterKey]: (prev[repeaterKey] ?? []).map((r) => r.id === rowId ? updatedRow : r) }));
+      setRepeaterRows((prev) => ({
+        ...prev,
+        [repeaterKey]: (prev[repeaterKey] ?? []).map((r) =>
+          r.id === rowId ? updatedRow : r,
+        ),
+      }));
     } catch (err) {
-      if (previousRow) setRepeaterRows((prev) => ({ ...prev, [repeaterKey]: (prev[repeaterKey] ?? []).map((r) => r.id === rowId ? previousRow : r) }));
+      if (previousRow)
+        setRepeaterRows((prev) => ({
+          ...prev,
+          [repeaterKey]: (prev[repeaterKey] ?? []).map((r) =>
+            r.id === rowId ? previousRow : r,
+          ),
+        }));
       setSaveError(err instanceof Error ? err.message : t("saveFailed"));
     }
   };
@@ -214,17 +326,23 @@ export const CharacterSheetPlayer: React.FC<CharacterSheetPlayerProps> = ({
   ) => {
     const previousRows = repeaterRows[repeaterKey] ?? [];
     const rowsById = new Map(previousRows.map((row) => [row.id, row]));
-    setRepeaterRows((prev) => ({ ...prev, [repeaterKey]: rowIds.flatMap((id) => rowsById.get(id) ?? []) }));
+    setRepeaterRows((prev) => ({
+      ...prev,
+      [repeaterKey]: rowIds.flatMap((id) => rowsById.get(id) ?? []),
+    }));
     try {
-      const response = await fetch(`/api/characters/${character.id}/repeaters/reorder`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          repeaterKey,
-          rowIds,
-          clientMutationId: crypto.randomUUID(),
-        }),
-      });
+      const response = await fetch(
+        `/api/characters/${character.id}/repeaters/reorder`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            repeaterKey,
+            rowIds,
+            clientMutationId: crypto.randomUUID(),
+          }),
+        },
+      );
       if (!response.ok) throw new Error(t("saveFailed"));
     } catch (err) {
       setRepeaterRows((prev) => ({ ...prev, [repeaterKey]: previousRows }));
@@ -232,7 +350,70 @@ export const CharacterSheetPlayer: React.FC<CharacterSheetPlayerProps> = ({
     }
   };
 
-  const rootNode = versionDetails?.layouts[target] ?? versionDetails?.layouts.desktop;
+  const handlePdfAction = async (action: "export" | "print") => {
+    const printWindow = action === "print" ? window.open("", "_blank") : null;
+    setPdfAction(action);
+    setSaveError(null);
+    try {
+      const response = await fetch(
+        `/api/characters/${character.id}/export?mode=${
+          action === "print" ? "flattened" : "interactive"
+        }`,
+        { method: "POST" },
+      );
+      if (!response.ok) throw new Error(t("exportFailed"));
+
+      const pdfUrl = URL.createObjectURL(await response.blob());
+      if (action === "print") {
+        if (!printWindow) throw new Error(t("printPopupBlocked"));
+        printWindow.location.href = pdfUrl;
+        window.setTimeout(() => URL.revokeObjectURL(pdfUrl), 60_000);
+      } else {
+        const anchor = document.createElement("a");
+        anchor.href = pdfUrl;
+        anchor.download = `${character.name.replace(/[^\p{L}\p{N}_-]+/gu, "-") || "character"}.pdf`;
+        anchor.click();
+        URL.revokeObjectURL(pdfUrl);
+      }
+    } catch (error: unknown) {
+      printWindow?.close();
+      setSaveError(error instanceof Error ? error.message : t("exportFailed"));
+    } finally {
+      setPdfAction(null);
+    }
+  };
+
+  const handleImageUpload = async (fieldBinding: string, file: File, aspectRatio: number) => {
+    setActiveFieldSaves((count) => count + 1);
+    setSaveError(null);
+    const formData = new FormData();
+    formData.set("file", file);
+    try {
+      const response = await fetch(
+        `/api/characters/${character.id}/images?fieldKey=${encodeURIComponent(fieldBinding)}`,
+        { method: "POST", body: formData },
+      );
+      if (!response.ok) throw new Error(t("imageUploadFailed"));
+      const result = (await response.json()) as { file: { url: string; fieldVersion: number } };
+      const aspectRatioKey = `__image_aspect_ratio__:${fieldBinding}`;
+      setFieldValues((previous) => ({
+        ...previous,
+        [fieldBinding]: result.file.url,
+        [aspectRatioKey]: aspectRatio,
+      }));
+      fieldVersions.current[fieldBinding] = result.file.fieldVersion;
+      handleFieldValueChange(aspectRatioKey, aspectRatio);
+      handleFieldCommit(aspectRatioKey);
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : t("imageUploadFailed"));
+      throw error;
+    } finally {
+      setActiveFieldSaves((count) => Math.max(0, count - 1));
+    }
+  };
+
+  const rootNode =
+    versionDetails?.layouts[target] ?? versionDetails?.layouts.desktop;
 
   return (
     <div className="flex flex-col min-h-screen bg-background">
@@ -249,80 +430,42 @@ export const CharacterSheetPlayer: React.FC<CharacterSheetPlayerProps> = ({
           <h1 className="text-base font-bold text-foreground truncate">
             {character.name || t("unnamed")}
           </h1>
-          {savingField && (
-            <span className="text-xs text-muted-foreground italic">{t("saving")}</span>
+          {activeFieldSaves > 0 && (
+            <span className="text-xs text-muted-foreground italic">
+              {t("saving")}
+            </span>
           )}
           {saveError && (
-            <span className="text-xs text-destructive font-medium">{saveError}</span>
+            <span className="text-xs text-destructive font-medium">
+              {saveError}
+            </span>
           )}
         </div>
 
         {/* Target Switcher */}
-        <div className="flex items-center gap-1 bg-muted p-1 rounded-lg">
-          <button
-            type="button"
-            onClick={() => setTarget("mobile")}
-            className={`px-3 py-1 text-xs font-medium rounded-md transition-colors flex items-center gap-1.5 ${
-              target === "mobile"
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <Smartphone className="size-3.5" />
-            <span>{t("mobile")}</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setTarget("tablet")}
-            className={`px-3 py-1 text-xs font-medium rounded-md transition-colors flex items-center gap-1.5 ${
-              target === "tablet"
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <Tablet className="size-3.5" />
-            <span>{t("tablet")}</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setTarget("desktop")}
-            className={`px-3 py-1 text-xs font-medium rounded-md transition-colors flex items-center gap-1.5 ${
-              target === "desktop"
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <Monitor className="size-3.5" />
-            <span>{t("desktop")}</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setTarget("print")}
-            className={`px-3 py-1 text-xs font-medium rounded-md transition-colors flex items-center gap-1.5 ${
-              target === "print"
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <FileText className="size-3.5" />
-            <span>{t("print")}</span>
-          </button>
-        </div>
+        <SheetViewSwitcher
+          value={viewMode}
+          onChange={setViewMode}
+          adaptiveLabel={t("adaptive")}
+          printLabel={t("print")}
+        />
 
         {/* Export & Actions */}
         <div className="flex items-center gap-2">
-          <a
-            href={`/api/characters/${character.id}/export?mode=interactive`}
-            download
-            className="px-3.5 py-1.5 bg-primary text-primary-foreground text-xs font-semibold rounded-md hover:bg-primary/90 shadow-sm transition-colors flex items-center gap-1.5"
+          <button
+            type="button"
+            onClick={() => void handlePdfAction("export")}
+            disabled={pdfAction !== null}
+            className="px-3.5 py-1.5 bg-primary text-primary-foreground text-xs font-semibold rounded-md hover:bg-primary/90 shadow-sm transition-colors flex items-center gap-1.5 disabled:pointer-events-none disabled:opacity-60"
           >
             <Download className="size-3.5" />
             <span>{t("exportPdf")}</span>
-          </a>
+          </button>
           <button
             type="button"
-            onClick={() => window.print()}
-            className="px-3 py-1.5 border border-border text-foreground text-xs font-semibold rounded-md hover:bg-muted transition-colors flex items-center gap-1.5"
+            onClick={() => void handlePdfAction("print")}
+            disabled={pdfAction !== null}
+            className="px-3 py-1.5 border border-border text-foreground text-xs font-semibold rounded-md hover:bg-muted transition-colors flex items-center gap-1.5 disabled:pointer-events-none disabled:opacity-60"
           >
             <Printer className="size-3.5" />
             <span>{t("printAction")}</span>
@@ -334,22 +477,34 @@ export const CharacterSheetPlayer: React.FC<CharacterSheetPlayerProps> = ({
       <main className="flex-1 flex justify-center p-4 md:p-8 overflow-x-auto">
         {rootNode ? (
           <div
+            data-sheet-page
+            data-sheet-target={target}
+            style={
+              target === "print"
+                ? { width: PRINT_CANVAS_WIDTH, height: PRINT_CANVAS_HEIGHT }
+                : undefined
+            }
             className={`w-full ${
               target === "mobile"
                 ? "max-w-md"
-                : target === "tablet"
-                ? "max-w-2xl"
                 : target === "print"
-                ? "w-[794px] h-[1123px] max-w-none flex-none bg-white text-black shadow-2xl rounded-sm"
-                : "max-w-5xl"
+                  ? "max-w-none flex-none overflow-hidden rounded-sm bg-white text-black shadow-2xl"
+                  : "max-w-5xl"
             }`}
           >
             <SheetRenderProvider
               value={{
                 target,
-                mode: canEdit ? "player" : "readonly",
+                mode:
+                  target === "print"
+                    ? "print"
+                    : canEdit
+                      ? "player"
+                      : "readonly",
                 fieldValues,
                 onFieldValueChange: handleFieldValueChange,
+                onFieldCommit: handleFieldCommit,
+                onImageUpload: canEdit ? handleImageUpload : undefined,
                 repeaterRows,
                 onAddRepeaterRow: handleAddRepeaterRow,
                 onUpdateRepeaterRowField: handleUpdateRepeaterRowField,
