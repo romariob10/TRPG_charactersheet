@@ -105,6 +105,31 @@ describe("social posts", () => {
     expect(publicPost.json().post.id).toBe(created.json().id);
   });
 
+  it("rejects abusive post text before it is stored", async () => {
+    const before = await testDb.db
+      .selectFrom("posts")
+      .select((eb) => eb.fn.countAll<number>().as("count"))
+      .executeTakeFirstOrThrow();
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/posts",
+      cookies: { mycharacter_session: user.cookie },
+      payload: {
+        blocks: [
+          { type: "paragraph", data: { text: "You should kill yourself" } },
+        ],
+      },
+    });
+
+    expect(response.statusCode).toBe(422);
+    expect(response.json().error.code).toBe("POST_REJECTED_BY_MODERATION");
+    const after = await testDb.db
+      .selectFrom("posts")
+      .select((eb) => eb.fn.countAll<number>().as("count"))
+      .executeTakeFirstOrThrow();
+    expect(after.count).toBe(before.count);
+  });
+
   it("ignores legacy empty paragraphs without breaking the feed", async () => {
     const created = await createTextPost("Legacy post");
     await testDb.db

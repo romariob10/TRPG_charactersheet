@@ -9,6 +9,11 @@ export const publicAuthorSchema = z.object({
   displayName: z.string().min(1).max(80).nullable(),
 });
 
+export const feedAuthorsResponseSchema = z.object({
+  popular: z.array(publicAuthorSchema).max(5),
+  following: z.array(publicAuthorSchema),
+});
+
 export const publicProfileSchema = z.object({
   id: z.string().uuid(),
   username: usernameSchema,
@@ -58,6 +63,7 @@ export const updateProfilePrivacyRequestSchema = z.object({
 
 export type Username = z.infer<typeof usernameSchema>;
 export type PublicAuthor = z.infer<typeof publicAuthorSchema>;
+export type FeedAuthorsResponse = z.infer<typeof feedAuthorsResponseSchema>;
 export type PublicProfile = z.infer<typeof publicProfileSchema>;
 export type MyProfile = z.infer<typeof myProfileSchema>;
 export type UpdateMyProfileRequest = z.infer<typeof updateMyProfileRequestSchema>;
