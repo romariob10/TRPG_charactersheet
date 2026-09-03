@@ -82,7 +82,7 @@ jobs:
       - name: Sync production checkout
         working-directory: /home/user/mycharacter
         run: |
-          git fetch origin
+          git fetch origin main:refs/remotes/origin/main
           git checkout main
           git reset --hard origin/main
       - name: Pull and start production
