@@ -105,24 +105,24 @@ describe("social posts", () => {
     expect(publicPost.json().post.id).toBe(created.json().id);
   });
 
-  it("rejects abusive post text before it is stored", async () => {
+  it("rejects abusive and profane post text before it is stored", async () => {
     const before = await testDb.db
       .selectFrom("posts")
       .select((eb) => eb.fn.countAll<number>().as("count"))
       .executeTakeFirstOrThrow();
-    const response = await app.inject({
-      method: "POST",
-      url: "/api/posts",
-      cookies: { mycharacter_session: user.cookie },
-      payload: {
-        blocks: [
-          { type: "paragraph", data: { text: "You should kill yourself" } },
-        ],
-      },
-    });
+    for (const text of ["You should kill yourself", "хуй"]) {
+      const response = await app.inject({
+        method: "POST",
+        url: "/api/posts",
+        cookies: { mycharacter_session: user.cookie },
+        payload: {
+          blocks: [{ type: "paragraph", data: { text } }],
+        },
+      });
 
-    expect(response.statusCode).toBe(422);
-    expect(response.json().error.code).toBe("POST_REJECTED_BY_MODERATION");
+      expect(response.statusCode).toBe(422);
+      expect(response.json().error.code).toBe("POST_REJECTED_BY_MODERATION");
+    }
     const after = await testDb.db
       .selectFrom("posts")
       .select((eb) => eb.fn.countAll<number>().as("count"))

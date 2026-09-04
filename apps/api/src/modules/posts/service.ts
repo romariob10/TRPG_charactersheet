@@ -16,7 +16,10 @@ import { AuditService } from "../audit/service.js";
 import { UserModerationService } from "../moderation/user-moderation-service.js";
 import { NotificationService } from "../notifications/service.js";
 import { WorkspaceService } from "../workspace/service.js";
-import { moderatePostText } from "./auto-moderation.js";
+import {
+  moderatePostContent,
+  type PostModerationReason,
+} from "./auto-moderation.js";
 
 const NO_ACTOR_UUID = "00000000-0000-0000-0000-000000000000";
 const REACTIONS = [
@@ -55,11 +58,24 @@ export interface PostRecommendationSignals {
   followedByMeCount: number;
 }
 
+/* eslint-disable no-unused-vars -- Function type parameters document the moderation contract. */
+export type PostContentModerator = (
+  text: string,
+  hasGameEmbed: boolean,
+) => Promise<PostModerationReason | null>;
+/* eslint-enable no-unused-vars */
+
 export class PostService {
   private readonly db: Kysely<Database>;
+  private readonly moderateContent: PostContentModerator;
 
-  public constructor(database: Kysely<Database>) {
+  public constructor(
+    database: Kysely<Database>,
+    moderateContent: PostContentModerator = (text, hasGameEmbed) =>
+      moderatePostContent(text, { hasGameEmbed }),
+  ) {
     this.db = database;
+    this.moderateContent = moderateContent;
   }
 
   async create(actorId: string, blocks: PostBlock[]): Promise<SocialPost> {
@@ -70,7 +86,11 @@ export class PostService {
     if (!plainText) {
       throw new AppError("POST_EMPTY", 400, "Post content cannot be empty.");
     }
-    assertPostPassesModeration(plainText);
+    await assertPostPassesModeration(
+      plainText,
+      hasGameEmbed(normalized),
+      this.moderateContent,
+    );
     const title = postTitle(normalized);
     const postId = randomUUID();
     const slug = postSlug(title, postId);
@@ -130,7 +150,11 @@ export class PostService {
     if (!plainText) {
       throw new AppError("POST_EMPTY", 400, "Post content cannot be empty.");
     }
-    assertPostPassesModeration(plainText);
+    await assertPostPassesModeration(
+      plainText,
+      hasGameEmbed(normalized),
+      this.moderateContent,
+    );
     const title = postTitle(normalized);
     const imageIds = uniqueIds(
       normalized.flatMap((block) =>
@@ -1104,14 +1128,24 @@ function recommendationScore(
   return freshness + engagement + followedAuthorBoost - ownPostPenalty;
 }
 
-function assertPostPassesModeration(plainText: string): void {
-  const reason = moderatePostText(plainText);
+async function assertPostPassesModeration(
+  plainText: string,
+  includesGameEmbed: boolean,
+  moderateContent: PostContentModerator,
+): Promise<void> {
+  const reason = await moderateContent(plainText, includesGameEmbed);
   if (!reason) return;
   throw new AppError(
     "POST_REJECTED_BY_MODERATION",
     422,
     "The post violates the community content rules.",
     { reason },
+  );
+}
+
+function hasGameEmbed(blocks: PostBlock[]): boolean {
+  return blocks.some(
+    (block) => block.type === "character" || block.type === "system",
   );
 }
 
