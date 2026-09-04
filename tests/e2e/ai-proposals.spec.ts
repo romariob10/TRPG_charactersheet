@@ -50,7 +50,8 @@ test("deterministic AI creates a private preview and applies only non-conflictin
   const chat = page.getByTestId("copilot-chat-textarea");
   await expect(chat).toBeVisible();
   await chat.fill("Заполни имя и биографию для acceptance-проверки");
-  await chat.press("Enter");
+  // The composer can appear before the runtime has enabled submission.
+  await page.getByTestId("copilot-send-button").click();
   await expect(
     page.getByText(/Предлагаемые изменения|Proposed changes/),
   ).toBeVisible({ timeout: 30_000 });

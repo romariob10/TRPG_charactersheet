@@ -131,6 +131,13 @@ jobs:
       - name: Show service logs after a failure
         if: failure()
         run: docker compose --profile test logs --no-color --tail 200
+      - name: Save end-to-end failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-failure-diagnostics
+          path: apps/web/test-results/
+          retention-days: 7
       - name: Stop end-to-end services
         if: always()
         run: |
