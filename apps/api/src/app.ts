@@ -144,7 +144,7 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
   await registerTemplateRoutes(app);
   await registerProfileRoutes(app);
   await registerSocialRoutes(app);
-  await registerPostRoutes(app);
+  await registerPostRoutes(app, aiSettings);
   await registerSearchRoutes(app);
   await registerWorkspaceRoutes(app);
   await registerSystemWorkspaceRoutes(app);

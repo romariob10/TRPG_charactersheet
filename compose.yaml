@@ -9,11 +9,6 @@ services:
       - "127.0.0.1:${OMNIROUTE_PORT:-20128}:20128"
     volumes:
       - omniroute_data:/app/data
-    healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:20128/v1/models').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"]
-      interval: 5s
-      timeout: 3s
-      retries: 30
 
   proxy:
     image: caddy:2.8-alpine
@@ -85,6 +80,7 @@ services:
     depends_on:
       omniroute:
         condition: service_healthy
+        required: false
       postgres:
         condition: service_healthy
       migrate:
@@ -261,6 +257,8 @@ services:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
+      worker-e2e:
+        condition: service_healthy
     network_mode: service:proxy-e2e
     shm_size: 1gb
     volumes:
@@ -333,6 +331,54 @@ services:
       - pdf_data:/var/lib/mycharacter/pdfs
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/api/health/ready').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+
+  worker-e2e:
+    profiles: ["test"]
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+      target: worker-development
+    environment:
+      AI_API_KEY: acceptance-test-key
+      AI_BASE_URL: http://fake-ai:4010/v1
+      AI_CHAT_MODEL: acceptance-model
+      AI_VISION_MODEL: acceptance-model
+      DATABASE_URL: postgresql://mycharacter:mycharacter@postgres:5432/mycharacter
+      OCR_LANG_PATH: /app
+      STORAGE_ROOT: /var/lib/mycharacter/pdfs
+    depends_on:
+      deps:
+        condition: service_completed_successfully
+      fake-ai:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+    init: true
+    command: >-
+      sh -c "pnpm --config.verify-deps-before-run=false --filter @mycharacter/database build
+      && pnpm --config.verify-deps-before-run=false --filter @mycharacter/storage build
+      && pnpm --config.verify-deps-before-run=false --filter @mycharacter/pdf build
+      && touch /tmp/worker-ready
+      && exec pnpm --config.verify-deps-before-run=false --filter @mycharacter/worker dev"
+    volumes:
+      - .:/app
+      - deps_node_modules:/app/node_modules:ro
+      - deps_apps_api_node_modules:/app/apps/api/node_modules:ro
+      - deps_apps_web_node_modules:/app/apps/web/node_modules:ro
+      - deps_apps_worker_node_modules:/app/apps/worker/node_modules:ro
+      - deps_contracts_node_modules:/app/packages/contracts/node_modules:ro
+      - deps_database_node_modules:/app/packages/database/node_modules:ro
+      - deps_pdf_node_modules:/app/packages/pdf/node_modules:ro
+      - deps_storage_node_modules:/app/packages/storage/node_modules:ro
+      - deps_mcp_node_modules:/app/packages/mcp/node_modules:ro
+      - pdf_data:/var/lib/mycharacter/pdfs
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /tmp/worker-ready"]
       interval: 2s
       timeout: 2s
       retries: 30

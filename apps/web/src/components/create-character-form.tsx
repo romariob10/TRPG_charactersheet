@@ -3,10 +3,11 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { BookOpen, Check, FilePlus2, FileText, Loader2, RefreshCw } from "lucide-react";
+import { BookOpen, Check, FilePlus2, FileText, ImageUp, Loader2, RefreshCw } from "lucide-react";
 import Link from "next/link";
 import { Button, buttonClassName } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PortraitCropDialog } from "@/components/sheet/player/portrait-crop-dialog";
 import { apiFetch } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
 
@@ -93,8 +94,12 @@ export function CreateCharacterForm({
   );
   const [name, setName] = useState("");
   const [pending, setPending] = useState(false);
+  const [portrait, setPortrait] = useState<File | null>(null);
+  const [portraitAspectRatio, setPortraitAspectRatio] = useState<number | null>(null);
+  const [portraitCropSource, setPortraitCropSource] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   const submittingRef = useRef(false);
+  const createdCharacterIdRef = useRef<string | null>(null);
 
   const selectedSource = effectiveSources.find((s) => s.id === selectedId);
   const sourceGroups = ["mine", "saved", "official"] as const;
@@ -130,12 +135,39 @@ export function CreateCharacterForm({
               templateId: selectedSource.templateId,
             };
 
-      const result = await apiFetch<{ id: string }>("/api/characters", {
-        method: "POST",
-        body: JSON.stringify(payload),
-      });
+      const result = createdCharacterIdRef.current
+        ? { id: createdCharacterIdRef.current }
+        : await apiFetch<{ id: string }>("/api/characters", {
+            method: "POST",
+            body: JSON.stringify(payload),
+          });
 
       if (result?.id) {
+        createdCharacterIdRef.current = result.id;
+        if (portrait && selectedSource.type === "sheet") {
+          const formData = new FormData();
+          formData.set("file", portrait);
+          const uploadResponse = await fetch(
+            `/api/characters/${result.id}/images?fieldKey=portrait`,
+            { method: "POST", body: formData },
+          );
+          if (!uploadResponse.ok) throw new Error(t("portraitUploadFailed"));
+          if (portraitAspectRatio) {
+            const metadataResponse = await fetch(
+              `/api/characters/${result.id}/sheet-fields/${encodeURIComponent("__image_aspect_ratio__:portrait")}`,
+              {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  value: portraitAspectRatio,
+                  expectedVersion: 0,
+                  clientMutationId: crypto.randomUUID(),
+                }),
+              },
+            );
+            if (!metadataResponse.ok) throw new Error(t("portraitUploadFailed"));
+          }
+        }
         router.push(`/characters/${result.id}`);
       } else {
         throw new Error("No character ID returned.");
@@ -169,22 +201,72 @@ export function CreateCharacterForm({
         />
       </div>
 
+      {selectedSource?.type === "sheet" && <div>
+        <label htmlFor="character-portrait" className="block text-sm font-semibold text-[var(--foreground)]">
+          {t("portrait")}
+        </label>
+        <label className="mt-2 flex cursor-pointer items-center gap-3 rounded-[var(--radius-control)] border border-dashed border-[var(--border)] bg-[var(--surface-subtle)] px-4 py-3 text-sm hover:border-[var(--brand)]/40">
+          <span className="grid size-9 place-items-center rounded-[var(--radius-control)] bg-[var(--surface-strong)] text-[var(--brand)]">
+            <ImageUp className="size-4" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <strong className="block truncate text-sm">{portrait?.name ?? t("portraitChoose")}</strong>
+            <span className="text-xs text-[var(--muted)]">{t("portraitHint")}</span>
+          </span>
+          <input
+            id="character-portrait"
+            type="file"
+            accept="image/png,image/jpeg"
+            disabled={pending}
+            className="sr-only"
+            onChange={(event) => {
+              const file = event.currentTarget.files?.[0];
+              if (file) setPortraitCropSource(file);
+              event.currentTarget.value = "";
+            }}
+          />
+        </label>
+      </div>}
+
+      {portraitCropSource && (
+        <PortraitCropDialog
+          source={portraitCropSource}
+          onCancel={() => setPortraitCropSource(null)}
+          onConfirm={(file, aspectRatio) => {
+            setPortrait(file);
+            setPortraitAspectRatio(aspectRatio);
+            setPortraitCropSource(null);
+          }}
+        />
+      )}
+
       <div>
         <span className="block text-sm font-semibold text-[var(--foreground)]">
           {t("template")} *
         </span>
         {effectiveSources.length ? (
-          <div className="mt-2.5 space-y-5">
+          <div className="mt-2.5 space-y-4">
             {sourceGroups.map((group) => {
               const groupedSources = effectiveSources.filter(
                 (source) => source.group === group,
               );
               if (groupedSources.length === 0) return null;
               return (
-                <section key={group} aria-labelledby={`source-group-${group}`}>
+                <section
+                  key={group}
+                  aria-labelledby={`source-group-${group}`}
+                  data-source-group={group}
+                  className={cn(
+                    "rounded-[var(--radius-control)] border border-[var(--border)] bg-[var(--surface-subtle)] p-3.5 sm:p-4",
+                    group === "official" && "border-[var(--brand)]/25",
+                  )}
+                >
                   <h3
                     id={`source-group-${group}`}
-                    className="mb-2 text-xs font-bold tracking-wide text-[var(--muted)] uppercase"
+                    className={cn(
+                      "mb-3 text-xs font-bold tracking-wide text-[var(--muted)] uppercase",
+                      group === "official" && "text-[var(--brand)]",
+                    )}
                   >
                     {t(`sourceGroup.${group}`)}
                   </h3>

@@ -7,6 +7,8 @@ import { FilesystemStorage, StorageError } from "../src/index.js";
 const roots: string[] = [];
 const validKey =
   "templates/aa/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb.pdf";
+const characterImageKey =
+  "character-images/aa/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb.png";
 
 afterEach(async () => {
   const { rm } = await import("node:fs/promises");
@@ -37,6 +39,14 @@ describe("FilesystemStorage", () => {
     expect(await storage.stat(validKey)).toMatchObject({ size: 9 });
     expect(await storage.listPartialFiles()).toEqual([]);
     expect(root).not.toBe("");
+  });
+
+  it("stores private character portraits", async () => {
+    const { storage } = await createStorage();
+    await storage.put(characterImageKey, Buffer.from([137, 80, 78, 71]));
+
+    const opened = await storage.open(characterImageKey);
+    expect(opened.size).toBe(4);
   });
 
   it("rejects a symlink escape", async () => {

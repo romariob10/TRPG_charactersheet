@@ -231,8 +231,10 @@ export function usePostEditor({
       return post;
     } catch (reason) {
       const message =
-        reason instanceof ApiClientError && reason.code === "POST_EMPTY"
-          ? "POST_EMPTY"
+        reason instanceof ApiClientError &&
+        (reason.code === "POST_EMPTY" ||
+          reason.code === "POST_REJECTED_BY_MODERATION")
+          ? reason.code
           : reason instanceof Error
             ? reason.message
             : "PUBLISH_FAILED";

@@ -11,6 +11,49 @@ import {
 } from "../src/index.js";
 
 describe("Sheet Builder Contracts", () => {
+  it("validates fillable tables and optional checkbox outlines", () => {
+    const table = layoutNodeSchema.parse({
+      id: crypto.randomUUID(),
+      kind: "table",
+      rows: 5,
+      columns: 6,
+      headerRows: 0,
+      headerColumns: 1,
+      cellLabels: ["+5"],
+      fieldBindingPrefix: "skills",
+      readOnly: false,
+      box: boxPropsSchema.parse({}),
+    });
+    const checkbox = layoutNodeSchema.parse({
+      id: crypto.randomUUID(),
+      kind: "checkbox",
+      fieldBinding: "trained",
+      label: "Trained",
+      shape: "circle",
+      showBorder: false,
+      readOnly: false,
+      box: boxPropsSchema.parse({}),
+    });
+
+    expect(table.kind).toBe("table");
+    expect(checkbox.kind).toBe("checkbox");
+    if (checkbox.kind === "checkbox") expect(checkbox.showBorder).toBe(false);
+  });
+
+  it("treats template images as character portrait slots", () => {
+    const image = layoutNodeSchema.parse({
+      id: crypto.randomUUID(),
+      kind: "image",
+      url: "",
+      alt: "",
+      fit: "cover",
+      box: boxPropsSchema.parse({}),
+    });
+
+    expect(image.kind).toBe("image");
+    if (image.kind === "image") expect(image.fieldBinding).toBe("portrait");
+  });
+
   it("validates minimal valid Frame node", () => {
     const validFrame = {
       id: crypto.randomUUID(),

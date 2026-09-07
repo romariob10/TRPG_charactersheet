@@ -34,11 +34,13 @@ export function PostFeed({
   profile,
   embedOptions,
   locale,
+  onPostsChange,
 }: {
   initialPosts: SocialPost[];
   profile: MyProfile;
   embedOptions: PostEmbedOptions;
   locale: string;
+  onPostsChange?: (posts: SocialPost[]) => void;
 }) {
   const t = useTranslations("Posts");
   const [posts, setPosts] = useState(initialPosts);
@@ -63,6 +65,10 @@ export function PostFeed({
       window.removeEventListener("focus", onFocus);
     };
   }, [fetchFeed, filter]);
+
+  useEffect(() => {
+    onPostsChange?.(posts);
+  }, [onPostsChange, posts]);
 
   const handleDeletePost = useCallback((postId: string) => {
     setPosts((current) => current.filter((p) => p.id !== postId));

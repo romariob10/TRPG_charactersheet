@@ -17,6 +17,7 @@ import {
   MoveVertical,
   Repeat,
   Rows2,
+  Table2,
   Trash2,
   Type,
   WrapText,
@@ -264,6 +265,8 @@ export const TreeView: React.FC<TreeViewProps> = ({
         return <ListFilter className="w-3.5 h-3.5 text-muted-foreground" />;
       case "image":
         return <ImageIcon className="w-3.5 h-3.5 text-muted-foreground" />;
+      case "table":
+        return <Table2 className="w-3.5 h-3.5 text-muted-foreground" />;
       case "divider":
         return <Minus className="w-3.5 h-3.5 text-muted-foreground" />;
       case "spacer":
@@ -448,7 +451,7 @@ export const TreeView: React.FC<TreeViewProps> = ({
   return (
     <div
       role="tree"
-      className="flex flex-col gap-0.5 p-2 overflow-y-auto max-h-[calc(100vh-280px)]"
+      className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto p-2"
       onClick={(e) => {
         if (e.target === e.currentTarget) {
           onSelectNode(null);

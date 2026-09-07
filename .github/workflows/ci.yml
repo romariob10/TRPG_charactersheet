@@ -1,0 +1,138 @@
+name: CI
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  lint-typecheck-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Enable pnpm through Corepack
+        run: corepack enable pnpm
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Build internal packages
+        run: |
+          pnpm --filter @mycharacter/contracts build
+          pnpm --filter @mycharacter/database build
+          pnpm --filter @mycharacter/storage build
+          pnpm --filter @mycharacter/pdf build
+      - run: pnpm lint && pnpm typecheck
+
+  unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Enable pnpm through Corepack
+        run: corepack enable pnpm
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Build internal packages
+        run: |
+          pnpm --filter @mycharacter/contracts build
+          pnpm --filter @mycharacter/database build
+          pnpm --filter @mycharacter/storage build
+          pnpm --filter @mycharacter/pdf build
+      - name: Run unit tests
+        run: |
+          pnpm --filter @mycharacter/web test
+          pnpm --filter @mycharacter/contracts test
+          pnpm --filter @mycharacter/storage test
+          pnpm --filter @mycharacter/pdf test
+          pnpm --filter @mycharacter/mcp test
+
+  integration-tests:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-bookworm
+        env:
+          POSTGRES_DB: mycharacter
+          POSTGRES_USER: mycharacter
+          POSTGRES_PASSWORD: mycharacter
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U mycharacter -d mycharacter"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgresql://mycharacter:mycharacter@127.0.0.1:5432/mycharacter
+      PUBLIC_ORIGIN: http://127.0.0.1:8080
+      COOKIE_SECURE: "false"
+      NODE_ENV: test
+    steps:
+      - uses: actions/checkout@v4
+      - name: Enable pnpm through Corepack
+        run: corepack enable pnpm
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install PostgreSQL 17 client
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+            | sudo gpg --batch --yes --dearmor \
+              -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.gpg
+          . /etc/os-release
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.gpg] https://apt.postgresql.org/pub/repos/apt ${VERSION_CODENAME}-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update
+          sudo apt-get install --yes postgresql-client-17
+          echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
+      - run: pnpm install --frozen-lockfile
+      - name: Build internal packages
+        run: |
+          pnpm --filter @mycharacter/contracts build
+          pnpm --filter @mycharacter/database build
+          pnpm --filter @mycharacter/storage build
+          pnpm --filter @mycharacter/pdf build
+      - name: Run integration tests
+        run: |
+          pnpm --filter @mycharacter/database test
+          pnpm --filter @mycharacter/api test
+          pnpm --filter @mycharacter/worker test
+
+  e2e-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Enable pnpm through Corepack
+        run: corepack enable pnpm
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Prepare compose environment
+        run: touch .env.local
+      - name: Run end-to-end tests
+        run: docker compose --profile test run --rm e2e
+      - name: Show service logs after a failure
+        if: failure()
+        run: docker compose --profile test logs --no-color --tail 200
+      - name: Stop end-to-end services
+        if: always()
+        run: |
+          docker compose --profile test down --remove-orphans
+          rm -f .env.local

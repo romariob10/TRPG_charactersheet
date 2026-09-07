@@ -40,6 +40,7 @@ services:
 
   web:
     <<: *app-security
+    image: ghcr.io/romariob10/trpg-charactersheet-web:${MYCHARACTER_IMAGE_TAG:-main}
     build:
       context: .
       dockerfile: Dockerfile.web
@@ -63,6 +64,7 @@ services:
 
   api:
     <<: *app-security
+    image: ghcr.io/romariob10/trpg-charactersheet-api:${MYCHARACTER_IMAGE_TAG:-main}
     build:
       context: .
       dockerfile: Dockerfile.backend
@@ -93,6 +95,7 @@ services:
 
   worker:
     <<: *app-security
+    image: ghcr.io/romariob10/trpg-charactersheet-worker:${MYCHARACTER_IMAGE_TAG:-main}
     build:
       context: .
       dockerfile: Dockerfile.backend

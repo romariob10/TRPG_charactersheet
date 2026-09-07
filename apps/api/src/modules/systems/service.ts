@@ -23,6 +23,7 @@ interface GameSystemRow {
   edition: string | null;
   visibility: "private" | "public";
   is_official: boolean;
+  deleted_at: Date | string | null;
   created_at: Date | string;
   updated_at: Date | string;
   owner_id: string | null;
@@ -47,7 +48,12 @@ export class GameSystemsService {
     let query = this.db
       .selectFrom("game_systems as gs")
       .leftJoin("profiles as p", "p.id", "gs.owner_id")
-      .where("gs.deleted_at", "is", null);
+      .where((eb) =>
+        eb.or([
+          eb("gs.deleted_at", "is", null),
+          eb("gs.is_official", "=", true),
+        ]),
+      );
 
     if (scope === "official") {
       query = query
@@ -55,7 +61,9 @@ export class GameSystemsService {
         .where("gs.is_official", "=", true);
     } else if (scope === "mine") {
       if (!userId) return [];
-      query = query.where("gs.owner_id", "=", userId);
+      query = query
+        .where("gs.owner_id", "=", userId)
+        .where("gs.deleted_at", "is", null);
     } else if (userId) {
       query = query.where((eb) =>
         eb.or([eb("gs.visibility", "=", "public"), eb("gs.owner_id", "=", userId)]),
@@ -74,6 +82,7 @@ export class GameSystemsService {
         "gs.edition",
         "gs.visibility",
         "gs.is_official",
+        "gs.deleted_at",
         "gs.created_at",
         "gs.updated_at",
         "gs.owner_id",
@@ -92,7 +101,12 @@ export class GameSystemsService {
     const rows = await this.db
       .selectFrom("game_systems as gs")
       .leftJoin("profiles as p", "p.id", "gs.owner_id")
-      .where("gs.deleted_at", "is", null)
+      .where((eb) =>
+        eb.or([
+          eb("gs.deleted_at", "is", null),
+          eb("gs.is_official", "=", true),
+        ]),
+      )
       .select([
         "gs.id",
         "gs.slug",
@@ -102,6 +116,7 @@ export class GameSystemsService {
         "gs.edition",
         "gs.visibility",
         "gs.is_official",
+        "gs.deleted_at",
         "gs.created_at",
         "gs.updated_at",
         "gs.owner_id",
@@ -121,7 +136,12 @@ export class GameSystemsService {
     let row = await this.db
       .selectFrom("game_systems as gs")
       .leftJoin("profiles as p", "p.id", "gs.owner_id")
-      .where("gs.deleted_at", "is", null)
+      .where((eb) =>
+        eb.or([
+          eb("gs.deleted_at", "is", null),
+          eb("gs.is_official", "=", true),
+        ]),
+      )
       .where((eb) => eb.or([eb("gs.id", "=", idOrSlug), eb("gs.slug", "=", idOrSlug)]))
       .select([
         "gs.id",
@@ -132,6 +152,7 @@ export class GameSystemsService {
         "gs.edition",
         "gs.visibility",
         "gs.is_official",
+        "gs.deleted_at",
         "gs.created_at",
         "gs.updated_at",
         "gs.owner_id",
@@ -147,7 +168,12 @@ export class GameSystemsService {
       row = await this.db
         .selectFrom("game_systems as gs")
         .leftJoin("profiles as p", "p.id", "gs.owner_id")
-        .where("gs.deleted_at", "is", null)
+        .where((eb) =>
+          eb.or([
+            eb("gs.deleted_at", "is", null),
+            eb("gs.is_official", "=", true),
+          ]),
+        )
         .where("gs.legacy_template_id", "=", idOrSlug)
         .select([
           "gs.id",
@@ -158,6 +184,7 @@ export class GameSystemsService {
           "gs.edition",
           "gs.visibility",
           "gs.is_official",
+          "gs.deleted_at",
           "gs.created_at",
           "gs.updated_at",
           "gs.owner_id",
@@ -315,7 +342,12 @@ export class GameSystemsService {
     const system = await this.db
       .selectFrom("game_systems")
       .where("id", "=", systemId)
-      .where("deleted_at", "is", null)
+      .where((eb) =>
+        eb.or([
+          eb("deleted_at", "is", null),
+          eb("is_official", "=", true),
+        ]),
+      )
       .select("id")
       .executeTakeFirst();
 
@@ -346,6 +378,7 @@ export class GameSystemsService {
         "gs.edition",
         "gs.visibility",
         "gs.is_official",
+        "gs.deleted_at",
         "gs.created_at",
         "gs.updated_at",
         "gs.owner_id",
@@ -364,7 +397,7 @@ export class GameSystemsService {
       .selectFrom("game_systems")
       .where("id", "=", systemId)
       .where("deleted_at", "is", null)
-      .select(["id", "owner_id"])
+      .select(["id", "owner_id", "is_official"])
       .executeTakeFirst();
 
     if (!system) {
@@ -373,6 +406,15 @@ export class GameSystemsService {
 
     if (system.owner_id !== userId) {
       throw new AppError("FORBIDDEN", 403, "Only the owner can delete this game system.");
+    }
+
+    if (system.is_official) {
+      await this.db
+        .updateTable("game_systems")
+        .set({ owner_id: null, updated_at: sql`now()` })
+        .where("id", "=", systemId)
+        .execute();
+      return;
     }
 
     await this.db
@@ -539,7 +581,9 @@ export class GameSystemsService {
       visibility: row.visibility,
       isOfficial: row.is_official,
       legacyTemplateId: row.legacy_template_id ?? undefined,
-      isOwner: Boolean(currentUserId && row.owner_id === currentUserId),
+      isOwner: Boolean(
+        currentUserId && row.owner_id === currentUserId && row.deleted_at === null,
+      ),
       owner: row.owner_id && row.author_username
         ? {
             id: row.owner_id,

@@ -76,7 +76,7 @@ const FateCornerTurnback: React.FC<{
       height={geometry.height}
       aria-hidden="true"
     >
-      <g transform={`rotate(${geometry.rotations[corner]} 5 5)`}>
+      <g transform={`rotate(${geometry.rotations[corner] + 180} 5 5)`}>
         <path d={geometry.clipPath} fill={maskColor} />
         <circle
           cx={geometry.outerCircle.cx}
@@ -212,10 +212,15 @@ const RenderEdgeOrnament: React.FC<{
   if (!isFate && !isDnd) {
     return (
       <div
-        style={{ ...containerStyle, backgroundColor: maskColor, borderColor: color }}
-        className="rounded border px-2.5 py-0.5 shadow-xs"
+        style={{ ...containerStyle, backgroundColor: maskColor }}
+        className="px-0.5 py-0.5"
       >
-        <span style={typographyStyle}>{text}</span>
+        <span
+          className="relative z-10 px-0.5"
+          style={{ ...typographyStyle, backgroundColor: maskColor }}
+        >
+          {text}
+        </span>
       </div>
     );
   }

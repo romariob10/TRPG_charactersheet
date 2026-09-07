@@ -59,7 +59,10 @@
     "createText": "Create a sheet or publish a system and it will appear in the community feed.",
     "newCharacter": "New character",
     "newSystem": "New system",
-    "people": "Creators in the feed"
+    "people": "Creators in the feed",
+    "popularAuthors": "Popular creators",
+    "subscriptions": "All subscriptions",
+    "subscriptionsEmpty": "You are not following anyone yet."
   },
   "Posts": {
     "startPost": "What is new in your game?",
@@ -78,6 +81,7 @@
     "publish": "Publish",
     "publishing": "Publishing…",
     "publishFailed": "Could not publish the post.",
+    "moderationRejected": "Automatic moderation rejected the post. Check it for profanity, abuse, link spam, and relevance to tabletop role-playing games.",
     "empty": "Add at least one text block to the post.",
     "imageCaption": "Image caption",
     "chooseImage": "Choose an image",
@@ -398,6 +402,10 @@
   "Create": {
     "title": "New character",
     "name": "Character name",
+    "portrait": "Character portrait",
+    "portraitChoose": "Choose an image",
+    "portraitHint": "Optional · PNG or JPEG up to 8 MB",
+    "portraitUploadFailed": "The character was created, but the portrait could not be uploaded. Try the upload again.",
     "upload": "Upload PDF",
     "template": "Choose a template",
     "drop": "Drop a PDF here or choose a file",
@@ -421,8 +429,8 @@
     "pages": "{count, plural, one {# page} other {# pages}}",
     "sourceGroup": {
       "mine": "My templates",
-      "saved": "Saved",
-      "official": "Official"
+      "saved": "Saved templates",
+      "official": "Official templates"
     }
   },
   "Editor": {
@@ -817,7 +825,7 @@
     "mySystems": "My systems",
     "selectSheet": "Select character sheet",
     "selectSystem": "Select system",
-    "sendHint": "Enter to send, Shift+Enter for new line",
+    "sendHint": "Enter to send, Shift+Enter for new line · /roll x rolls from 1 to x",
     "uploadingImage": "Uploading image…",
     "imageUploadFailed": "Failed to upload image"
   },
@@ -841,6 +849,7 @@
     "palette": "Add Elements",
     "layers": "Layers",
     "inspector": "Properties",
+    "targetAdaptive": "Adaptive Sheet",
     "targetMobile": "Mobile",
     "targetTablet": "Tablet",
     "targetDesktop": "Desktop",
@@ -872,7 +881,7 @@
     "zoomOut": "Zoom out",
     "zoomIn": "Zoom in",
     "resizePanel": "Resize layers panel",
-    "adaptTargetsHint": "Generate mobile, tablet, and print layouts from desktop",
+    "adaptTargetsHint": "Generate mobile and print layouts from desktop",
     "defaultChangelog": "Published version",
     "publishFailed": "Failed to publish version",
     "publishSucceeded": "Sheet version published successfully",
@@ -889,6 +898,7 @@
       "checkbox": "Checkbox",
       "select": "Select",
       "image": "Image",
+      "table": "Table",
       "divider": "Divider",
       "spacer": "Spacer",
       "frame": "Frame"
@@ -1006,7 +1016,23 @@
     "defaultValue": "Default value",
     "defaultValuePlaceholder": "Optional default",
     "cancel": "Cancel",
-    "saveAndBind": "Save and bind"
+    "saveAndBind": "Save and bind",
+    "showCheckboxBorder": "Show checkbox outline",
+    "imageSection": "Image",
+    "characterImageHint": "This defines an image slot. The character portrait is uploaded when a user creates or fills in the character.",
+    "imageFieldBinding": "Character image field key",
+    "uploadingImage": "Uploading image…",
+    "imageUploadFailed": "Could not upload image",
+    "imageFit": "Image fit",
+    "imageFitContain": "Contain",
+    "imageFitCover": "Cover",
+    "imageFitFill": "Stretch",
+    "tableSection": "Table",
+    "tableRows": "Rows",
+    "tableColumns": "Columns",
+    "tableHeaderRows": "Header rows",
+    "tableHeaderColumns": "Header columns",
+    "tableLabels": "Cell labels (columns separated with |)"
   },
   "Palette": {
     "layoutFrames": "Layout frames",
@@ -1020,6 +1046,8 @@
     "dividerHint": "Border line",
     "spacer": "Spacer",
     "spacerHint": "Empty spacing",
+    "table": "Table",
+    "tableHint": "Fillable grid",
     "inputsAndFields": "Inputs and fields",
     "headerText": "Header text",
     "headerTextHint": "Title display",
@@ -1033,6 +1061,8 @@
     "textAreaHint": "Multiline notes",
     "selectDropdown": "Select",
     "selectDropdownHint": "Options list",
+    "image": "Image",
+    "imageHint": "Upload PNG, JPEG or WebP",
     "repeatersAndCollections": "Repeaters and collections",
     "dynamicList": "Dynamic list",
     "dynamicListHint": "Player adds rows",
@@ -1088,12 +1118,36 @@
     "saving": "Saving…",
     "saveFailed": "Failed to save field",
     "versionConflict": "Conflict: this field was modified in another session. Changes have been reloaded.",
+    "adaptive": "Adaptive Sheet",
     "mobile": "Mobile",
     "tablet": "Tablet",
     "desktop": "Desktop",
     "print": "A4 Print",
     "exportPdf": "Export Vector PDF",
+    "exportFailed": "Could not prepare the PDF",
+    "printPopupBlocked": "The browser blocked the print window. Allow pop-ups and try again.",
     "printAction": "Print",
-    "noLayout": "No sheet blueprint layout available for this character."
+    "noLayout": "No sheet blueprint layout available for this character.",
+    "textareaFontSize": "Text area font size",
+    "textareaFontSmaller": "Decrease this text area's font size",
+    "textareaFontLarger": "Increase this text area's font size",
+    "portraitPlaceholder": "Upload character portrait",
+    "portraitAlt": "Character portrait",
+    "replacePortrait": "Replace portrait",
+    "cropPortrait": "Crop again",
+    "imageUploadFailed": "Could not upload the portrait"
+  },
+  "PortraitCrop": {
+    "title": "Crop portrait",
+    "description": "Adjust the ratio, zoom, and position. The portrait height on the sheet will follow this crop.",
+    "ratio": "Aspect ratio",
+    "zoom": "Zoom",
+    "horizontal": "Horizontal position",
+    "vertical": "Vertical position",
+    "loading": "Loading image",
+    "loadFailed": "Could not open the image.",
+    "applyFailed": "Could not save the cropped portrait. Try again.",
+    "cancel": "Cancel",
+    "apply": "Apply crop"
   }
 }

@@ -118,6 +118,15 @@ describe("AppSidebar", () => {
     expect(screen.getByRole("button", { name: "account" })).toBeInTheDocument();
   });
 
+  it("shows history in the full-width mobile drawer even when desktop is collapsed", () => {
+    renderSidebar({}, true);
+    expect(screen.queryByTestId("workspace-history")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "openNavigation" }));
+
+    expect(screen.getByTestId("workspace-history")).toBeInTheDocument();
+  });
+
   it("reveals the expand control over the logo when the collapsed header is hovered", () => {
     renderSidebar({}, true);
     expect(

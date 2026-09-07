@@ -105,6 +105,7 @@ export const checkboxNodeSchema = z.object({
   fieldBinding: z.string().trim().min(1).max(64),
   label: z.string().trim().max(120).default(""),
   shape: checkboxShapeSchema.default("circle"),
+  showBorder: z.boolean().optional(),
   readOnly: z.boolean().default(false),
 });
 export type CheckboxNode = z.infer<typeof checkboxNodeSchema>;
@@ -129,12 +130,26 @@ export type SelectNode = z.infer<typeof selectNodeSchema>;
 export const imageNodeSchema = z.object({
   ...baseNodeProps,
   kind: z.literal("image"),
+  fieldBinding: z.string().trim().min(1).max(64).default("portrait"),
   url: z.string().trim().max(1000).default(""),
   alt: z.string().trim().max(200).default(""),
   fit: imageFitSchema.default("cover"),
   aspectRatio: z.string().trim().max(20).optional(),
 });
 export type ImageNode = z.infer<typeof imageNodeSchema>;
+
+export const tableNodeSchema = z.object({
+  ...baseNodeProps,
+  kind: z.literal("table"),
+  rows: z.number().int().min(1).max(20).default(5),
+  columns: z.number().int().min(1).max(12).default(6),
+  headerRows: z.number().int().min(0).max(5).default(0),
+  headerColumns: z.number().int().min(0).max(5).default(1),
+  cellLabels: z.array(z.string().trim().max(120)).max(240).default([]),
+  fieldBindingPrefix: z.string().trim().min(1).max(48),
+  readOnly: z.boolean().default(false),
+});
+export type TableNode = z.infer<typeof tableNodeSchema>;
 
 export const dividerNodeSchema = z.object({
   ...baseNodeProps,
@@ -171,6 +186,7 @@ export type LayoutNode =
   | CheckboxNode
   | SelectNode
   | ImageNode
+  | TableNode
   | DividerNode
   | SpacerNode
   | ComponentInstanceNode
@@ -235,6 +251,7 @@ export const layoutNodeSchema: z.ZodType<LayoutNode> = z.lazy(() =>
     checkboxNodeSchema,
     selectNodeSchema,
     imageNodeSchema,
+    tableNodeSchema,
     dividerNodeSchema,
     spacerNodeSchema,
     componentInstanceNodeSchema,

@@ -1,14 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { sql } from "kysely";
 import { createDatabase } from "../src/db.js";
-import { runMigrations } from "../src/migrate.js";
 import { createTestDatabase, destroyTestDatabase } from "../src/testing.js";
-import { down as removeWorkspaceItems } from "../migrations/202608190004_workspace_items.js";
-import { down as removeSystemProjects } from "../migrations/202608190005_system_projects.js";
-import { down as removeDirectMessageImages } from "../migrations/202608220001_direct_message_images.js";
-import { down as removeSheetBuilderAndSystems } from "../migrations/202608230001_sheet_builder_and_systems.js";
-
-const REPAIR_MIGRATION = "202608190001_repair_social_tables";
+import { up as repairSocialTables } from "../migrations/202608190001_repair_social_tables.js";
 
 const REPAIRED_TABLES = [
   "admin_audit_events",
@@ -43,57 +37,32 @@ describe("social table repair migration", () => {
     return rows.map((row) => row.table_name).sort();
   }
 
-  // Kysely refuses to run migrations out of order, so every record from the
-  // repair migration onwards has to go for it to be replayed. Revert the
-  // objects from those later migrations as well so their normal, intentionally
-  // non-idempotent `up` functions can run again inside this isolated schema.
-  async function forgetRepairMigration(): Promise<void> {
+  async function applyRepairMigration(): Promise<void> {
     const db = createDatabase(testDb.databaseUrl, {
       searchPath: `${testDb.schema},public`,
     });
     try {
-      await removeSheetBuilderAndSystems(db);
-      await removeDirectMessageImages(db);
-      await removeSystemProjects(db);
-      await removeWorkspaceItems(db);
-    } finally {
-      await db.destroy();
-    }
-    await sql`
-      delete from ${sql.id(testDb.schema, "kysely_migration")}
-      where name >= ${REPAIR_MIGRATION}
-    `.execute(testDb.db);
-  }
-
-  async function migrateAgain(): Promise<void> {
-    const db = createDatabase(testDb.databaseUrl, {
-      searchPath: `${testDb.schema},public`,
-    });
-    try {
-      await runMigrations(db, { migrationTableSchema: testDb.schema });
+      await repairSocialTables(db);
     } finally {
       await db.destroy();
     }
   }
 
-  it("re-creates tables that a ledger-only migration record left behind", async () => {
+  it("re-creates tables missing from a legacy schema", async () => {
     for (const table of REPAIRED_TABLES) {
       await sql`drop table if exists ${sql.id(testDb.schema, table)} cascade`.execute(
         testDb.db,
       );
     }
-    await forgetRepairMigration();
     expect(await presentTables()).toEqual([]);
 
-    await migrateAgain();
+    await applyRepairMigration();
 
     expect(await presentTables()).toEqual(REPAIRED_TABLES);
   });
 
   it("leaves an already consistent schema untouched", async () => {
-    await forgetRepairMigration();
-
-    await expect(migrateAgain()).resolves.toBeUndefined();
+    await expect(applyRepairMigration()).resolves.toBeUndefined();
 
     expect(await presentTables()).toEqual(REPAIRED_TABLES);
   });

@@ -63,6 +63,7 @@ interface ResolvedSystemTarget {
   title: string;
   gameSystemName: string | null;
   ownerId: string;
+  visibility: "private" | "public" | "curated";
 }
 
 export class SystemWorkspaceService {
@@ -78,7 +79,7 @@ export class SystemWorkspaceService {
     // 1. Check game_systems by id
     const gs = await this.db
       .selectFrom("game_systems")
-      .select(["id", "title", "owner_id as ownerId", "legacy_template_id as legacyTemplateId", "deleted_at as deletedAt"])
+      .select(["id", "title", "owner_id as ownerId", "visibility", "legacy_template_id as legacyTemplateId", "deleted_at as deletedAt"])
       .where("id", "=", id)
       .executeTakeFirst();
 
@@ -90,13 +91,14 @@ export class SystemWorkspaceService {
         title: gs.title,
         gameSystemName: gs.title,
         ownerId: gs.ownerId ?? "",
+        visibility: gs.visibility,
       };
     }
 
     // 2. Check pdf_templates by id
     const template = await this.db
       .selectFrom("pdf_templates")
-      .select(["id", "title", "owner_id as ownerId", "game_system as gameSystem", "deleted_at as deletedAt"])
+      .select(["id", "title", "owner_id as ownerId", "visibility", "game_system as gameSystem", "deleted_at as deletedAt"])
       .where("id", "=", id)
       .executeTakeFirst();
 
@@ -116,6 +118,7 @@ export class SystemWorkspaceService {
         title: template.title,
         gameSystemName: template.gameSystem ?? null,
         ownerId: template.ownerId,
+        visibility: template.visibility,
       };
     }
 
@@ -125,6 +128,14 @@ export class SystemWorkspaceService {
   private async requireOwner(userId: string, id: string): Promise<ResolvedSystemTarget> {
     const target = await this.resolveSystem(id);
     if (target.ownerId !== userId) {
+      throw new AppError("SYSTEM_NOT_FOUND", 404, "System not found.");
+    }
+    return target;
+  }
+
+  private async requireReader(userId: string, id: string): Promise<ResolvedSystemTarget> {
+    const target = await this.resolveSystem(id);
+    if (target.ownerId !== userId && target.visibility === "private") {
       throw new AppError("SYSTEM_NOT_FOUND", 404, "System not found.");
     }
     return target;
@@ -366,7 +377,7 @@ export class SystemWorkspaceService {
       stream: NodeJS.ReadableStream & AsyncIterable<Buffer | string>;
     }>;
   }> {
-    const target = await this.requireOwner(userId, id);
+    const target = await this.requireReader(userId, id);
     const row = await this.db
       .selectFrom("system_materials")
       .select([

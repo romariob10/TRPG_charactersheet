@@ -59,6 +59,7 @@ export type {
   TemplateCommentList,
 } from "./community.js";
 export {
+  feedAuthorsResponseSchema,
   friendSummarySchema,
   listFriendsResponseSchema,
   myProfileSchema,
@@ -69,6 +70,7 @@ export {
   usernameSchema,
 } from "./profiles.js";
 export type {
+  FeedAuthorsResponse,
   FriendSummary,
   ListFriendsResponse,
   MyProfile,
@@ -427,6 +429,7 @@ export {
   dividerNodeSchema,
   fieldInputNodeSchema,
   imageNodeSchema,
+  tableNodeSchema,
   layoutNodeSchema,
   normalizeFrameNode,
   normalizeLayoutNode,
@@ -460,6 +463,7 @@ export type {
   SheetFieldDefinition,
   SpacerNode,
   TargetLayoutMap,
+  TableNode,
   TextNode,
   TextareaNode,
 } from "./sheet-blueprints.js";
