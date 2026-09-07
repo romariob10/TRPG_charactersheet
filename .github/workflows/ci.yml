@@ -16,6 +16,7 @@ permissions:
 jobs:
   lint-typecheck-build:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - name: Enable pnpm through Corepack
@@ -32,9 +33,12 @@ jobs:
           pnpm --filter @mycharacter/storage build
           pnpm --filter @mycharacter/pdf build
       - run: pnpm lint && pnpm typecheck
+      - name: Build production applications
+        run: pnpm build
 
   unit-tests:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - name: Enable pnpm through Corepack
@@ -60,6 +64,7 @@ jobs:
 
   integration-tests:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     services:
       postgres:
         image: postgres:17-bookworm
