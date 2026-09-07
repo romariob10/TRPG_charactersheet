@@ -7,7 +7,7 @@ export default defineConfig({
   fullyParallel: false,
   workers: 1,
   timeout: 120_000,
-  use: { baseURL, trace: "on-first-retry" },
+  use: { baseURL, trace: "retain-on-failure", screenshot: "only-on-failure" },
   webServer: process.env.E2E_BASE_URL
     ? undefined
     : { command: "pnpm dev --port 3100", url: baseURL, reuseExistingServer: false },
