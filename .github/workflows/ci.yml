@@ -16,6 +16,7 @@ permissions:
 jobs:
   lint-typecheck-build:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - name: Enable pnpm through Corepack
@@ -32,9 +33,12 @@ jobs:
           pnpm --filter @mycharacter/storage build
           pnpm --filter @mycharacter/pdf build
       - run: pnpm lint && pnpm typecheck
+      - name: Build production applications
+        run: pnpm build
 
   unit-tests:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - name: Enable pnpm through Corepack
@@ -60,6 +64,7 @@ jobs:
 
   integration-tests:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     services:
       postgres:
         image: postgres:17-bookworm
@@ -131,6 +136,13 @@ jobs:
       - name: Show service logs after a failure
         if: failure()
         run: docker compose --profile test logs --no-color --tail 200
+      - name: Save end-to-end failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-failure-diagnostics
+          path: apps/web/test-results/
+          retention-days: 7
       - name: Stop end-to-end services
         if: always()
         run: |

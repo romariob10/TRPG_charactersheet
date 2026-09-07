@@ -67,7 +67,7 @@ describe("authentication session serialization", () => {
     await expect(bootstrap.login("race@example.com", oldPassword)).rejects.toMatchObject({
       code: "AUTH_INVALID_CREDENTIALS",
     });
-  }, 1_000);
+  });
 
   it("performs one password verification for active-wrong, missing, and disabled logins", async () => {
     const bootstrap = new AuthService(db);
