@@ -1,4 +1,26 @@
 {
+  "Agents": {
+    "syncError": "Agent presence could not be refreshed",
+    "title": "AI agents · MCP",
+    "description": "Connect your agent to MyCharacter. It can create and edit your systems, sheet templates and characters. Tokens last 90 days and do not grant access to security settings or administration.",
+    "name": "Agent name",
+    "create": "Create token",
+    "working": "Please wait…",
+    "error": "The request failed. Please try again.",
+    "once": "Copy this token now: it cannot be shown again. Share it only with your agent.",
+    "token": "New agent token",
+    "copy": "Copy",
+    "copied": "Copied",
+    "dismiss": "Dismiss",
+    "loading": "Loading agents…",
+    "empty": "No agents connected yet.",
+    "expires": "Until {date}",
+    "revoke": "Revoke",
+    "setup": "Connect via MCP",
+    "setupHelp": "Build with pnpm --filter @mycharacter/contracts build, then pnpm --filter @mycharacter/mcp build. In your agent's MCP settings, enter the absolute server path and replace TOKEN with the copied token. During work the agent calls set_presence to show its name and cursor, and leave_editor when finished.",
+    "online": "Connected agents",
+    "agent": "AI"
+  },
   "Common": {
     "appName": "MyCharacter",
     "save": "Save",

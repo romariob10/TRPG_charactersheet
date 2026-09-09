@@ -1,5 +1,6 @@
 "use client";
 
+import { AgentPresence } from "@/components/agent-presence";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Layers, Plus, Redo2, Undo2 } from "lucide-react";
 import { useTranslations } from "next-intl";
@@ -12,7 +13,8 @@ import type {
   TargetLayoutKind,
   TargetLayoutMap,
 } from "@mycharacter/contracts";
-import { defaultBoxProps } from "@mycharacter/contracts";
+import { apiFetch } from "@/lib/api/client";
+import { sheetEditorDataResponseSchema, defaultBoxProps } from "@mycharacter/contracts";
 import {
   duplicateNode,
   findNode,
@@ -383,6 +385,26 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
     };
   }, [layouts, draftFields, flushAutosave]);
 
+  const syncAgentDraft = async (signal: AbortSignal) => {
+    if (saveStatus !== "saved" || pendingSaveRef.current || saveInFlightRef.current) return;
+    const before = latestDraftRef.current;
+    const data = sheetEditorDataResponseSchema.parse(await apiFetch<unknown>(
+      `/api/sheet-definitions/${initialData.sheetDefinition.id}/editor`, { signal },
+    ));
+    if (signal.aborted || pendingSaveRef.current || saveInFlightRef.current || latestDraftRef.current !== before || data.draft.revision <= revisionRef.current) return;
+    const next = { layouts: data.draft.layouts, fields: data.draft.fields };
+    // A remote draft must not trigger a new autosave or overwrite local edits.
+    observedDraftRef.current = next;
+    latestDraftRef.current = next;
+    revisionRef.current = data.draft.revision;
+    setLayouts(next.layouts);
+    setDraftFields(next.fields);
+    setRevision(data.draft.revision);
+    setResolvedComponents(new Map(Object.entries(data.resolvedComponents)));
+    setHistory([]);
+    setFuture([]);
+  };
+
   // Insert component instance from library
   const handleInsertComponent = (
     summary: ComponentSummary,
@@ -472,12 +494,11 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
     setSidebarWidth((width) => Math.max(220, Math.min(480, width + delta)));
   };
 
-  const canvasSizeClass = {
-    mobile: "max-w-sm",
-    tablet: "max-w-2xl",
-    desktop: "max-w-4xl",
-    print:
-      "h-[874px] w-[595px] max-w-none flex-none bg-white text-black shadow-2xl",
+  const canvasWidth = {
+    mobile: 384,
+    tablet: 672,
+    desktop: 896,
+    print: PRINT_CANVAS_WIDTH,
   }[activeTarget];
 
   return (
@@ -673,30 +694,21 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
 
         {/* Central Visual Canvas */}
         <main
-          className="flex-1 bg-muted/30 p-8 overflow-auto flex items-start justify-center relative"
+          className="min-w-0 flex-1 bg-muted/30 p-8 overflow-auto relative"
           onClick={() => setSelectedNodeId(null)}
         >
-          <div
-            className={activeTarget === "print" ? "flex-none" : "w-full"}
-            style={
-              activeTarget === "print"
-                ? {
-                    width: PRINT_CANVAS_WIDTH * zoom,
-                    height: PRINT_CANVAS_HEIGHT * zoom,
-                  }
-                : undefined
-            }
-          >
+          <div className="mx-auto w-fit">
             <div
               data-sheet-page
               data-sheet-target={activeTarget}
               style={{
-                transform: `scale(${zoom})`,
-                transformOrigin: "top center",
-                transition: "transform 0.1s ease-out",
+                width: canvasWidth,
+                height: activeTarget === "print" ? PRINT_CANVAS_HEIGHT : undefined,
+                zoom,
               }}
-              className={`${activeTarget === "print" ? "" : "w-full"} ${canvasSizeClass} transition-all duration-200`}
+              className={activeTarget === "print" ? "relative bg-white text-black shadow-2xl" : "relative"}
             >
+              <AgentPresence resourceType="sheet" resourceId={initialData.sheetDefinition.id} target={activeTarget} onSync={syncAgentDraft} />
               <SheetRenderProvider
                 value={{
                   mode: "builder",

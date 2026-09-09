@@ -1,5 +1,8 @@
 "use client";
 
+import { characterSheetStateSchema } from "@mycharacter/contracts";
+import { apiFetch } from "@/lib/api/client";
+import { AgentPresence } from "@/components/agent-presence";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Download, Printer } from "lucide-react";
@@ -56,6 +59,20 @@ export const CharacterSheetPlayer: React.FC<CharacterSheetPlayerProps> = ({
     new Map<string, ReturnType<typeof setTimeout>>(),
   );
   const fieldsInFlight = useRef(new Set<string>());
+
+  const syncAgentChanges = async (signal: AbortSignal) => {
+    const state = characterSheetStateSchema.parse(await apiFetch<unknown>(`/api/characters/${character.id}/sheet-state`, { signal }));
+    if (signal.aborted) return;
+    const changes: Record<string, FieldValue> = {};
+    for (const [key, value] of Object.entries(state.values)) {
+      if (pendingFieldValues.current.has(key) || fieldsInFlight.current.has(key)) continue;
+      const version = state.versions[key] ?? 0;
+      if (version <= (fieldVersions.current[key] ?? -1)) continue;
+      fieldVersions.current[key] = version;
+      changes[key] = value;
+    }
+    if (Object.keys(changes).length) setFieldValues(previous => ({ ...previous, ...changes }));
+  };
 
   useEffect(() => {
     const media = window.matchMedia(MOBILE_LAYOUT_QUERY);
@@ -484,7 +501,7 @@ export const CharacterSheetPlayer: React.FC<CharacterSheetPlayerProps> = ({
                 ? { width: PRINT_CANVAS_WIDTH, height: PRINT_CANVAS_HEIGHT }
                 : undefined
             }
-            className={`w-full ${
+            className={`relative w-full ${
               target === "mobile"
                 ? "max-w-md"
                 : target === "print"
@@ -492,6 +509,7 @@ export const CharacterSheetPlayer: React.FC<CharacterSheetPlayerProps> = ({
                   : "max-w-5xl"
             }`}
           >
+            <AgentPresence resourceType="character" resourceId={character.id} target={target} onSync={syncAgentChanges} />
             <SheetRenderProvider
               value={{
                 target,

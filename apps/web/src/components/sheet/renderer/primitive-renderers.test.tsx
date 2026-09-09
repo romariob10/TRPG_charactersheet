@@ -74,6 +74,50 @@ describe("sheet primitive inputs", () => {
     expect(screen.getByRole("textbox")).not.toHaveClass("resize-none");
   });
 
+  it.each([0.5, 1, 1.5])("saves layout height at zoom %s and allows shrinking again", (zoom) => {
+    const onFieldValueChange = vi.fn();
+    const onFieldCommit = vi.fn();
+    render(
+      <SheetRenderProvider value={{ target: "desktop", mode: "player",
+        fieldValues: { notes: "", "__layout_height__:notes": 180 },
+        onFieldValueChange, onFieldCommit }}>
+        <RenderTextarea node={{ id: "notes", kind: "textarea", fieldBinding: "notes",
+          label: "", placeholder: "", rows: 3, variant: "boxed", readOnly: false,
+          box: defaultBoxProps }} />
+      </SheetRenderProvider>,
+    );
+    const textarea = screen.getByRole("textbox");
+    expect(textarea.style.minHeight).toBe("");
+    vi.spyOn(textarea, "getBoundingClientRect").mockReturnValue(
+      new DOMRect(0, 0, 300 * zoom, 100 * zoom),
+    );
+    const height = vi.spyOn(textarea, "offsetHeight", "get").mockReturnValue(180);
+    fireEvent.pointerDown(textarea);
+    height.mockReturnValue(100);
+    // Releasing outside the field must still save the resize.
+    fireEvent.pointerUp(window);
+    expect(onFieldValueChange).toHaveBeenCalledWith("__layout_height__:notes", 100);
+    expect(onFieldCommit).toHaveBeenCalledWith("__layout_height__:notes");
+    onFieldValueChange.mockClear();
+    fireEvent.pointerDown(textarea);
+    fireEvent.pointerUp(window);
+    expect(onFieldValueChange).not.toHaveBeenCalled();
+  });
+
+  it("fits the template box without offering an unsaved native resize in the builder", () => {
+    render(
+      <SheetRenderProvider value={{ target: "desktop", mode: "builder" }}>
+        <RenderTextarea node={{ id: "notes", kind: "textarea", fieldBinding: "notes",
+          label: "", placeholder: "", rows: 3, variant: "boxed", readOnly: false,
+          box: { ...defaultBoxProps, height: { mode: "fixed", value: 200 } } }} />
+      </SheetRenderProvider>,
+    );
+    const textarea = screen.getByRole("textbox");
+    expect(textarea).toHaveClass("resize-none", "flex-1");
+    expect(textarea.parentElement).toHaveClass("h-full");
+    expect(textarea.style.height).toBe("");
+  });
+
   it("restores the saved font size and grows to the text content", () => {
     const onFieldValueChange = vi.fn();
     const { rerender } = render(

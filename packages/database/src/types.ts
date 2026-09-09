@@ -642,7 +642,21 @@ export interface CharacterImagesTable {
   created_at: Timestamp;
 }
 
+export interface AgentTokensTable {
+  id: Uuid;
+  user_id: string;
+  name: string;
+  prefix: string;
+  token_hash: string;
+  created_at: Timestamp;
+  expires_at: Timestamp;
+  last_used_at: Timestamp | null;
+  presence: Json | null;
+  presence_at: Timestamp | null;
+}
+
 export interface Database {
+  agent_tokens: AgentTokensTable;
   users: UsersTable;
   profiles: ProfilesTable;
   sessions: SessionsTable;

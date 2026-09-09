@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
@@ -5,9 +6,12 @@ import {
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import { MyCharacterClient, markdownToBlocks } from "./client.js";
+import { createCharacterRequestSchema } from "@mycharacter/contracts";
+import { authoringToolDefinitions, callAuthoringTool } from "./authoring-tools.js";
 import type { PostBlock } from "@mycharacter/contracts";
 
 export interface CreateMcpServerOptions {
+  token?: string;
   apiUrl?: string;
   origin?: string;
   email?: string;
@@ -17,6 +21,7 @@ export interface CreateMcpServerOptions {
 
 export function createMyCharacterMcpServer(options: CreateMcpServerOptions = {}) {
   const client = options.client || new MyCharacterClient({
+    token: options.token || process.env.MYCHARACTER_TOKEN,
     baseUrl: options.apiUrl || process.env.MYCHARACTER_API_URL,
     origin: options.origin || process.env.MYCHARACTER_ORIGIN,
   });
@@ -37,6 +42,7 @@ export function createMyCharacterMcpServer(options: CreateMcpServerOptions = {})
   server.setRequestHandler(ListToolsRequestSchema, async () => {
     return {
       tools: [
+        ...authoringToolDefinitions(),
         {
           name: "mycharacter_get_my_profile",
           description: "Get profile information of the currently authenticated user (ID, email, username, displayName, bio, stats).",
@@ -93,6 +99,8 @@ export function createMyCharacterMcpServer(options: CreateMcpServerOptions = {})
             type: "object",
             properties: {
               name: { type: "string", description: "Character name" },
+              sheetVersionId: { type: "string", description: "Published sheet version UUID for the new constructor" },
+              systemId: { type: "string", description: "Game system UUID (uses its published default sheet)" },
               templateId: { type: "string", description: "Optional UUID of the RPG system/sheet template" },
             },
             required: ["name"],
@@ -182,6 +190,14 @@ export function createMyCharacterMcpServer(options: CreateMcpServerOptions = {})
           },
         },
         {
+          name: "mycharacter_upload_character_image",
+          description: "Upload an image produced by your agent to a character's image field. Supply base64 image bytes; MyCharacter does not generate or bill for the image.",
+          inputSchema: { type: "object", properties: {
+            characterId: { type: "string", format: "uuid" }, fieldKey: { type: "string" },
+            base64Data: { type: "string" }, filename: { type: "string" }, mediaType: { type: "string", enum: ["image/png", "image/jpeg", "image/webp"] },
+          }, required: ["characterId", "fieldKey", "base64Data", "mediaType"] },
+        },
+        {
           name: "mycharacter_upload_post_image",
           description: "Upload an image (base64) to be used in posts.",
           inputSchema: {
@@ -233,8 +249,8 @@ export function createMyCharacterMcpServer(options: CreateMcpServerOptions = {})
         }
 
         case "mycharacter_create_character": {
-          const { name, templateId } = args as { name: string; templateId?: string };
-          const created = await client.createCharacter(name, templateId);
+          const input = createCharacterRequestSchema.parse(args);
+          const created = await client.createCharacter(input.name, input.templateId, input.sheetVersionId, input.systemId);
           return { content: [{ type: "text", text: JSON.stringify(created, null, 2) }] };
         }
 
@@ -323,6 +339,17 @@ export function createMyCharacterMcpServer(options: CreateMcpServerOptions = {})
           return { content: [{ type: "text", text: JSON.stringify(post, null, 2) }] };
         }
 
+        case "mycharacter_upload_character_image": {
+          const input = z.object({ characterId: z.string().uuid(), fieldKey: z.string().min(1).max(200),
+            base64Data: z.string().max(12_000_000).regex(/^[A-Za-z0-9+/]*={0,2}$/),
+            filename: z.string().max(120).default("portrait.png"), mediaType: z.enum(["image/png", "image/jpeg", "image/webp"]),
+          }).parse(args);
+          const form = new FormData();
+          form.append("image", new Blob([Uint8Array.from(Buffer.from(input.base64Data, "base64"))], { type: input.mediaType }), input.filename);
+          const result = await client.requestApi(`/api/characters/${input.characterId}/images?fieldKey=${encodeURIComponent(input.fieldKey)}`, { method: "POST", body: form });
+          return { content: [{ type: "text", text: JSON.stringify(result) }] };
+        }
+
         case "mycharacter_upload_post_image": {
           const { base64Data, filename = "image.png", mediaType = "image/png" } = args as {
             base64Data: string;
@@ -334,8 +361,10 @@ export function createMyCharacterMcpServer(options: CreateMcpServerOptions = {})
           return { content: [{ type: "text", text: JSON.stringify(upload, null, 2) }] };
         }
 
-        default:
-          throw new Error(`Unknown tool: ${name}`);
+        default: {
+          const result = await callAuthoringTool(name, args, client);
+          return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+        }
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -346,6 +375,7 @@ export function createMyCharacterMcpServer(options: CreateMcpServerOptions = {})
     }
   });
 
+  server.onclose = () => { void client.close(); };
   return { server, client };
 }
 
@@ -356,7 +386,7 @@ export async function runMcpServer(options: CreateMcpServerOptions = {}) {
   const email = options.email || process.env.MYCHARACTER_EMAIL;
   const password = options.password || process.env.MYCHARACTER_PASSWORD;
 
-  if (email && password) {
+  if (!options.token && !process.env.MYCHARACTER_TOKEN && email && password) {
     try {
       await client.login(email, password);
       process.stderr.write(`[MyCharacter MCP] Successfully authenticated as ${email}\n`);

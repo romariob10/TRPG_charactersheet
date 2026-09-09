@@ -1,5 +1,6 @@
 "use client";
 
+import { AgentPresence } from "@/components/agent-presence";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import type { PDFDocumentProxy } from "pdfjs-dist";
@@ -620,7 +621,8 @@ export function CharacterEditor({
         )}
         <div className="flex min-h-0 min-w-0 flex-1">
           {viewMode === "adaptive" ? (
-            <main className="scrollbar-thin min-w-0 flex-1 overflow-auto">
+            <main className="scrollbar-thin relative min-w-0 flex-1 overflow-auto">
+              <AgentPresence resourceType="character" resourceId={initialCharacter.id} target="desktop" />
               <InteractiveCharacterSheet
                 fields={fields}
                 activeFieldId={activeFieldId}
@@ -690,7 +692,8 @@ export function CharacterEditor({
                   </div>
                 </aside>
               )}
-              <main className="scrollbar-thin min-w-0 flex-1 overflow-auto p-6 lg:p-8">
+              <main className="scrollbar-thin relative min-w-0 flex-1 overflow-auto p-6 lg:p-8">
+                <AgentPresence resourceType="character" resourceId={initialCharacter.id} target="print" />
                 <div className="mx-auto flex w-fit flex-col gap-8">
                   {pdf ? (
                     Array.from({ length: pdf.numPages }, (_, index) => (

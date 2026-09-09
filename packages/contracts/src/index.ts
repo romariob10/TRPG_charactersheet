@@ -528,3 +528,5 @@ export type {
   SheetVersionSummary,
   UpdateSheetDefinitionRequest,
 } from "./sheet-builder-api.js";
+
+export * from "./agents.js";

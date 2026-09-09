@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useLayoutEffect, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import Image from "next/image";
 import { Crop, ImageUp } from "lucide-react";
@@ -216,19 +216,37 @@ export const RenderTextarea: React.FC<{ node: TextareaNode }> = ({ node }) => {
 
   useLayoutEffect(() => {
     const textarea = textareaRef.current;
-    if (!textarea) return;
+    if (!textarea || mode === "builder") return;
     textarea.style.height = "auto";
-    textarea.style.height = `${Math.max(textareaHeight ?? 48, textarea.scrollHeight)}px`;
-  }, [fontSize, textareaHeight, value]);
+    textarea.style.height = `${Math.max(textareaHeight ?? 48, textarea.scrollHeight + textarea.offsetHeight - textarea.clientHeight)}px`;
+  }, [fontSize, textareaHeight, value, mode]);
 
-  const persistManualHeight = (textarea: HTMLTextAreaElement) => {
-    const startHeight = pointerStartHeight.current;
-    pointerStartHeight.current = null;
-    const nextHeight = Math.round(textarea.getBoundingClientRect().height);
-    if (startHeight !== null && Math.abs(nextHeight - startHeight) >= 2 && nextHeight >= 48) {
-      onFieldValueChange?.(heightFieldKey, nextHeight);
-    }
-  };
+  useEffect(() => {
+    if (mode !== "player") return;
+    const persistManualHeight = () => {
+      const startHeight = pointerStartHeight.current;
+      pointerStartHeight.current = null;
+      const textarea = textareaRef.current;
+      if (!textarea || startHeight === null) return;
+      // offsetHeight is in layout pixels, independent of the canvas zoom.
+      const nextHeight = textarea.offsetHeight;
+      if (Math.abs(nextHeight - startHeight) >= 2 && nextHeight >= 48) {
+        onFieldValueChange?.(heightFieldKey, nextHeight);
+        onFieldCommit?.(heightFieldKey);
+      }
+    };
+    const cancelResize = () => {
+      pointerStartHeight.current = null;
+    };
+    window.addEventListener("pointerup", persistManualHeight);
+    window.addEventListener("pointercancel", cancelResize);
+    window.addEventListener("blur", persistManualHeight);
+    return () => {
+      window.removeEventListener("pointerup", persistManualHeight);
+      window.removeEventListener("pointercancel", cancelResize);
+      window.removeEventListener("blur", persistManualHeight);
+    };
+  }, [heightFieldKey, onFieldValueChange, onFieldCommit, mode]);
 
   const updateFontSize = (nextSize: number) => {
     onFieldValueChange?.(fontSizeFieldKey, nextSize);
@@ -236,7 +254,7 @@ export const RenderTextarea: React.FC<{ node: TextareaNode }> = ({ node }) => {
   };
 
   return (
-    <div className="relative flex min-h-0 w-full flex-col gap-1">
+    <div className={`relative flex min-h-0 w-full flex-col gap-1 ${mode === "builder" && node.box.height.mode !== "hug" ? "h-full" : ""}`}>
       {node.label && (
         <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
           {node.label}
@@ -284,12 +302,11 @@ export const RenderTextarea: React.FC<{ node: TextareaNode }> = ({ node }) => {
             disabled={isReadOnly}
             onChange={(e) => onFieldValueChange?.(node.fieldBinding, e.target.value)}
             onPointerDown={(event) => {
-              pointerStartHeight.current = event.currentTarget.getBoundingClientRect().height;
+              pointerStartHeight.current = mode === "player" ? event.currentTarget.offsetHeight : null;
             }}
-            onPointerUp={(event) => persistManualHeight(event.currentTarget)}
             onBlur={() => onFieldCommit?.(node.fieldBinding)}
-            style={{ fontSize, minHeight: textareaHeight }}
-            className="min-h-12 w-full resize-y overflow-hidden rounded-md border border-border bg-background/50 px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-primary"
+            style={{ fontSize }}
+            className={`min-h-12 w-full overflow-auto rounded-md border border-border bg-background/50 px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-primary ${mode === "builder" ? "resize-none flex-1" : "resize-y"}`}
           />
         </>
       )}
