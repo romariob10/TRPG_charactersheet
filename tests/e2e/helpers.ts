@@ -97,17 +97,19 @@ export async function createTemplate(
   await expectStatus(upload, 201);
   const { templateId } = (await upload.json()) as { templateId: string };
 
-  let editor: {
-    catalogStatus: string;
-    fields: TestTemplate["fields"];
-  } | null = null;
+  const result: {
+    editor: {
+      catalogStatus: string;
+      fields: TestTemplate["fields"];
+    } | null;
+  } = { editor: null };
   await expect
     .poll(
       async () => {
         const response = await api.get(`/api/templates/${templateId}/editor`);
         if (!response.ok()) return `http-${response.status()}`;
-        editor = (await response.json()) as typeof editor;
-        return editor?.catalogStatus;
+        result.editor = (await response.json()) as typeof result.editor;
+        return result.editor?.catalogStatus;
       },
       {
         message: "The synthetic PDF catalog did not complete.",
@@ -120,8 +122,8 @@ export async function createTemplate(
     await api.post(`/api/templates/${templateId}/approve`),
     200,
   );
-  if (!editor) throw new Error("Template editor data was not loaded.");
-  return { id: templateId, fields: editor.fields };
+  if (!result.editor) throw new Error("Template editor data was not loaded.");
+  return { id: templateId, fields: result.editor.fields };
 }
 
 export async function createCharacter(

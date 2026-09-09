@@ -5,6 +5,7 @@ set -eu
 : "${STORAGE_ROOT:?STORAGE_ROOT is required}"
 : "${BACKUP_ROOT:?BACKUP_ROOT is required}"
 
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 timestamp=$(date -u +%Y%m%dT%H%M%SZ)
 backup_path="$BACKUP_ROOT/$timestamp"
 umask 077
@@ -17,7 +18,7 @@ mkdir "$backup_path"
 
 before_manifest="$backup_path/storage.before.json"
 after_manifest="$backup_path/storage.after.json"
-node /app/scripts/verify-storage.mjs --manifest "$before_manifest"
+node "$script_dir/verify-storage.mjs" --manifest "$before_manifest"
 
 pg_dump "$DATABASE_URL" \
   --format=custom \
@@ -31,7 +32,7 @@ tar -C "$STORAGE_ROOT" -cf "$backup_path/storage.tar" .
   find . -type f -print0 | sort -z | xargs -0 -r sha256sum
 ) > "$backup_path/storage.sha256"
 
-node /app/scripts/verify-storage.mjs --manifest "$after_manifest"
+node "$script_dir/verify-storage.mjs" --manifest "$after_manifest"
 if ! cmp -s "$before_manifest" "$after_manifest"; then
   echo "Data changed while the backup was running. Stop application traffic and retry." >&2
   exit 75

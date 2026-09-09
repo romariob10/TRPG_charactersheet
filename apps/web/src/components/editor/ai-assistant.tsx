@@ -604,6 +604,7 @@ const AiAssistantSurface = memo(function AiAssistantSurface({
     explicit: false,
   }));
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [isMobileViewport, setIsMobileViewport] = useState(false);
   const [chatWidth, setChatWidth] = useState(() => {
     if (typeof window === "undefined") return 420;
     const saved = Number(window.localStorage.getItem("mycharacter:chat-width"));
@@ -616,6 +617,14 @@ const AiAssistantSurface = memo(function AiAssistantSurface({
     const saved = window.localStorage.getItem("mycharacter:chat-position");
     return saved === "left" || saved === "right" ? saved : "right";
   });
+
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 767px)");
+    const updateViewport = () => setIsMobileViewport(media.matches);
+    updateViewport();
+    media.addEventListener("change", updateViewport);
+    return () => media.removeEventListener("change", updateViewport);
+  }, []);
   const [capability, setCapability] = useState<{
     status: "checking" | "enabled" | "disabled";
     diagnostic?: string;
@@ -768,9 +777,10 @@ const AiAssistantSurface = memo(function AiAssistantSurface({
         hasExplicitThreadId={thread.explicit}
       >
         <CopilotSidebar
+          key={isMobileViewport ? "mobile" : "desktop"}
           autoScroll="none"
           position={chatPosition}
-          width={`min(${chatWidth}px, 100vw)`}
+          width={isMobileViewport ? "100vw" : chatWidth}
           header={{
             children: ({
               titleContent,

@@ -47,6 +47,19 @@ function nextAssistantMessage(body) {
     return toolMessage("capabilityProbe", { ok: true });
   }
 
+  const messages = body.messages ?? [];
+  const userIndex = messages.findLastIndex((message) => message.role === "user");
+  const userContent = messages[userIndex]?.content;
+  const userText = typeof userContent === "string"
+    ? userContent
+    : (userContent ?? []).map((part) => part.text ?? "").join(" ");
+  if (userText.includes("D&D 5e 2014")) {
+    return knowledgeAssistantMessage(
+      messages.slice(userIndex + 1),
+      userText.includes("преимущество") ? "преимущество" : "квантовая магия гравихомяков",
+    );
+  }
+
   const calls = (body.messages ?? [])
     .flatMap((message) => message.tool_calls ?? [])
     .map((call) => call.function?.name)
@@ -75,6 +88,47 @@ function nextAssistantMessage(body) {
     });
   }
   return { role: "assistant", content: "Предложение готово к проверке." };
+}
+
+function knowledgeAssistantMessage(messages, query) {
+  const call = messages.flatMap((message) => message.tool_calls ?? [])
+    .find((item) => item.function?.name === "searchRpgKnowledge");
+  if (!call) {
+    return toolMessage("searchRpgKnowledge", {
+      query,
+      systemId: "dnd",
+      edition: "5e-2014",
+      locale: "ru",
+    });
+  }
+  const message = messages.find((item) =>
+    item.role === "tool" && item.tool_call_id === call.id);
+  const result = findKnowledgeResult(parseMaybeJson(message?.content));
+  if (!result) {
+    return { role: "assistant", content: "RAG acceptance: retrieval result is missing." };
+  }
+  const match = result.matches.find((entry) => entry.locale === "ru") ?? result.matches[0];
+  if (!match) {
+    return {
+      role: "assistant",
+      content: "В базе знаний нет подходящего источника для этого вопроса. Уточните систему, редакцию или предоставьте источник.",
+    };
+  }
+  // The fixture formats the real retrieval result, so a missing or wrong source fails E2E.
+  return {
+    role: "assistant",
+    content: `${match.text}\n\n[${match.source.title}](${match.source.url})`,
+  };
+}
+
+function findKnowledgeResult(value) {
+  if (!value || typeof value !== "object") return null;
+  if (Array.isArray(value.matches)) return value;
+  for (const child of Object.values(value)) {
+    const result = findKnowledgeResult(parseMaybeJson(child));
+    if (result) return result;
+  }
+  return null;
 }
 
 function toolMessage(name, args) {

@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { Compass } from "lucide-react";
-import type { SocialPost } from "@mycharacter/contracts";
+import type { FeedAuthorsResponse, SocialPost } from "@mycharacter/contracts";
 import { getLocale, getTranslations } from "next-intl/server";
 import { FeedView } from "@/components/feed-view";
 import type { PostEmbedOptions } from "@/lib/use-post-editor";
@@ -14,10 +14,11 @@ export default async function FeedPage() {
     redirect("/auth/sign-in");
   }
 
-  const [feed, profile, embedOptions, t, locale] = await Promise.all([
+  const [feed, profile, embedOptions, authors, t, locale] = await Promise.all([
     apiFetch<{ posts: SocialPost[] }>("/api/posts"),
     apiFetch<MyProfile>("/api/profiles/me"),
     apiFetch<PostEmbedOptions>("/api/posts/embed-options"),
+    apiFetch<FeedAuthorsResponse>("/api/profiles/feed-authors"),
     getTranslations("Feed"),
     getLocale(),
   ]);
@@ -42,6 +43,8 @@ export default async function FeedPage() {
           profile={profile.data}
           embedOptions={embedOptions.data}
           locale={locale}
+          popularAuthors={authors.data.popular}
+          followingAuthors={authors.data.following}
         />
       </div>
     </main>

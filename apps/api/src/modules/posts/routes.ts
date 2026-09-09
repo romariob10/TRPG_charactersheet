@@ -4,9 +4,12 @@ import {
   createPostRequestSchema,
   postReactionSchema,
 } from "@mycharacter/contracts";
+import type { AiSettingsReader } from "@mycharacter/storage";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { AppError } from "../../errors.js";
 import { requireActor } from "../../plugins/auth.js";
+import { moderatePostContent } from "./auto-moderation.js";
+import { createAiPostTopicClassifier } from "./ai-topic-classifier.js";
 import { PostService } from "./service.js";
 
 const UUID_PATTERN =
@@ -28,8 +31,21 @@ const interactionRateLimit = {
     ),
 };
 
-export async function registerPostRoutes(app: FastifyInstance): Promise<void> {
-  const service = new PostService(app.db);
+export async function registerPostRoutes(
+  app: FastifyInstance,
+  settingsStore: AiSettingsReader,
+): Promise<void> {
+  const classifyTopic = createAiPostTopicClassifier(settingsStore);
+  const service = new PostService(app.db, (text, hasGameEmbed) =>
+    moderatePostContent(text, {
+      hasGameEmbed,
+      classifyTopic,
+      onClassifierError: () =>
+        app.log.warn(
+          "Post topic classification is unavailable; allowing the post after deterministic moderation.",
+        ),
+    }),
+  );
 
   app.get("/api/posts", async (request) => {
     const actor = requireActor(request);

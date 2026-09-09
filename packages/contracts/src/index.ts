@@ -59,6 +59,7 @@ export type {
   TemplateCommentList,
 } from "./community.js";
 export {
+  feedAuthorsResponseSchema,
   friendSummarySchema,
   listFriendsResponseSchema,
   myProfileSchema,
@@ -69,6 +70,7 @@ export {
   usernameSchema,
 } from "./profiles.js";
 export type {
+  FeedAuthorsResponse,
   FriendSummary,
   ListFriendsResponse,
   MyProfile,

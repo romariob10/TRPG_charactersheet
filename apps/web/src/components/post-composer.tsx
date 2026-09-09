@@ -134,7 +134,11 @@ function PostComposerExpanded({
           role="alert"
           className="mx-4 mb-3 rounded-xl bg-red-50 p-3 text-sm text-red-700 sm:mx-5"
         >
-          {error === "POST_EMPTY" ? t("empty") : t("publishFailed")}
+          {error === "POST_EMPTY"
+            ? t("empty")
+            : error === "POST_REJECTED_BY_MODERATION"
+              ? t("moderationRejected")
+              : t("publishFailed")}
         </p>
       )}
       <footer className="flex items-center justify-between border-t border-[var(--border)] px-4 py-3 sm:px-5">

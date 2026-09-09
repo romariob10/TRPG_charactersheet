@@ -165,7 +165,11 @@ export function FullPostEditor({
               role="alert"
               className="mt-4 rounded-xl bg-red-50 p-3 text-sm text-red-700"
             >
-              {error === "POST_EMPTY" ? t("empty") : t("publishFailed")}
+              {error === "POST_EMPTY"
+                ? t("empty")
+                : error === "POST_REJECTED_BY_MODERATION"
+                  ? t("moderationRejected")
+                  : t("publishFailed")}
             </p>
           )}
 

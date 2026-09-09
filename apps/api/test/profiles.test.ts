@@ -186,6 +186,64 @@ describe("profiles, usernames and slugs", () => {
     ).toBe(401);
   });
 
+  it("returns five popular feed authors and every followed author", async () => {
+    const viewer = await register("feed.viewer@example.com");
+    const authors = [];
+    for (let index = 0; index < 6; index++) {
+      const author = await register(`creator.${index}@example.com`);
+      const profile = await testDb.db
+        .selectFrom("profiles")
+        .select("username")
+        .where("id", "=", author.userId)
+        .executeTakeFirstOrThrow();
+      const created = await app.inject({
+        method: "POST",
+        url: "/api/posts",
+        cookies: { mycharacter_session: author.cookie },
+        payload: {
+          blocks: [
+            { type: "paragraph", data: { text: `Creator post ${index}` } },
+          ],
+        },
+      });
+      expect(created.statusCode, created.body).toBe(201);
+      await testDb.db
+        .updateTable("posts")
+        .set({ views_count: (index + 1) * 100 })
+        .where("id", "=", created.json().id as string)
+        .execute();
+      authors.push({ ...author, username: profile.username });
+    }
+
+    for (const author of [authors[0], authors[5]]) {
+      const followed = await app.inject({
+        method: "PUT",
+        url: `/api/profiles/${author.username}/follow`,
+        cookies: { mycharacter_session: viewer.cookie },
+      });
+      expect(followed.statusCode).toBe(204);
+    }
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/profiles/feed-authors",
+      cookies: { mycharacter_session: viewer.cookie },
+    });
+    expect(response.statusCode, response.body).toBe(200);
+    expect(response.json().popular).toHaveLength(5);
+    expect(
+      response.json().popular.map((author: { username: string }) => author.username),
+    ).toEqual(
+      [authors[5], authors[0], authors[4], authors[3], authors[2]].map(
+        (author) => author.username,
+      ),
+    );
+    expect(
+      response.json().following.map((author: { username: string }) => author.username),
+    ).toEqual(expect.arrayContaining([authors[0].username, authors[5].username]));
+    expect(response.json().following).toHaveLength(2);
+  });
+
   it("community list returns author and slug in one response", async () => {
     const owner = await register("community.author@example.com");
     const stranger = await register("community.viewer@example.com");

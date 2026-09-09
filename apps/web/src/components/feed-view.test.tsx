@@ -1,58 +1,32 @@
 // @vitest-environment jsdom
 
 import "@testing-library/jest-dom/vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { SocialPost } from "@mycharacter/contracts";
-import { collectFeedAuthors, FeedView } from "./feed-view";
-
-const { refreshedPosts } = vi.hoisted(() => ({
-  refreshedPosts: [] as SocialPost[],
-}));
+import { FeedView } from "./feed-view";
 
 vi.mock("next-intl", () => ({
   useTranslations: () => (key: string) => key,
 }));
 vi.mock("@/components/post-feed", () => ({
-  PostFeed: ({
-    onPostsChange,
-  }: {
-    onPostsChange?: (posts: SocialPost[]) => void;
-  }) => (
-    <button type="button" onClick={() => onPostsChange?.(refreshedPosts)}>
-      Refresh feed
-    </button>
-  ),
+  PostFeed: () => <div>Post feed</div>,
 }));
 
 afterEach(cleanup);
 
-function post(author: SocialPost["author"]): Pick<SocialPost, "author"> {
-  return { author };
-}
-
 describe("FeedView", () => {
-  it("deduplicates all authors, including the current user", () => {
-    const current = { id: "current", username: "current", displayName: null };
-    const alice = { id: "alice", username: "alice", displayName: "Alice" };
-    const bob = { id: "bob", username: "bob", displayName: null };
-
-    expect(
-      collectFeedAuthors(
-        [post(current), post(alice), post(alice), post(bob)],
-      ),
-    ).toEqual([current, alice, bob]);
-  });
-
-  it("updates the author list when the client feed refreshes", () => {
-    const alice = { id: "alice", username: "alice", displayName: "Alice" };
-    const bob = { id: "bob", username: "bob", displayName: "Bob" };
-    refreshedPosts.splice(
-      0,
-      refreshedPosts.length,
-      post(alice) as SocialPost,
-      post(bob) as SocialPost,
-    );
+  it("shows five popular authors and every subscription", () => {
+    const popularAuthors = Array.from({ length: 5 }, (_, index) => ({
+      id: `popular-${index}`,
+      username: `popular-${index}`,
+      displayName: null,
+    }));
+    const followingAuthors = Array.from({ length: 7 }, (_, index) => ({
+      id: `following-${index}`,
+      username: `following-${index}`,
+      displayName: null,
+    }));
 
     render(
       <FeedView
@@ -68,11 +42,38 @@ describe("FeedView", () => {
         }}
         embedOptions={{ characters: [], systems: [] }}
         locale="ru"
+        popularAuthors={popularAuthors}
+        followingAuthors={followingAuthors}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Refresh feed" }));
 
-    expect(screen.getByText("@alice")).toBeVisible();
-    expect(screen.getByText("@bob")).toBeVisible();
+    expect(screen.getAllByText(/^@popular-/)).toHaveLength(5);
+    expect(screen.getAllByText(/^@following-/)).toHaveLength(7);
+    expect(screen.getByText("popularAuthors")).toBeVisible();
+    expect(screen.getByText("subscriptions")).toBeVisible();
+  });
+
+  it("keeps the subscriptions section visible when it is empty", () => {
+    render(
+      <FeedView
+        initialPosts={[] as SocialPost[]}
+        profile={{
+          id: "current",
+          email: "current@example.com",
+          username: "current",
+          displayName: null,
+          bio: "",
+          isAdmin: false,
+          siteRole: "user",
+        }}
+        embedOptions={{ characters: [], systems: [] }}
+        locale="ru"
+        popularAuthors={[]}
+        followingAuthors={[]}
+      />,
+    );
+
+    expect(screen.getByText("subscriptions")).toBeVisible();
+    expect(screen.getByText("subscriptionsEmpty")).toBeVisible();
   });
 });

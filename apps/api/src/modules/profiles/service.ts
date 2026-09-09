@@ -1,4 +1,5 @@
 import type {
+  FeedAuthorsResponse,
   FriendSummary,
   MyProfile,
   PublicCharacterSummary,
@@ -192,6 +193,58 @@ export class ProfileService {
       title: "New follower",
       body: "started following your profile",
     });
+  }
+
+  async listFeedAuthors(actorId: string): Promise<FeedAuthorsResponse> {
+    const [popular, following] = await Promise.all([
+      this.db
+        .selectFrom("profiles as profile")
+        .innerJoin("users as user_row", "user_row.id", "profile.id")
+        .select([
+          "profile.id",
+          "profile.username",
+          "profile.display_name as displayName",
+        ])
+        .where("user_row.status", "=", "active")
+        .where((eb) =>
+          eb.exists(
+            eb
+              .selectFrom("posts as post")
+              .select("post.id")
+              .whereRef("post.author_id", "=", "profile.id")
+              .where("post.deleted_at", "is", null)
+              .where("post.is_hidden", "=", false),
+          ),
+        )
+        .orderBy(
+          sql<number>`
+            (select count(*) * 5 from profile_follows where following_id = profile.id)
+            + (select count(*) * 3 from post_reactions reaction inner join posts post on post.id = reaction.post_id where post.author_id = profile.id and post.deleted_at is null and post.is_hidden = false)
+            + (select count(*) * 4 from post_comments comment inner join posts post on post.id = comment.post_id where post.author_id = profile.id and post.deleted_at is null and post.is_hidden = false and comment.deleted_at is null)
+            + (select coalesce(least(sum(post.views_count), 5000), 0) * 0.01 from posts post where post.author_id = profile.id and post.deleted_at is null and post.is_hidden = false)
+          `,
+          "desc",
+        )
+        .orderBy("profile.username", "asc")
+        .limit(5)
+        .execute(),
+      this.db
+        .selectFrom("profile_follows as follow")
+        .innerJoin("profiles as profile", "profile.id", "follow.following_id")
+        .innerJoin("users as user_row", "user_row.id", "profile.id")
+        .select([
+          "profile.id",
+          "profile.username",
+          "profile.display_name as displayName",
+        ])
+        .where("follow.follower_id", "=", actorId)
+        .where("user_row.status", "=", "active")
+        .orderBy("follow.created_at", "desc")
+        .orderBy("profile.username", "asc")
+        .execute(),
+    ]);
+
+    return { popular, following };
   }
 
   async unfollow(actorId: string, username: string): Promise<void> {

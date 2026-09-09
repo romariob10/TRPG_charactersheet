@@ -8,6 +8,7 @@ import {
   createConfiguredStorage,
   FileAiSettingsStore,
 } from "@mycharacter/storage";
+import { rm, writeFile } from "node:fs/promises";
 import { PgBoss } from "pg-boss";
 import {
   createCatalogDependencies,
@@ -19,6 +20,9 @@ import { reconcileStorage } from "./jobs/reconcile-storage.js";
 
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) throw new Error("DATABASE_URL is required.");
+
+const readinessPath = "/tmp/mycharacter-worker-ready";
+await rm(readinessPath, { force: true });
 
 const db = createDatabase(databaseUrl);
 const storageRoot = process.env.STORAGE_ROOT ?? "/var/lib/mycharacter/pdfs";
@@ -118,12 +122,14 @@ await boss.work(
   },
 );
 
+await writeFile(readinessPath, "ready\n");
 console.info("local background worker ready");
 
 let closing = false;
 async function close(): Promise<void> {
   if (closing) return;
   closing = true;
+  await rm(readinessPath, { force: true });
   await boss.stop({ graceful: true, timeout: 30_000 });
   await db.destroy();
 }
