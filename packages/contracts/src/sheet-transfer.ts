@@ -13,7 +13,7 @@ import { ensureBoundFieldDefinitions } from "./sheet-fields.js";
 import type { ComponentVersionDetails } from "./sheet-builder-api.js";
 import type { ExposedPropertyDefinition, PropertyOverrideValue } from "./sheet-components.js";
 
-export const MAX_SHEET_TRANSFER_BYTES = 1024 * 1024;
+export const MAX_SHEET_TRANSFER_BYTES = 2 * 1024 * 1024;
 
 // Bound recursion before the recursive layout schema sees an untrusted document.
 const boundedDocument = z.unknown().superRefine((value, ctx) => {
@@ -21,7 +21,7 @@ const boundedDocument = z.unknown().superRefine((value, ctx) => {
   let count = 0;
   while (pending.length) {
     const next = pending.pop()!;
-    if (++count > 30000 || next.depth > 32) {
+    if (++count > 200000 || next.depth > 32) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Sheet document is too complex." });
       return;
     }
@@ -48,6 +48,9 @@ export const sheetTransferDocumentSchema = boundedDocument.pipe(z.object({
   const visit = (node: LayoutNode, inRepeater = false): void => {
     if (node.kind === "component-instance") ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Portable sheets must contain resolved components." });
     if (!inRepeater && "fieldBinding" in node && !keys.has(node.fieldBinding)) ctx.addIssue({ code: z.ZodIssueCode.custom, message: `Missing field definition: ${node.fieldBinding}` });
+    if (node.kind === "textarea" && !inRepeater) for (const key of node.itemCheckboxBindings ?? []) {
+      if (!keys.has(key)) ctx.addIssue({ code: z.ZodIssueCode.custom, message: `Missing checkbox field definition: ${key}` });
+    }
     if (node.kind === "table" && !inRepeater) {
       for (let row = node.headerRows; row < node.rows; row++) {
         for (let column = node.headerColumns; column < node.columns; column++) {

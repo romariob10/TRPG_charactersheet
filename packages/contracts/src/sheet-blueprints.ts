@@ -68,6 +68,7 @@ export const fieldInputNodeSchema = z.object({
   label: z.string().trim().max(120).default(""),
   placeholder: z.string().trim().max(120).default(""),
   variant: inputVariantSchema.default("underline"),
+  align: textAlignSchema.optional(),
   readOnly: z.boolean().default(false),
 });
 export type FieldInputNode = z.infer<typeof fieldInputNodeSchema>;
@@ -99,6 +100,7 @@ export const textareaNodeSchema = z.object({
   allowItemCountChange: z.boolean().optional(),
   itemBindings: z.array(z.string().trim().min(1).max(64)).min(1).max(50).optional(),
   itemLabels: z.array(z.string().max(120)).max(50).optional(),
+  itemCheckboxBindings: z.array(z.string().trim().min(1).max(64)).min(1).max(50).optional(),
   variant: inputVariantSchema.default("boxed"),
   readOnly: z.boolean().default(false),
 });
@@ -209,6 +211,8 @@ export interface FrameNode {
   justify: LayoutJustify;
   wrap: boolean;
   collapseAdjacentStrokes: boolean;
+  /** Top-level frame exported as its own A4 page. */
+  printAsPage?: boolean;
   cornerOrnaments?: CornerOrnaments;
   topOrnament?: EdgeOrnament;
   bottomOrnament?: EdgeOrnament;
@@ -269,6 +273,7 @@ export const layoutNodeSchema: z.ZodType<LayoutNode> = z.lazy(() =>
       justify: layoutJustifySchema.default("start"),
       wrap: z.boolean().default(false),
       collapseAdjacentStrokes: z.boolean().default(false),
+      printAsPage: z.boolean().optional(),
       cornerOrnaments: cornerOrnamentsSchema.default(defaultCornerOrnaments),
       topOrnament: edgeOrnamentSchema.default(defaultEdgeOrnament),
       bottomOrnament: edgeOrnamentSchema.default(defaultEdgeOrnament),
@@ -353,6 +358,7 @@ export function normalizeFrameNode(raw: Record<string, unknown>): FrameNode {
     justify: layoutJustifySchema.parse(raw.justify || "start"),
     wrap: Boolean(raw.wrap),
     collapseAdjacentStrokes: Boolean(raw.collapseAdjacentStrokes),
+    ...(raw.printAsPage === undefined ? {} : { printAsPage: z.boolean().parse(raw.printAsPage) }),
     cornerOrnaments,
     topOrnament,
     bottomOrnament,

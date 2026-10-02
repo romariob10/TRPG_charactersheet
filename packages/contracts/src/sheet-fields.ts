@@ -41,6 +41,12 @@ export function ensureBoundFieldDefinitions(
       });
       keys.add(node.fieldBinding);
     }
+    if (node.kind === "textarea") node.itemCheckboxBindings?.forEach((key, index) => {
+      if (keys.has(key)) return;
+      result.push({ id: crypto.randomUUID(), key, label: node.itemLabels?.[index] || `${node.name || node.fieldBinding} ${index + 1}`,
+        kind: "checkbox", defaultValue: false, options: [], readOnly: node.readOnly });
+      keys.add(key);
+    });
     if ("children" in node) node.children.forEach(visit);
     if ("rowTemplate" in node) visit(node.rowTemplate);
   };

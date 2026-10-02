@@ -11,6 +11,19 @@ import {
 } from "../src/index.js";
 
 describe("Sheet Builder Contracts", () => {
+  it("preserves A4 page frames through normalization and rejects invalid page flags", () => {
+    const page = layoutNodeSchema.parse({ id: crypto.randomUUID(), kind: "frame", printAsPage: true, box: {} });
+    const parsed = targetLayoutMapSchema.parse({ desktop: page, print: page, mobile: page, tablet: page });
+    expect(parsed.print.kind === "frame" && parsed.print.printAsPage).toBe(true);
+    expect(layoutNodeSchema.safeParse({ ...page, printAsPage: "yes" }).success).toBe(false);
+  });
+  it("preserves optional single-line alignment and rejects unknown directions", () => {
+    const input = { id: crypto.randomUUID(), kind: "field-input", fieldBinding: "modifier", align: "center", box: {} };
+    const parsed = normalizeLayoutNode(input);
+    expect(parsed.kind === "field-input" && parsed.align).toBe("center");
+    expect(layoutNodeSchema.safeParse({ ...input, align: "bottom" }).success).toBe(false);
+    expect(layoutNodeSchema.safeParse({ ...input, align: undefined }).success).toBe(true);
+  });
   it("validates fillable tables and optional checkbox outlines", () => {
     const table = layoutNodeSchema.parse({
       id: crypto.randomUUID(),

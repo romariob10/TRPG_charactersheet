@@ -18,7 +18,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { apiFetch, ApiClientError } from "@/lib/api/client";
 import { SheetBuilderMain } from "./sheet-builder-main";
 
-vi.mock("next-intl", () => ({ useTranslations: () => (key: string) => key }));
+vi.mock("next-intl", () => ({ useTranslations: (namespace: string) => (key: string) => namespace === "DndSheet" ? `DndSheet.${key}` : key }));
 vi.mock("@/lib/api/client", async (original) => ({
   ...(await original<typeof import("@/lib/api/client")>()),
   apiFetch: vi.fn(),
@@ -223,6 +223,23 @@ describe("SheetBuilderMain", () => {
     fireEvent.click(screen.getByRole("button", { name: "redo" }));
     await saveDebounce();
     expect(savedBody().fields).toHaveLength(33);
+  });
+
+  it("undoes and restores the complete D&D preset including its three print pages", async () => {
+    const data = initialData();
+    for (const root of Object.values(data.draft.layouts)) if (root.kind === "frame") root.children = [];
+    render(<SheetBuilderMain initialData={data} systemId={data.system.id} />);
+    fireEvent.click(screen.getByRole("button", { name: "DndSheet.usePreset" }));
+    await saveDebounce();
+    const saved = () => JSON.parse(String(vi.mocked(apiFetch).mock.calls.at(-1)?.[1]?.body));
+    expect(saved().fields).toHaveLength(343);
+    expect(saved().layouts.print.children.every((page: { printAsPage?: boolean }) => page.printAsPage)).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "undo" }));
+    await saveDebounce();
+    expect(saved().fields).toHaveLength(0);
+    fireEvent.click(screen.getByRole("button", { name: "redo" }));
+    await saveDebounce();
+    expect(saved().fields).toHaveLength(343);
   });
 
   it("offers the preset only when all layouts are empty", () => {

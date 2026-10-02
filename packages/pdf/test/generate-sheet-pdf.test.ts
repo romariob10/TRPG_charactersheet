@@ -6,6 +6,49 @@ import { PDFDocument } from "pdf-lib";
 import { extractPdfCatalog } from "../src/catalog.js";
 
 describe("generateA4SheetPdf", () => {
+  it("exports native page frames to separate A4 pages without losing sibling content", async () => {
+    const root = layoutNodeSchema.parse({ id: crypto.randomUUID(), kind: "frame", box: { ...defaultBoxProps, height: { mode: "fixed", value: 2526 } }, children: [
+      { id: crypto.randomUUID(), kind: "text", text: "Обложка", box: defaultBoxProps },
+      ...["Характеристики", "Биография", "Заклинания"].map(text => ({ id: crypto.randomUUID(), kind: "frame", printAsPage: true,
+        box: { ...defaultBoxProps, height: { mode: "fixed", value: 842 } },
+        children: [{ id: crypto.randomUUID(), kind: "text", text, box: defaultBoxProps }] })),
+    ] });
+    const bytes = await generateA4SheetPdf({ layout: root });
+    const pdf = await PDFDocument.load(bytes);
+    expect(pdf.getPageCount()).toBe(4);
+    for (const page of pdf.getPages()) { expect(page.getWidth()).toBeCloseTo(595.28); expect(page.getHeight()).toBeCloseTo(841.89); }
+    const catalog = await extractPdfCatalog(bytes);
+    expect(catalog.tokens.map(token => token.text).join(" ")).toContain("Обложка");
+    expect(catalog.tokens.map(token => token.text).join(" ")).toContain("Заклинания");
+  });
+  it("fits numeric fonts to their slots and preserves centered cross-axis alignment", async () => {
+    const numeric = (key: string, height: LayoutNode["box"]["height"]) => layoutNodeSchema.parse({
+      id: crypto.randomUUID(), kind: "number-input", fieldBinding: key, variant: "plain",
+      box: { ...defaultBoxProps, height },
+    });
+    const row = layoutNodeSchema.parse({ id: crypto.randomUUID(), kind: "frame", direction: "horizontal", align: "center", gap: 0,
+      box: { ...defaultBoxProps, height: { mode: "fixed", value: 60 } },
+      children: [numeric("small", { mode: "fixed", value: 24 }), numeric("large", { mode: "fill" })] });
+    const layout = layoutNodeSchema.parse({ id: crypto.randomUUID(), kind: "frame",
+      box: { ...defaultBoxProps, height: { mode: "fixed", value: 842 } }, children: [row] });
+    const catalog = await extractPdfCatalog(await generateA4SheetPdf({ layout, fieldValues: { small: 12, large: 34 } }));
+    const small = catalog.tokens.find(token => token.text === "12")!;
+    const large = catalog.tokens.find(token => token.text === "34")!;
+    expect(small.fontSize).toBeCloseTo(14, 1);
+    expect(large.fontSize).toBeCloseTo(32, 1);
+    const centerY = (token: typeof small) => (token.rect[1] + token.rect[3]) / 2 * 842;
+    expect(Math.abs(centerY(small) - centerY(large))).toBeLessThan(4);
+  });
+
+  it("centers signed single-line values without a second input border", async () => {
+    const field = layoutNodeSchema.parse({ id: crypto.randomUUID(), kind: "field-input", fieldBinding: "modifier", align: "center", variant: "plain",
+      box: { ...defaultBoxProps, height: { mode: "fixed", value: 24 } } });
+    const root = layoutNodeSchema.parse({ id: crypto.randomUUID(), kind: "frame", box: { ...defaultBoxProps, height: { mode: "fixed", value: 842 } }, children: [field] });
+    const catalog = await extractPdfCatalog(await generateA4SheetPdf({ layout: root, fieldValues: { modifier: "+2" } }));
+    const value = catalog.tokens.find(token => token.text === "+2")!;
+    expect((value.rect[0] + value.rect[2]) / 2).toBeCloseTo(0.5, 3);
+  });
+
   it("generates a valid A4 PDF document containing all 12 node types with Cyrillic text", async () => {
     const layout: LayoutNode = {
       id: "550e8400-e29b-41d4-a716-446655440000",

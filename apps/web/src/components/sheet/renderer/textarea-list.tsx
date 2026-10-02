@@ -23,7 +23,7 @@ function ListItem({ value, label, fontSize, readOnly, clipped, onChange, onCommi
     observer.observe(input.parentElement ?? input);
     return () => observer.disconnect();
   }, [value, fontSize]);
-  return readOnly ? <div style={{ maxHeight: clipped ? "100%" : undefined }} className="min-w-0 min-h-0 flex-1 whitespace-pre-wrap wrap-anywhere px-1 py-1 overflow-hidden">{value || "\u00a0"}</div>
+  return readOnly ? <div style={{ maxHeight: clipped ? "100%" : undefined }} className={`min-w-0 min-h-0 flex-1 whitespace-pre-wrap wrap-anywhere px-1 ${clipped ? "py-0" : "py-1"} overflow-hidden`}>{value || "\u00a0"}</div>
     : <textarea ref={ref} rows={1} value={value} aria-label={label} maxLength={20_000}
         onChange={event => onChange(event.target.value)} onBlur={onCommit}
         className="min-w-0 w-full flex-auto resize-none overflow-hidden bg-transparent px-1 py-1 outline-none focus:ring-1 focus:ring-primary"
@@ -54,6 +54,15 @@ export function RenderTextareaList({ node }: { node: TextareaNode }) {
       {items.map((value, index) => <li key={node.itemBindings?.[index] ?? index}
         className={`flex min-h-0 flex-auto items-start gap-1 ${node.listStyle === "lined" ? "border-b" : ""}`}
         style={{ borderColor: node.box.strokeColor === "ink" ? "#000" : undefined, minHeight: mode === "print" ? 0 : fontSize * TEXTAREA_LINE_HEIGHT + 8, flexBasis: mode === "print" ? 0 : undefined, overflow: mode === "print" ? "hidden" : undefined }}>
+        {node.itemCheckboxBindings?.[index] && <input type="checkbox"
+          aria-label={t("listItemCheckbox", { name: node.itemLabels?.[index] || t("listItem", { name: node.name || node.fieldBinding, index: index + 1 }) })}
+          checked={fieldValues?.[node.itemCheckboxBindings[index]] === true} disabled={readOnly}
+          onChange={event => {
+            const key = node.itemCheckboxBindings![index];
+            onFieldValueChange?.(key, event.target.checked);
+            onFieldCommit?.(key);
+          }}
+          className="mt-1.5 size-3 shrink-0 appearance-none rounded-full border border-black bg-white checked:bg-black focus-visible:outline-2 focus-visible:outline-primary" />}
         {node.listStyle !== "lined" && <span className="shrink-0 py-1" aria-hidden="true">{node.listStyle === "numbered" ? `${index + 1}.` : "•"}</span>}
         <ListItem value={value} fontSize={fontSize} readOnly={readOnly} clipped={mode === "print"}
           label={node.itemLabels?.[index] || t("listItem", { name: node.label || node.name || node.fieldBinding, index: index + 1 })}

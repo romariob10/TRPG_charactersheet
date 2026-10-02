@@ -42,7 +42,7 @@ export async function registerSheetBuilderRoutes(
     return service.getSheetEditorData(actor.userId, id);
   });
 
-  app.put("/api/sheet-definitions/:id/draft", async (request) => {
+  app.put("/api/sheet-definitions/:id/draft", { bodyLimit: MAX_SHEET_TRANSFER_BYTES + 1024 }, async (request) => {
     const actor = requireActor(request);
     const { id } = parseParams(idParamsSchema, request.params);
     const parsed = autosaveSheetDraftRequestSchema.safeParse(request.body);

@@ -112,21 +112,21 @@ export const RenderFieldInput: React.FC<{ node: FieldInputNode }> = ({ node }) =
     return () => observer.disconnect();
   }, [node.label, node.box.height, value]);
 
-  const inputClass = `min-w-0 w-full px-2 ${node.variant === "boxed" ? "py-1" : "py-0"} text-sm focus:outline-none focus:ring-1 focus:ring-primary ${
+  const inputClass = `min-w-0 w-full px-2 ${node.variant === "boxed" ? "py-1" : "py-0"} text-sm focus:outline-none ${node.variant === "plain" ? "focus:bg-primary/5" : "focus:ring-1 focus:ring-primary"} ${
     node.variant === "underline" ? "border-b border-border rounded-none"
       : node.variant === "boxed" ? "border border-border rounded-md bg-background/50"
         : "border-none bg-transparent"
   }`;
 
   return (
-    <div ref={inputRef} className="flex h-full min-h-5 w-full flex-col gap-1" style={{ fontFamily: "Arial, sans-serif", fontSize, lineHeight: 1.2 }}>
+    <div ref={inputRef} className="flex h-full min-h-0 w-full flex-col gap-1" style={{ fontFamily: "Arial, sans-serif", fontSize, lineHeight: 1.2, textAlign: node.align ?? "left" }}>
       {node.label && (
         <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
           {node.label}
         </label>
       )}
       {isReadOnly ? (
-        <div className={`flex-auto min-h-5 truncate px-2 py-0 text-sm text-foreground ${node.variant === "underline" ? "border-b border-border" : ""}`} style={{ borderColor: node.box.strokeColor === "ink" ? "#000" : undefined, fontSize, lineHeight: 1.2 }}>
+        <div className={`flex flex-auto min-h-0 items-center ${node.align === "center" ? "justify-center" : node.align === "right" ? "justify-end" : ""} truncate px-2 py-0 text-sm text-foreground ${node.variant === "underline" ? "border-b border-border" : ""}`} style={{ borderColor: node.box.strokeColor === "ink" ? "#000" : undefined, fontSize, lineHeight: 1.2 }}>
           {value || (node.variant === "boxed" ? "—" : "")}
         </div>
       ) : (
@@ -136,7 +136,7 @@ export const RenderFieldInput: React.FC<{ node: FieldInputNode }> = ({ node }) =
           onChange={(event) => onFieldValueChange?.(node.fieldBinding, event.target.value)}
           onBlur={() => onFieldCommit?.(node.fieldBinding)}
           className={`${inputClass} flex-auto min-h-0`}
-          style={{ borderColor: node.box.strokeColor === "ink" ? "#000" : undefined, fontSize, lineHeight: 1.2 }} />
+          style={{ borderColor: node.box.strokeColor === "ink" ? "#000" : undefined, fontSize, lineHeight: 1.2, textAlign: node.align ?? "left" }} />
       )}
     </div>
   );
@@ -173,10 +173,36 @@ export const RenderNumberInput: React.FC<{ node: NumberInputNode }> = ({ node })
     }
   };
 
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const [fontSize, setFontSize] = useState(16);
+  useLayoutEffect(() => {
+    const wrapper = wrapperRef.current;
+    if (!wrapper) return;
+    const slot = wrapper.closest<HTMLElement>("[data-node-id]") ?? wrapper;
+    const measure = () => {
+      const height = node.variant === "circle" ? 28 : node.box.height.mode === "hug" ? 28 : slot.clientHeight - (node.label ? 16 : 0);
+      if (height <= 0) return;
+      const baseSize = getSingleLineFontSize(height);
+      const context = typeof CanvasRenderingContext2D !== "undefined" ? document.createElement("canvas").getContext("2d") : null;
+      let fittedSize = baseSize;
+      if (context) {
+        context.font = `bold ${baseSize}px Arial`;
+        const width = context.measureText(formattedDisplay).width;
+        if (width > 0) fittedSize = Math.max(8, Math.min(baseSize, Math.floor(baseSize * Math.max(1, slot.clientWidth - 4) / width)));
+      }
+      setFontSize(fittedSize);
+    };
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(slot);
+    return () => observer.disconnect();
+  }, [formattedDisplay, node.box.height, node.label, node.variant]);
+
   const inputProps = {
     "aria-label": node.label || node.name || node.fieldBinding,
     defaultValue: committedValue,
-    style: { fontSize: 16 },
+    style: { fontSize, lineHeight: 1.2 },
     min: node.min,
     max: node.max,
     step: node.step ?? 1,
@@ -192,14 +218,14 @@ export const RenderNumberInput: React.FC<{ node: NumberInputNode }> = ({ node })
   };
 
   return (
-    <div className="flex flex-col items-center gap-1" style={{ fontFamily: "Arial, sans-serif" }}>
+    <div ref={wrapperRef} className="flex h-full min-h-0 w-full flex-col items-center justify-center gap-1" style={{ fontFamily: "Arial, sans-serif" }}>
       {node.label && (
         <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground text-center">
           {node.label}
         </label>
       )}
       {isReadOnly ? (
-        <div className="font-bold text-foreground text-center" style={{ fontSize: 16 }}>
+        <div className="flex min-h-0 flex-1 items-center justify-center font-bold text-foreground text-center" style={{ fontSize, lineHeight: 1.2 }}>
           {formattedDisplay}
         </div>
       ) : node.variant === "circle" ? (
@@ -217,7 +243,7 @@ export const RenderNumberInput: React.FC<{ node: NumberInputNode }> = ({ node })
           type="number"
           {...inputProps}
           placeholder={node.placeholder}
-          className={`${node.box.width.mode === "hug" ? "w-16" : "w-full min-w-0"} text-center ${node.variant === "plain" ? "py-0" : "py-1"} text-sm font-bold bg-background focus:outline-none focus:ring-1 focus:ring-primary ${
+          className={`${node.box.width.mode === "hug" ? "w-16" : "w-full min-w-0"} min-h-0 flex-1 text-center ${node.variant === "plain" ? "py-0" : "py-1"} text-sm font-bold bg-background [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none focus:outline-none ${node.variant === "plain" ? "focus:bg-primary/5" : "focus:ring-1 focus:ring-primary"} ${
             node.variant === "underline"
               ? "border-b border-border rounded-none"
               : node.variant === "plain" ? "border-none bg-transparent"
@@ -357,6 +383,7 @@ export const RenderTextarea: React.FC<{ node: TextareaNode }> = ({ node }) =>
 export const RenderCheckbox: React.FC<{ node: CheckboxNode }> = ({ node }) => {
   const { fieldValues, onFieldValueChange, mode } = useSheetRender();
   const checked = Boolean(fieldValues?.[node.fieldBinding]);
+  const controlSize = Math.min(16, node.box.width.mode === "fixed" ? node.box.width.value : 16, node.box.height.mode === "fixed" ? node.box.height.value : 16);
   const isReadOnly = mode === "readonly" || mode === "print" || node.readOnly;
 
   if (node.shape === "arc") {
@@ -388,7 +415,9 @@ export const RenderCheckbox: React.FC<{ node: CheckboxNode }> = ({ node }) => {
         className={`w-4 h-4 text-primary bg-background border-border focus:ring-primary ${
           node.shape === "circle" ? "appearance-none border checked:bg-primary rounded-full" : "rounded"
         }`}
-        style={node.showBorder === false ? { border: 0 } : undefined}
+        style={{ ...(node.showBorder === false ? { border: 0 } : {}),
+          ...(node.box.strokeColor === "ink" ? { borderColor: "#000", backgroundColor: checked ? "#000" : "#fff", accentColor: "#000" } : {}),
+          width: controlSize, height: controlSize, flexShrink: 0 }}
       />
       {node.label && (
         <span className="text-xs font-medium text-foreground">{node.label}</span>

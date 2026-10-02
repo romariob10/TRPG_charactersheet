@@ -1,0 +1,86 @@
+import { expect, test } from "@playwright/test";
+import { createGameSystemResponseSchema, sheetEditorDataResponseSchema, sheetTransferDocumentSchema } from "@mycharacter/contracts";
+import { PDFDocument } from "pdf-lib";
+import { Pool } from "pg";
+import { createUser, e2eDatabaseUrl, expectStatus } from "./helpers";
+
+test("native D&D preset survives large JSON transfer, saves prepared spells, adapts and prints three A4 pages", async ({ page }) => {
+  const owner = await createUser("dnd-native");
+  const database = new Pool({ connectionString: e2eDatabaseUrl });
+  const errors: string[] = [];
+  page.on("pageerror", error => errors.push(error.message));
+  try {
+    const response = await owner.api.post("/api/game-systems", { data: { title: "D&D 5e test", visibility: "private" } });
+    await expectStatus(response, 201);
+    const system = createGameSystemResponseSchema.parse(await response.json());
+    await page.setViewportSize({ width: 1440, height: 1100 });
+    await page.goto("/auth/sign-in");
+    await page.getByRole("textbox", { name: /email|почт/i }).fill(owner.email);
+    await page.getByLabel(/password|пароль/i).fill(owner.password);
+    await page.getByRole("button", { name: /continue|продолжить/i, exact: true }).click();
+    await page.waitForURL("**/dashboard/feed");
+    await page.goto(`/dashboard/systems/${system.id}/sheets/${system.defaultSheetId}/builder`);
+    await page.getByRole("button", { name: "Вставить лист D&D 5e", exact: true }).click();
+    const editor = async () => sheetEditorDataResponseSchema.parse(await (await owner.api.get(`/api/sheet-definitions/${system.defaultSheetId}/editor`)).json());
+    await expect.poll(async () => (await editor()).draft.fields.length).toBe(343);
+    const exported = sheetTransferDocumentSchema.parse(await (await owner.api.get(`/api/sheet-definitions/${system.defaultSheetId}/export`)).json());
+    expect(Buffer.byteLength(JSON.stringify(exported))).toBeGreaterThan(1024 * 1024);
+    await expectStatus(await owner.api.post(`/api/sheet-definitions/${system.defaultSheetId}/import`, { data: { expectedRevision: (await editor()).draft.revision, document: exported } }), 200);
+    const published = await owner.api.post(`/api/sheet-definitions/${system.defaultSheetId}/publish`, { data: { changelog: "D&D test" } });
+    await expectStatus(published, 200);
+    const created = await owner.api.post("/api/characters", { data: { name: "D&D test", systemId: system.id, sheetVersionId: (await published.json()).versionId } });
+    await expectStatus(created, 201);
+    const characterId = (await created.json()).id as string;
+    await page.goto(`/characters/${characterId}`);
+    const characterName = page.getByRole("textbox", { name: "Имя персонажа", exact: true });
+    await characterName.first().fill("Эрис Ночной Ветер");
+    await characterName.first().press("Tab");
+    await expect(characterName.last()).toHaveValue("Эрис Ночной Ветер");
+    await characterName.first().focus();
+    expect(await characterName.first().evaluate(input => getComputedStyle(input).borderBottomWidth)).toBe("0px");
+    const strength = page.getByRole("spinbutton", { name: "Сила / Значение", exact: true });
+    await strength.fill("18");
+    await strength.press("Tab");
+    await expect(strength).toHaveCSS("font-size", "18px");
+    expect(await strength.evaluate(input => {
+      const slot = input.closest("[data-node-id]")!.getBoundingClientRect();
+      const bounds = input.getBoundingClientRect();
+      return Math.abs((bounds.top + bounds.bottom) / 2 - (slot.top + slot.bottom) / 2);
+    })).toBeLessThan(1);
+
+    const spell = page.getByRole("textbox", { name: "Уровень заклинаний 1 / Название заклинания 1", exact: true });
+    const prepared = page.getByRole("checkbox", { name: "Уровень заклинаний 1 / Название заклинания 1 — подготовлено", exact: true });
+    await spell.fill("Волшебная стрела\nДополнительные заметки о заклинании");
+    await prepared.check();
+    const state = async () => (await (await owner.api.get(`/api/characters/${characterId}/sheet-state`)).json()).values;
+    await expect.poll(async () => (await state()).spell_1_1_prepared).toBe(true);
+    await expect.poll(async () => (await state()).spell_1_items?.[0]).toContain("Волшебная стрела");
+    await page.reload();
+    await expect(prepared).toBeChecked();
+    await expect(spell).toHaveValue(/Волшебная стрела/);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(page.locator("[data-sheet-page]")).toHaveAttribute("data-sheet-target", "mobile");
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+    const row = page.getByRole("list", { name: "Уровень заклинаний 1", exact: true }).getByRole("listitem").first();
+    expect(await row.getByRole("checkbox").count()).toBe(1);
+    await expect(row.getByRole("textbox")).toHaveValue(/Волшебная стрела/);
+    await page.getByRole("button", { name: "Печать A4", exact: true }).click();
+    await expect(page.locator("[data-sheet-page]")).toHaveCSS("height", "2526px");
+    const downloadPromise = page.waitForEvent("download");
+    await page.getByRole("button", { name: "Экспорт векторного PDF", exact: true }).click();
+    const stream = await (await downloadPromise).createReadStream();
+    if (!stream) throw new Error("Missing PDF stream");
+    const chunks: Buffer[] = [];
+    for await (const chunk of stream) chunks.push(Buffer.from(chunk));
+    const pdf = await PDFDocument.load(Buffer.concat(chunks));
+    expect(pdf.getPageCount()).toBe(3);
+    pdf.getPages().forEach(p => { expect(p.getWidth()).toBeCloseTo(595.28); expect(p.getHeight()).toBeCloseTo(841.89); });
+    expect(errors).toEqual([]);
+  } finally {
+    await database.query("DELETE FROM characters WHERE owner_id = $1", [owner.id]);
+    await database.query("DELETE FROM game_systems WHERE owner_id = $1", [owner.id]);
+    await database.query("DELETE FROM users WHERE id = $1 AND email = $2", [owner.id, owner.email]);
+    await database.end();
+    await owner.api.dispose();
+  }
+});

@@ -7,6 +7,12 @@ const frame = (children: LayoutNode[] = []): LayoutNode => layoutNodeSchema.pars
 const layouts = (node: LayoutNode) => ({ desktop: node, print: node, mobile: node, tablet: node });
 
 describe("portable sheets", () => {
+  it("transfers a full multi-page native sheet larger than the former one-megabyte limit", () => {
+    const root = frame(Array.from({ length: 400 }, () => layoutNodeSchema.parse({ id: crypto.randomUUID(), kind: "text", text: "x".repeat(600), box: defaultBoxProps })));
+    const document = createSheetTransferDocument("D&D", layouts(root), []);
+    expect(new TextEncoder().encode(JSON.stringify(document)).length).toBeGreaterThan(1024 * 1024);
+    expect(sheetTransferDocumentSchema.safeParse(document).success).toBe(true);
+  });
   it("round trips all layouts and field names without server identity or character values", () => {
     const root = frame([layoutNodeSchema.parse({ id: crypto.randomUUID(), kind: "field-input", fieldBinding: "name", name: "Character name", box: defaultBoxProps })]);
     const document = createSheetTransferDocument("Fate", layouts(root), []);

@@ -46,3 +46,18 @@ it("keeps fixed lists separate and restores values from legacy aspect fields", (
   expect(screen.queryByRole("button", { name: "addListItem" })).not.toBeInTheDocument();
   expect(screen.getAllByRole("listitem").every(item => item.classList.contains("border-b"))).toBe(true);
 });
+
+it("saves prepared marks independently of spell text and disables them in print mode", () => {
+  const node = textareaNodeSchema.parse({ id: crypto.randomUUID(), kind: "textarea", fieldBinding: "spells", listStyle: "lined",
+    itemCount: 2, itemCheckboxBindings: ["prepared_1", "prepared_2"], itemLabels: ["First spell", "Second spell"] });
+  const save = vi.fn(), commit = vi.fn();
+  const view = render(<SheetRenderProvider value={{ target: "desktop", mode: "player", fieldValues: { spells: ["Magic missile", "Shield"], prepared_1: true },
+    onFieldValueChange: save, onFieldCommit: commit }}><RenderTextarea node={node} /></SheetRenderProvider>);
+  expect(screen.getAllByRole("checkbox")[0]).toBeChecked();
+  fireEvent.click(screen.getAllByRole("checkbox")[1]);
+  expect(save).toHaveBeenLastCalledWith("prepared_2", true);
+  expect(commit).toHaveBeenLastCalledWith("prepared_2");
+  expect(screen.getByRole("textbox", { name: "First spell" })).toHaveValue("Magic missile");
+  view.rerender(<SheetRenderProvider value={{ target: "print", mode: "print" }}><RenderTextarea node={node} /></SheetRenderProvider>);
+  expect(screen.getAllByRole("checkbox").every(checkbox => checkbox.hasAttribute("disabled"))).toBe(true);
+});

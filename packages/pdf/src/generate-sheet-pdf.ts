@@ -149,6 +149,28 @@ class PdfRenderContext {
 export async function generateA4SheetPdf(
   options: GenerateSheetPdfOptions,
 ): Promise<Uint8Array> {
+  const root = options.layout;
+  if (root.kind === "frame" && root.children.some(child => child.kind === "frame" && child.printAsPage)) {
+    const pages: LayoutNode[] = [];
+    let pending: LayoutNode[] = [];
+    const flush = () => {
+      if (!pending.length) return;
+      pages.push({ ...root, children: pending, box: { ...root.box, height: { mode: "hug" } } });
+      pending = [];
+    };
+    for (const child of root.children) {
+      if (child.kind === "frame" && child.printAsPage) { flush(); pages.push(child); }
+      else pending.push(child);
+    }
+    flush();
+    const output = await PDFDocument.create();
+    if (options.title) output.setTitle(options.title);
+    for (const layout of pages) {
+      const document = await PDFDocument.load(await generateA4SheetPdf({ ...options, layout }));
+      for (const page of await output.copyPages(document, document.getPageIndices())) output.addPage(page);
+    }
+    return output.save();
+  }
   options = { ...options, layout: upgradeLegacyFateTextLists(options.layout) };
   const doc = await PDFDocument.create();
   if (options.title) {
@@ -917,7 +939,15 @@ function renderFrameNode(
     });
   }
 
-  if (strokeColor) {
+  const radii = node.box.cornerRadius;
+  const roundedStroke = strokeColor && strokes.top > 0 && Object.values(strokes).every(width => width === strokes.top)
+    && Object.values(radii).some(radius => radius > 0);
+  if (roundedStroke) {
+    const [tl, tr, br, bl] = [radii.topLeft, radii.topRight, radii.bottomRight, radii.bottomLeft].map(radius => Math.min(radius, availableWidth / 2, measuredHeight / 2));
+    const w = availableWidth, h = measuredHeight;
+    ctx.page.drawSvgPath(`M${tl} 0 H${w - tr} Q${w} 0 ${w} ${tr} V${h - br} Q${w} ${h} ${w - br} ${h} H${bl} Q0 ${h} 0 ${h - bl} V${tl} Q0 0 ${tl} 0 Z`,
+      { x, y: startY, borderColor: strokeColor, borderWidth: strokes.top });
+  } else if (strokeColor) {
     for (const [side, thickness] of Object.entries(strokes)) {
       if (thickness <= 0) continue;
       const horizontal = side === "top" || side === "bottom";
@@ -946,7 +976,10 @@ function renderFrameNode(
       const child = node.children[index]!;
       const childWidth = childWidths[index] ?? innerWidth;
       const resolvedChild = child.box.height.mode === "fill" ? allocateHeight(child, innerHeight) : child;
-      const childHeight = renderNode(ctx, resolvedChild, childX, contentY, childWidth);
+      const estimatedChildHeight = estimateNodeHeight(ctx, resolvedChild, childWidth);
+      const offsetY = node.align === "center" ? Math.max(0, (innerHeight - estimatedChildHeight) / 2)
+        : node.align === "end" ? Math.max(0, innerHeight - estimatedChildHeight) : 0;
+      const childHeight = renderNode(ctx, resolvedChild, childX, contentY - offsetY, childWidth);
       if (childHeight > maxChildHeight) maxChildHeight = childHeight;
       childX += childWidth + gap;
     }
@@ -1119,7 +1152,9 @@ function renderFieldInputNode(
     const fontSize = textWidth > 0 ? Math.max(8, Math.min(baseSize, Math.floor(baseSize * Math.max(1, availableWidth - 16) / textWidth))) : baseSize;
     ctx.page.pushOperators(pushGraphicsState(), rectangle(x, boxY, availableWidth, boxHeight), clip(), endPath());
     ctx.page.drawText(text.replace(/\r?\n/g, " "), {
-      x: x + 8, y: boxY + Math.max(0, (boxHeight - fontSize) / 2), size: fontSize, font,
+      x: node.align === "center" ? x + Math.max(0, (availableWidth - font.widthOfTextAtSize(text.replace(/\r?\n/g, " "), fontSize)) / 2)
+        : node.align === "right" ? x + Math.max(8, availableWidth - 8 - font.widthOfTextAtSize(text.replace(/\r?\n/g, " "), fontSize)) : x + 8,
+      y: boxY + Math.max(0, (boxHeight - fontSize) / 2), size: fontSize, font,
       color: displayVal ? rgb(0.1, 0.1, 0.1) : rgb(0.65, 0.65, 0.65),
     });
     ctx.page.pushOperators(popGraphicsState());
@@ -1151,12 +1186,13 @@ function renderNumberInputNode(
     curY -= 12;
   }
 
-  const boxSize = Math.min(36, availableWidth, node.box.height.mode === "fixed" ? node.box.height.value : 36);
-  const boxY = curY - boxSize;
+  const height = node.box.height.mode === "fixed" ? Math.max(0, node.box.height.value - (node.label ? 12 : 0)) : 28;
+  const boxSize = node.variant === "circle" ? Math.min(40, availableWidth, height) : height;
+  const boxY = curY - boxSize - (node.variant === "circle" ? Math.max(0, (height - boxSize) / 2) : 0);
 
   if (node.variant === "circle") {
     ctx.page.drawEllipse({
-      x: x + boxSize / 2,
+      x: x + availableWidth / 2,
       y: boxY + boxSize / 2,
       xScale: boxSize / 2,
       yScale: boxSize / 2,
@@ -1178,11 +1214,13 @@ function renderNumberInputNode(
 
   if (displayVal) {
     const numFont = ctx.fonts.titleBoldFont;
-    const numSize = 16;
+    const baseSize = getSingleLineFontSize(node.variant === "circle" ? 28 : boxSize);
+    const widthAtBaseSize = numFont.widthOfTextAtSize(displayVal, baseSize);
+    const numSize = widthAtBaseSize > 0 ? Math.max(8, Math.min(baseSize, Math.floor(baseSize * Math.max(1, availableWidth - 4) / widthAtBaseSize))) : baseSize;
     const textWidth = numFont.widthOfTextAtSize(displayVal, numSize);
     ctx.page.drawText(displayVal, {
       x: x + Math.max(0, (availableWidth - textWidth) / 2),
-      y: boxY + (boxSize - numSize) / 2 + 2,
+      y: boxY + (boxSize - numSize) / 2,
       size: numSize,
       font: numFont,
       color: node.box.strokeColor === "ink" ? rgb(0, 0, 0) : rgb(0.06, 0.24, 0.09),
@@ -1243,7 +1281,10 @@ function renderTextareaNode(
       const bottom = Math.max(boxY, top - height);
       if (top <= boxY) break;
       const marker = node.listStyle === "numbered" ? `${index + 1}.` : node.listStyle === "bulleted" ? "•" : "";
-      const markerWidth = marker ? font.widthOfTextAtSize(marker, fontSize) + 4 : 0;
+      const checkboxKey = node.itemCheckboxBindings?.[index];
+      const markerWidth = checkboxKey ? 16 : marker ? font.widthOfTextAtSize(marker, fontSize) + 4 : 0;
+      if (checkboxKey) ctx.page.drawEllipse({ x: x + 5, y: top - Math.min(height / 2, 9), xScale: 4, yScale: 4,
+        borderColor: rgb(0, 0, 0), borderWidth: 0.75, color: ctx.fieldValues[checkboxKey] === true ? rgb(0, 0, 0) : rgb(1, 1, 1) });
       if (marker) ctx.page.drawText(marker, { x, y: top - fontSize - 4, font, size: fontSize });
       let lineY = top - fontSize - 4;
       for (const line of wrapText(font, item, fontSize, Math.max(1, availableWidth - markerWidth - 8))) {
@@ -1293,8 +1334,9 @@ function renderCheckboxNode(
 ): number {
   const val = ctx.fieldValues[node.fieldBinding];
   const isChecked = val === true || val === "true";
-  const size = 12;
-  const boxY = y - size - 2;
+  const size = Math.min(12, _availableWidth, node.box.height.mode === "fixed" ? node.box.height.value : 12);
+  const color = node.box.strokeColor === "ink" ? rgb(0, 0, 0) : rgb(0.06, 0.24, 0.09);
+  const boxY = y - size - (node.box.height.mode === "fixed" ? Math.max(0, (node.box.height.value - size) / 2) : 2);
 
   if (node.shape === "arc") {
     const color = rgb(0.1, 0.1, 0.1);
@@ -1309,9 +1351,9 @@ function renderCheckboxNode(
       y: boxY + size / 2,
       xScale: size / 2,
       yScale: size / 2,
-      borderColor: rgb(0.06, 0.24, 0.09),
+      borderColor: color,
       borderWidth: node.showBorder === false ? 0 : 1.5,
-      color: isChecked ? rgb(0.06, 0.24, 0.09) : rgb(1, 1, 1),
+      color: isChecked ? color : rgb(1, 1, 1),
     });
   } else {
     ctx.page.drawRectangle({
@@ -1319,9 +1361,9 @@ function renderCheckboxNode(
       y: boxY,
       width: size,
       height: size,
-      borderColor: rgb(0.06, 0.24, 0.09),
+      borderColor: color,
       borderWidth: node.showBorder === false ? 0 : 1.5,
-      color: isChecked ? rgb(0.06, 0.24, 0.09) : rgb(1, 1, 1),
+      color: isChecked ? color : rgb(1, 1, 1),
     });
   }
 
@@ -1335,7 +1377,7 @@ function renderCheckboxNode(
     });
   }
 
-  return size + 6;
+  return node.box.height.mode === "fixed" ? node.box.height.value : size + 6;
 }
 
 function renderSelectNode(
