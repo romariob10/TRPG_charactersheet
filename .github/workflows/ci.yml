@@ -5,6 +5,7 @@ on:
     branches: [main, dev]
   pull_request:
     branches: [main, dev]
+  workflow_dispatch:
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -33,6 +34,8 @@ jobs:
           pnpm --filter @mycharacter/storage build
           pnpm --filter @mycharacter/pdf build
       - run: pnpm lint && pnpm typecheck
+      - name: Validate deployment scripts
+        run: bash -n scripts/deploy-production.sh scripts/backup-production.sh
       - name: Build production applications
         run: pnpm build
 

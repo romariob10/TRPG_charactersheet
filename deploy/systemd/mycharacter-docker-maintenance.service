@@ -1,0 +1,11 @@
+[Unit]
+Description=Remove old unused Docker cache and dangling images
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/docker builder prune -af --filter until=168h
+ExecStart=/usr/bin/docker image prune -f --filter until=168h
+Nice=10
+IOSchedulingClass=idle

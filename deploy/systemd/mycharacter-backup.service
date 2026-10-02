@@ -1,0 +1,10 @@
+[Unit]
+Description=Back up MyCharacter production database and storage
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/mycharacter-backup-production
+Nice=10
+IOSchedulingClass=idle
