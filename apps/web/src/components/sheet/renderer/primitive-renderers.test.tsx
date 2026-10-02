@@ -11,7 +11,7 @@ vi.mock("next-intl", () => ({
   useTranslations: () => (key: string) => key,
 }));
 
-afterEach(cleanup);
+afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 describe("sheet primitive inputs", () => {
   it("commits a numeric value only after focus leaves the input", () => {
@@ -47,6 +47,21 @@ describe("sheet primitive inputs", () => {
     expect(onFieldValueChange).not.toHaveBeenCalled();
     fireEvent.blur(input);
     expect(onFieldValueChange).toHaveBeenCalledWith("stress", 14);
+  });
+
+  it.each(["player", "print"] as const)("centers numbers and sizes their font to the allocated slot in %s", (mode) => {
+    vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockReturnValue(40);
+    vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(80);
+    render(<SheetRenderProvider value={{ target: "desktop", mode, fieldValues: { score: 18 } }}>
+      <div data-node-id="score"><RenderNumberInput node={{ id: crypto.randomUUID(), kind: "number-input",
+        fieldBinding: "score", label: "", placeholder: "", variant: "plain", showSign: false,
+        readOnly: false, box: { ...defaultBoxProps, height: { mode: "fill" } } }} /></div>
+    </SheetRenderProvider>);
+    const number = mode === "player" ? screen.getByRole("spinbutton") : screen.getByText("18");
+    expect(number).toHaveStyle({ fontSize: "24px" });
+    expect(number.parentElement).toHaveClass("h-full", "justify-center");
+    if (mode === "print") expect(number).toHaveClass("items-center", "justify-center");
+    else expect(number).toHaveClass("flex-1", "[appearance:textfield]");
   });
 
   it("keeps manual resizing available when a textarea fills its parent height", () => {

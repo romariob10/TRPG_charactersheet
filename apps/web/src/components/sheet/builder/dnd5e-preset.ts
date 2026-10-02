@@ -93,7 +93,9 @@ export const dnd5eLabelKeys = [
   "spellName",
   "prepared",
   "slotsTotal",
-  "slotsUsed"
+  "slotsUsed",
+  "slotsTotalShort",
+  "slotsUsedShort"
 ] as const;
 export type Dnd5eLabels = Record<(typeof dnd5eLabelKeys)[number], string>;
 
@@ -105,10 +107,10 @@ export function createDnd5ePreset(labels: Dnd5eLabels) {
     id: crypto.randomUUID(), kind: "frame", name, box: box(props), direction, gap,
     align: "stretch", justify: "start", wrap: false, collapseAdjacentStrokes: false, children,
   });
-  const text = (value: string, fontSize = 7, props: Partial<BoxProps> = {}): LayoutNode => ({
-    id: crypto.randomUUID(), kind: "text", name: value, text: value, variant: "label",
-    fontFamily: "Noto Sans", fontSize, align: "center", weight: "bold", uppercase: false,
-    color: "ink", lineHeight: 1.15, box: box(props),
+  const text = (value: string, fontSize = 7.5, props: Partial<BoxProps> = {}): LayoutNode => ({
+    id: crypto.randomUUID(), kind: "text", name: value, text: value, variant: "body",
+    fontFamily: "Noto Sans", fontSize, align: "center", weight: "medium", uppercase: false,
+    color: "ink", lineHeight: 1.2, box: box(props),
   });
   const field = (key: string, label: string, kind: SheetFieldDefinition["kind"] = "text", props: Partial<BoxProps> = {}): LayoutNode => {
     fields.push(sheetFieldDefinitionSchema.parse({ id: crypto.randomUUID(), key, label, kind,
@@ -119,15 +121,27 @@ export function createDnd5ePreset(labels: Dnd5eLabels) {
     if (kind === "checkbox") return { ...base, kind: "checkbox", shape: "circle", showBorder: true };
     if (kind === "avatar") return { ...base, kind: "image", url: "", alt: label, fit: "cover", aspectRatio: "3:4" };
     if (kind === "multiline") return { ...base, kind: "textarea", rows: 1, variant: "plain" };
-    return { ...base, kind: "field-input", variant: "underline" };
+    return { ...base, kind: "field-input", variant: "underline", align: key.endsWith("_modifier") || key.endsWith("_bonus") || ["initiative", "speed", "spellcasting_ability"].includes(key) ? "center" : "left" };
   };
   const control = (key: string, label: string, kind: SheetFieldDefinition["kind"] = "text", height = 34, caption = label) => frame(label,
-    [field(key, label, kind, { height: { mode: "fill" } }), text(caption)], { height: { mode: "fixed", value: height } }, "vertical", 0);
-  const panel = (label: string, height: number, children: LayoutNode[]) => frame(label, [...children, text(label)], {
-    height: { mode: "fixed", value: height }, padding: { top: 8, right: 8, bottom: 6, left: 8 }, fill: "surface",
-    strokeColor: "ink", strokeWidth: { top: 1, right: 1, bottom: 1, left: 1 },
-    cornerRadius: { topLeft: 8, topRight: 8, bottomRight: 8, bottomLeft: 8 },
-  }, "vertical", 0);
+    [field(key, label, kind, { height: { mode: "fixed", value: Math.max(12, Math.min(28, height - 14)) } }), text(caption, key === "hit_dice_total" ? 6 : 7.5)], { height: { mode: "fixed", value: height } }, "vertical", 0);
+  const panel = (label: string, height: number, children: LayoutNode[], compact = false) => {
+    const node = frame(label, compact ? [...children, text(label, 6)] : children, {
+      height: { mode: "fixed", value: height }, padding: { top: compact ? 6 : 14, right: 8, bottom: 8, left: 8 }, fill: "surface",
+      strokeColor: "ink", strokeWidth: { top: 1, right: 1, bottom: 1, left: 1 },
+    }, "vertical", 0);
+    node.cornerOrnaments = { preset: "fate-turnback", topLeft: true, topRight: true, bottomLeft: true, bottomRight: true };
+    if (!compact) node.topOrnament = {
+      preset: "fate", align: "center", offset: 0, text: label.toLowerCase(),
+      fontFamily: "Montserrat Alternates", fontSize: 8, fontWeight: "medium", letterSpacingPx: -0.6,
+    };
+    return node;
+  };
+  const plainField = (key: string, label: string, props: Partial<BoxProps> = {}) => {
+    const node = field(key, label, "text", props);
+    if (node.kind === "field-input") node.variant = "plain";
+    return node;
+  };
   const prose = (key: string, label: string, height: number) => panel(label, height, [field(key, label, "multiline", { height: { mode: "fill" } })]);
   const row = (name: string, children: LayoutNode[], gap = 6) => frame(name, children, {}, "horizontal", gap);
   const abilities = ["strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma"] as const;
@@ -135,17 +149,18 @@ export function createDnd5ePreset(labels: Dnd5eLabels) {
   const skillAbilities = [1, 0, 4, 4, 5, 5, 3, 1, 3, 4, 5, 3, 4, 3, 3, 1, 5, 4];
   const trainedRow = (key: string, label: string, suffix = "") => {
     const node = row(label, [
-      field(`${key}_proficient`, `${label} / ${labels.proficient}`, "checkbox", { width: { mode: "fixed", value: 10 }, height: { mode: "fill" } }),
+      field(`${key}_proficient`, `${label} / ${labels.proficient}`, "checkbox", { width: { mode: "fixed", value: 10 }, height: { mode: "fixed", value: 8 } }),
       field(`${key}_bonus`, label, "text", { width: { mode: "fixed", value: 22 }, height: { mode: "fill" } }),
-      text(`${label}${suffix}`, 6, { height: { mode: "fill" } }),
+      text(`${label}${suffix}`, 6.5),
     ], 3);
     node.box.height = { mode: "fixed", value: 19 };
+    node.align = "center";
     const title = node.children[2];
     if (title.kind === "text") title.align = "left";
     return node;
   };
   const header = row(labels.characterName, [
-    panel(labels.characterName, 72, [field("character_name", labels.characterName, "text", { height: { mode: "fill" } })]),
+    panel(labels.characterName, 72, [plainField("character_name", labels.characterName, { height: { mode: "fill" } })]),
     frame(labels.classLevel, [
       row(labels.classLevel, [control("class_level", labels.classLevel), control("background", labels.background), control("player_name", labels.playerName)]),
       row(labels.race, [control("race", labels.race), control("alignment", labels.alignment), control("experience", labels.experience, "number")]),
@@ -153,9 +168,9 @@ export function createDnd5ePreset(labels: Dnd5eLabels) {
   ]);
   header.children[0].box.width = { mode: "fixed", value: 190 };
   const scores = frame(labels.score, abilities.map(ability => panel(labels[ability], 77, [
-    field(ability, `${labels[ability]} / ${labels.score}`, "number", { height: { mode: "fill" } }),
-    field(`${ability}_modifier`, `${labels[ability]} / ${labels.modifier}`, "text", { height: { mode: "fixed", value: 18 } }),
-  ])), { width: { mode: "fixed", value: 60 } }, "vertical", 7);
+    field(ability, `${labels[ability]} / ${labels.score}`, "number", { height: { mode: "fixed", value: 30 } }),
+    plainField(`${ability}_modifier`, `${labels[ability]} / ${labels.modifier}`, { height: { mode: "fixed", value: 18 } }),
+  ], true)), { width: { mode: "fixed", value: 64 } }, "vertical", 7);
   const checks = frame(labels.skills, [
     row(labels.inspiration, [field("inspiration", labels.inspiration, "checkbox", { width: { mode: "fixed", value: 16 } }), text(labels.inspiration, 7)]),
     control("proficiency_bonus", labels.proficiencyBonus, "text", 28),
@@ -163,10 +178,11 @@ export function createDnd5ePreset(labels: Dnd5eLabels) {
     panel(labels.skills, 365, skills.map((skill, index) => trainedRow(`skill_${skill}`, labels[skill], ` (${labels[abilities[skillAbilities[index]]].slice(0, 3)})`))),
   ], {}, "vertical", 6);
   const left = frame(labels.skills, [row(labels.skills, [scores, checks], 6), control("passive_perception", labels.passivePerception, "number", 35), prose("languages", labels.languages, 80)], {}, "vertical", 9);
-  left.box.width = { mode: "fixed", value: 184 };
+  left.box.width = { mode: "fixed", value: 214 };
   const deathRow = (key: string, label: string) => {
-    const node = row(label, [text(label, 6, { width: { mode: "fixed", value: 32 } }), ...Array.from({ length: 3 }, (_, index) => field(`${key}_${index + 1}`, `${label} ${index + 1}`, "checkbox", { width: { mode: "fixed", value: 9 }, height: { mode: "fixed", value: 9 } }))], 3);
+    const node = row(label, [text(label, 6, { width: { mode: "fixed", value: 28 } }), ...Array.from({ length: 3 }, (_, index) => field(`${key}_${index + 1}`, `${label} ${index + 1}`, "checkbox", { width: { mode: "fixed", value: 8 }, height: { mode: "fixed", value: 8 } }))], 2);
     node.box.height = { mode: "fixed", value: 18 };
+    node.align = "center";
     return node;
   };
   const attacks = panel(labels.attacks, 202, [
@@ -181,15 +197,15 @@ export function createDnd5ePreset(labels: Dnd5eLabels) {
   const currency = ["copper", "silver", "electrum", "gold", "platinum"] as const;
   const middle = frame(labels.hitPointsCurrent, [
     row(labels.armorClass, [control("armor_class", labels.armorClass, "number", 52), control("initiative", labels.initiative, "text", 52), control("speed", labels.speed, "text", 52)]),
-    panel(labels.hitPointsCurrent, 90, [control("hit_points_max", labels.hitPointsMax, "number", 26), field("hit_points_current", labels.hitPointsCurrent, "number", { height: { mode: "fill" } })]),
-    panel(labels.hitPointsTemporary, 62, [field("hit_points_temporary", labels.hitPointsTemporary, "number", { height: { mode: "fill" } })]),
-    row(labels.hitDice, [panel(labels.hitDice, 69, [control("hit_dice_total", labels.hitDiceTotal, "text", 22), field("hit_dice", labels.hitDice)]), panel(labels.deathSaves, 69, [deathRow("death_success", labels.successes), deathRow("death_failure", labels.failures)])]),
+    panel(labels.hitPointsCurrent, 90, [control("hit_points_max", labels.hitPointsMax, "number", 26), field("hit_points_current", labels.hitPointsCurrent, "number", { height: { mode: "fixed", value: 36 } })]),
+    panel(labels.hitPointsTemporary, 62, [field("hit_points_temporary", labels.hitPointsTemporary, "number", { height: { mode: "fixed", value: 36 } })]),
+    row(labels.hitDice, [panel(labels.hitDice, 72, [control("hit_dice_total", labels.hitDiceTotal, "text", 26), field("hit_dice", labels.hitDice)], true), panel(labels.deathSaves, 72, [deathRow("death_success", labels.successes), deathRow("death_failure", labels.failures)], true)]),
     attacks,
     panel(labels.equipment, 180, [row(labels.equipment, [frame(labels.gold, currency.map(key => control(key, labels[key], "number", 28)), { width: { mode: "fixed", value: 30 } }), field("equipment", labels.equipment, "multiline", { height: { mode: "fill" } })], 6)]),
   ], {}, "vertical", 9);
   const right = frame(labels.features, [prose("personality", labels.personality, 112), prose("ideals", labels.ideals, 84), prose("bonds", labels.bonds, 84), prose("flaws", labels.flaws, 84), prose("features", labels.features, 300)], {}, "vertical", 9);
   const columns = row(labels.features, [left, middle, right], 10);
-  const bioHeader = row(labels.characterName, [control("character_name", labels.characterName, "text", 66), frame(labels.age, [
+  const bioHeader = row(labels.characterName, [panel(labels.characterName, 72, [plainField("character_name", labels.characterName, { height: { mode: "fill" } })]), frame(labels.age, [
     row(labels.age, [control("age", labels.age), control("height", labels.height), control("weight", labels.weight)]),
     row(labels.eyes, [control("eyes", labels.eyes), control("skin", labels.skin), control("hair", labels.hair)]),
   ])]);
@@ -200,7 +216,7 @@ export function createDnd5ePreset(labels: Dnd5eLabels) {
     frame(labels.appearance, [panel(labels.appearance, 269, [field("portrait", labels.appearance, "avatar", { height: { mode: "fill" } })]), prose("backstory", labels.backstory, 431)], { width: { mode: "fixed", value: 184 } }, "vertical", 12),
     frame(labels.allies, [panel(labels.allies, 269, [control("organization", labels.organization, "text", 34), row(labels.allies, [field("allies", labels.allies, "multiline", { height: { mode: "fill" } }), field("organization_symbol", labels.symbol, "avatar", { width: { mode: "fixed", value: 140 }, height: { mode: "fill" } })])]), prose("additional_features", labels.additionalFeatures, 263), prose("treasure", labels.treasure, 156)], {}, "vertical", 12),
   ], 12);
-  const spellHeader = row(labels.spellcastingClass, [control("spellcasting_class", labels.spellcastingClass, "text", 65), control("spellcasting_ability", labels.spellcastingAbility, "text", 65), control("spell_save_dc", labels.spellSaveDc, "number", 65), control("spell_attack_bonus", labels.spellAttackBonus, "text", 65)]);
+  const spellHeader = row(labels.spellcastingClass, [control("spellcasting_class", labels.spellcastingClass, "text", 52), control("spellcasting_ability", labels.spellcastingAbility, "text", 52), control("spell_save_dc", labels.spellSaveDc, "number", 52), control("spell_attack_bonus", labels.spellAttackBonus, "text", 52)]);
   const counts = [8, 12, 13, 13, 13, 9, 9, 9, 7, 7];
   const spellLevel = (level: number) => {
     const label = level === 0 ? labels.cantrips : `${labels.spellLevel} ${level}`;
@@ -216,7 +232,12 @@ export function createDnd5ePreset(labels: Dnd5eLabels) {
       list.itemCheckboxBindings.forEach((key, index) => field(key, `${label} / ${labels.prepared} ${index + 1}`, "checkbox"));
     }
     const spellRows = frame(label, [list], { height: { mode: "fixed", value: counts[level] * 16 } }, "vertical", 0);
-    return frame(label, [row(label, level === 0 ? [text(label, 9)] : [text(String(level), 14), control(`spell_slots_${level}_total`, `${labels.slotsTotal} / ${labels.spellLevel} ${level}`, "number", 28, labels.slotsTotal), control(`spell_slots_${level}_used`, `${labels.slotsUsed} / ${labels.spellLevel} ${level}`, "number", 28, labels.slotsUsed)]), spellRows], {}, "vertical", 5);
+    const heading = row(label, level === 0 ? [text(labels.spellName)] : [
+      control(`spell_slots_${level}_total`, `${labels.slotsTotal} / ${labels.spellLevel} ${level}`, "number", 22, labels.slotsTotalShort),
+      control(`spell_slots_${level}_used`, `${labels.slotsUsed} / ${labels.spellLevel} ${level}`, "number", 22, labels.slotsUsedShort),
+    ]);
+    heading.box.height = { mode: "fixed", value: 22 };
+    return panel(label, counts[level] * 16 + 44, [heading, spellRows]);
   };
   const spells = row(labels.spellName, [[0, 1, 2], [3, 4, 5], [6, 7, 8, 9]].map(levels => frame(labels.spellName, levels.map(spellLevel), {}, "vertical", 12)), 14);
   const page = (name: string, children: LayoutNode[]) => frame(name, children, {
@@ -233,6 +254,7 @@ export function createDnd5ePreset(labels: Dnd5eLabels) {
   const adapt = (node: LayoutNode) => {
     if (node.kind === "text") { node.fontSize = Math.max(10, node.fontSize ?? 10); return; }
     if (node.kind !== "frame") return;
+    if (node.topOrnament) node.topOrnament.fontSize = Math.max(10, node.topOrnament.fontSize);
     if (node.id === left.children[0].id) { node.direction = "vertical"; node.gap = 12; }
     if (node.id === scores.id) { node.direction = "horizontal"; node.wrap = true; for (const child of node.children) child.box.minWidth = 90; }
     node.box.width = { mode: "fill" };

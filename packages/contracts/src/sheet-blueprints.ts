@@ -68,6 +68,7 @@ export const fieldInputNodeSchema = z.object({
   label: z.string().trim().max(120).default(""),
   placeholder: z.string().trim().max(120).default(""),
   variant: inputVariantSchema.default("underline"),
+  align: textAlignSchema.optional(),
   readOnly: z.boolean().default(false),
 });
 export type FieldInputNode = z.infer<typeof fieldInputNodeSchema>;

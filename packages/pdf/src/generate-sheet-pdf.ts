@@ -976,7 +976,10 @@ function renderFrameNode(
       const child = node.children[index]!;
       const childWidth = childWidths[index] ?? innerWidth;
       const resolvedChild = child.box.height.mode === "fill" ? allocateHeight(child, innerHeight) : child;
-      const childHeight = renderNode(ctx, resolvedChild, childX, contentY, childWidth);
+      const estimatedChildHeight = estimateNodeHeight(ctx, resolvedChild, childWidth);
+      const offsetY = node.align === "center" ? Math.max(0, (innerHeight - estimatedChildHeight) / 2)
+        : node.align === "end" ? Math.max(0, innerHeight - estimatedChildHeight) : 0;
+      const childHeight = renderNode(ctx, resolvedChild, childX, contentY - offsetY, childWidth);
       if (childHeight > maxChildHeight) maxChildHeight = childHeight;
       childX += childWidth + gap;
     }
@@ -1149,7 +1152,9 @@ function renderFieldInputNode(
     const fontSize = textWidth > 0 ? Math.max(8, Math.min(baseSize, Math.floor(baseSize * Math.max(1, availableWidth - 16) / textWidth))) : baseSize;
     ctx.page.pushOperators(pushGraphicsState(), rectangle(x, boxY, availableWidth, boxHeight), clip(), endPath());
     ctx.page.drawText(text.replace(/\r?\n/g, " "), {
-      x: x + 8, y: boxY + Math.max(0, (boxHeight - fontSize) / 2), size: fontSize, font,
+      x: node.align === "center" ? x + Math.max(0, (availableWidth - font.widthOfTextAtSize(text.replace(/\r?\n/g, " "), fontSize)) / 2)
+        : node.align === "right" ? x + Math.max(8, availableWidth - 8 - font.widthOfTextAtSize(text.replace(/\r?\n/g, " "), fontSize)) : x + 8,
+      y: boxY + Math.max(0, (boxHeight - fontSize) / 2), size: fontSize, font,
       color: displayVal ? rgb(0.1, 0.1, 0.1) : rgb(0.65, 0.65, 0.65),
     });
     ctx.page.pushOperators(popGraphicsState());
@@ -1181,12 +1186,13 @@ function renderNumberInputNode(
     curY -= 12;
   }
 
-  const boxSize = Math.min(36, availableWidth, node.box.height.mode === "fixed" ? node.box.height.value : 36);
-  const boxY = curY - boxSize;
+  const height = node.box.height.mode === "fixed" ? Math.max(0, node.box.height.value - (node.label ? 12 : 0)) : 28;
+  const boxSize = node.variant === "circle" ? Math.min(40, availableWidth, height) : height;
+  const boxY = curY - boxSize - (node.variant === "circle" ? Math.max(0, (height - boxSize) / 2) : 0);
 
   if (node.variant === "circle") {
     ctx.page.drawEllipse({
-      x: x + boxSize / 2,
+      x: x + availableWidth / 2,
       y: boxY + boxSize / 2,
       xScale: boxSize / 2,
       yScale: boxSize / 2,
@@ -1208,11 +1214,13 @@ function renderNumberInputNode(
 
   if (displayVal) {
     const numFont = ctx.fonts.titleBoldFont;
-    const numSize = 16;
+    const baseSize = getSingleLineFontSize(node.variant === "circle" ? 28 : boxSize);
+    const widthAtBaseSize = numFont.widthOfTextAtSize(displayVal, baseSize);
+    const numSize = widthAtBaseSize > 0 ? Math.max(8, Math.min(baseSize, Math.floor(baseSize * Math.max(1, availableWidth - 4) / widthAtBaseSize))) : baseSize;
     const textWidth = numFont.widthOfTextAtSize(displayVal, numSize);
     ctx.page.drawText(displayVal, {
       x: x + Math.max(0, (availableWidth - textWidth) / 2),
-      y: boxY + (boxSize - numSize) / 2 + 2,
+      y: boxY + (boxSize - numSize) / 2,
       size: numSize,
       font: numFont,
       color: node.box.strokeColor === "ink" ? rgb(0, 0, 0) : rgb(0.06, 0.24, 0.09),

@@ -1328,6 +1328,8 @@
     "spellName": "Название заклинания",
     "prepared": "Подготовлено",
     "slotsTotal": "Всего ячеек",
-    "slotsUsed": "Потрачено ячеек"
+    "slotsUsed": "Потрачено ячеек",
+    "slotsTotalShort": "Всего",
+    "slotsUsedShort": "Потрачено"
 }
 }

@@ -1328,6 +1328,8 @@
     "spellName": "Spell name",
     "prepared": "Prepared",
     "slotsTotal": "Total slots",
-    "slotsUsed": "Slots expended"
+    "slotsUsed": "Slots expended",
+    "slotsTotalShort": "Total",
+    "slotsUsedShort": "Used"
 }
 }

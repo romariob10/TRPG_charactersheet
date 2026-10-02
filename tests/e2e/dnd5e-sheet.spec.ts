@@ -36,6 +36,18 @@ test("native D&D preset survives large JSON transfer, saves prepared spells, ada
     await characterName.first().fill("Эрис Ночной Ветер");
     await characterName.first().press("Tab");
     await expect(characterName.last()).toHaveValue("Эрис Ночной Ветер");
+    await characterName.first().focus();
+    expect(await characterName.first().evaluate(input => getComputedStyle(input).borderBottomWidth)).toBe("0px");
+    const strength = page.getByRole("spinbutton", { name: "Сила / Значение", exact: true });
+    await strength.fill("18");
+    await strength.press("Tab");
+    await expect(strength).toHaveCSS("font-size", "18px");
+    expect(await strength.evaluate(input => {
+      const slot = input.closest("[data-node-id]")!.getBoundingClientRect();
+      const bounds = input.getBoundingClientRect();
+      return Math.abs((bounds.top + bounds.bottom) / 2 - (slot.top + slot.bottom) / 2);
+    })).toBeLessThan(1);
+
     const spell = page.getByRole("textbox", { name: "Уровень заклинаний 1 / Название заклинания 1", exact: true });
     const prepared = page.getByRole("checkbox", { name: "Уровень заклинаний 1 / Название заклинания 1 — подготовлено", exact: true });
     await spell.fill("Волшебная стрела\nДополнительные заметки о заклинании");

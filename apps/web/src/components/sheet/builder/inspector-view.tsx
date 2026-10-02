@@ -809,6 +809,21 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
       )}
 
       {/* Field Binding & Widget Settings */}
+      {selectedNode.kind === "field-input" && (
+        <label className="flex flex-col gap-1 pb-3 border-b border-border text-[10px] font-medium text-muted-foreground">
+          {t("alignment")}
+          <select aria-label={t("alignment")} value={selectedNode.align ?? "left"}
+            onChange={event => {
+              const align = event.target.value;
+              if (align === "left" || align === "center" || align === "right") onUpdateNode({ ...selectedNode, align });
+            }} className="w-full px-2 py-1 bg-background border border-border rounded">
+            <option value="left">{t("alignStart")}</option>
+            <option value="center">{t("alignCenter")}</option>
+            <option value="right">{t("alignEnd")}</option>
+          </select>
+        </label>
+      )}
+
       {(selectedNode.kind === "field-input" ||
         selectedNode.kind === "number-input" ||
         selectedNode.kind === "textarea" ||
