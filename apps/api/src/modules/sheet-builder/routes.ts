@@ -1,6 +1,8 @@
 import type { FastifyInstance } from "fastify";
 import {
   autosaveSheetDraftRequestSchema,
+  importSheetRequestSchema,
+  MAX_SHEET_TRANSFER_BYTES,
   createSheetDefinitionRequestSchema,
   publishSheetVersionRequestSchema,
 } from "@mycharacter/contracts";
@@ -48,6 +50,26 @@ export async function registerSheetBuilderRoutes(
       throw new AppError("VALIDATION_FAILED", 400, "Invalid sheet draft payload.");
     }
     return service.autosaveSheetDraft(actor.userId, id, parsed.data);
+  });
+
+  app.get("/api/sheet-definitions/:id/export", async (request, reply) => {
+    const actor = requireActor(request);
+    const { id } = parseParams(idParamsSchema, request.params);
+    reply.header("Cache-Control", "private, no-store");
+    reply.header("Content-Disposition", 'attachment; filename="character-sheet.json"');
+    return service.exportSheet(actor.userId, id);
+  });
+
+  app.post("/api/sheet-definitions/:id/import", { bodyLimit: MAX_SHEET_TRANSFER_BYTES + 1024 }, async (request) => {
+    const actor = requireActor(request);
+    const { id } = parseParams(idParamsSchema, request.params);
+    const parsed = importSheetRequestSchema.safeParse(request.body);
+    if (!parsed.success) throw new AppError("INVALID_SHEET_IMPORT", 400, "Invalid portable sheet document.");
+    return service.autosaveSheetDraft(actor.userId, id, {
+      expectedRevision: parsed.data.expectedRevision,
+      layouts: parsed.data.document.layouts,
+      fields: parsed.data.document.fields,
+    });
   });
 
   app.post("/api/sheet-definitions/:id/publish", async (request, reply) => {

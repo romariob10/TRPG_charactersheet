@@ -1,6 +1,7 @@
-import type { PostBlock, SocialPost } from "@mycharacter/contracts";
+import type { AgentPresenceRequest, PostBlock, SocialPost } from "@mycharacter/contracts";
 
 export interface MyCharacterClientOptions {
+  token?: string;
   baseUrl?: string;
   origin?: string;
 }
@@ -20,12 +21,25 @@ export interface CharacterSummary {
   updatedAt: string;
 }
 
+export class MyCharacterApiError extends Error {
+  readonly status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = "MyCharacterApiError";
+    this.status = status;
+  }
+}
+
 export class MyCharacterClient {
   public readonly baseUrl: string;
   public readonly origin: string;
+  private readonly token?: string;
+  private presenceTimer?: ReturnType<typeof setInterval>;
+  private presence?: AgentPresenceRequest;
   private cookies: Map<string, string> = new Map();
 
   constructor(options: MyCharacterClientOptions = {}) {
+    this.token = options.token || process.env.MYCHARACTER_TOKEN;
     this.baseUrl = (options.baseUrl || process.env.MYCHARACTER_API_URL || "http://localhost:8080").replace(/\/+$/, "");
     this.origin = (options.origin || process.env.MYCHARACTER_ORIGIN || this.baseUrl).replace(/\/+$/, "");
   }
@@ -45,7 +59,7 @@ export class MyCharacterClient {
   }
 
   public isAuthenticated(): boolean {
-    return this.cookies.has("session") || this.cookies.size > 0;
+    return Boolean(this.token) || this.cookies.has("session") || this.cookies.size > 0;
   }
 
   private parseSetCookie(headerValue: string | null): void {
@@ -58,12 +72,14 @@ export class MyCharacterClient {
     }
   }
 
-  private async request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  public async requestApi<T = unknown>(path: string, init: RequestInit = {}): Promise<T> {
+    if (!path.startsWith("/api/") || path.includes("..") || path.includes("\\")) throw new Error("Invalid API path.");
     const url = `${this.baseUrl}${path.startsWith("/") ? path : `/${path}`}`;
     const headers = new Headers(init.headers || {});
 
+    if (this.token) headers.set("Authorization", `Bearer ${this.token}`);
     const cookieHeader = this.getCookieHeader();
-    if (cookieHeader) {
+    if (cookieHeader && !this.token) {
       headers.set("Cookie", cookieHeader);
     }
 
@@ -80,6 +96,8 @@ export class MyCharacterClient {
     const response = await fetch(url, {
       ...init,
       headers,
+      redirect: "error",
+      signal: init.signal ?? AbortSignal.timeout(30_000),
     });
 
     // Node fetch might return combined or array set-cookie
@@ -98,7 +116,7 @@ export class MyCharacterClient {
       } catch {
         // Non-JSON error
       }
-      throw new Error(errorMessage);
+      throw new MyCharacterApiError(response.status, errorMessage);
     }
 
     if (response.status === 204) {
@@ -108,9 +126,42 @@ export class MyCharacterClient {
     return (await response.json()) as T;
   }
 
+  async setPresence(presence: AgentPresenceRequest) {
+    await this.requestApi("/api/agent-presence", { method: "PUT", body: JSON.stringify(presence) });
+    this.presence = presence;
+    if (!this.presenceTimer) {
+      this.presenceTimer = setInterval(() => {
+        if (!this.presence) return;
+        void this.requestApi("/api/agent-presence", { method: "PUT", body: JSON.stringify(this.presence) })
+           .catch((error: unknown) => {
+            if (error instanceof MyCharacterApiError && [401, 403].includes(error.status)) this.stopPresence();
+          });
+      }, 10_000);
+      this.presenceTimer.unref();
+    }
+    return { connected: true };
+  }
+
+  private stopPresence() {
+    clearInterval(this.presenceTimer);
+    this.presenceTimer = undefined;
+    this.presence = undefined;
+  }
+
+  async leaveEditor() {
+    this.stopPresence();
+    await this.requestApi("/api/agent-presence", { method: "DELETE" });
+    return { connected: false };
+  }
+
+  async close() {
+    if (this.presence) await this.leaveEditor().catch(() => this.stopPresence());
+    this.stopPresence();
+  }
+
   // Auth
   async register(email: string, password: string): Promise<UserAuthResult> {
-    const result = await this.request<{ user: UserAuthResult }>("/api/auth/register", {
+    const result = await this.requestApi<{ user: UserAuthResult }>("/api/auth/register", {
       method: "POST",
       body: JSON.stringify({ email, password }),
     });
@@ -118,7 +169,7 @@ export class MyCharacterClient {
   }
 
   async login(email: string, password: string): Promise<UserAuthResult> {
-    const result = await this.request<{ user: UserAuthResult }>("/api/auth/sign-in", {
+    const result = await this.requestApi<{ user: UserAuthResult }>("/api/auth/login", {
       method: "POST",
       body: JSON.stringify({ email, password }),
     });
@@ -126,7 +177,7 @@ export class MyCharacterClient {
   }
 
   async logout(): Promise<void> {
-    await this.request<void>("/api/auth/sign-out", {
+    await this.requestApi<void>("/api/auth/logout", {
       method: "POST",
       body: JSON.stringify({}),
     });
@@ -135,34 +186,34 @@ export class MyCharacterClient {
 
   // Profile
   async setUsername(username: string): Promise<{ username: string }> {
-    return this.request<{ username: string }>("/api/profiles/username", {
-      method: "POST",
+    return this.requestApi<{ username: string }>("/api/profiles/me", {
+      method: "PATCH",
       body: JSON.stringify({ username }),
     });
   }
 
   async getMyProfile(): Promise<Record<string, unknown>> {
-    return this.request<Record<string, unknown>>("/api/profiles/me");
+    return this.requestApi<Record<string, unknown>>("/api/profiles/me");
   }
 
   async getUserProfile(username: string): Promise<Record<string, unknown>> {
-    return this.request<Record<string, unknown>>(`/api/public/profiles/${encodeURIComponent(username)}`);
+    return this.requestApi<Record<string, unknown>>(`/api/profiles/${encodeURIComponent(username)}`);
   }
 
   // Characters
   async listCharacters(): Promise<CharacterSummary[]> {
-    const result = await this.request<{ characters: CharacterSummary[] }>("/api/characters");
+    const result = await this.requestApi<{ characters: CharacterSummary[] }>("/api/characters");
     return result.characters;
   }
 
   async getCharacter(id: string): Promise<Record<string, unknown>> {
-    return this.request<Record<string, unknown>>(`/api/characters/${encodeURIComponent(id)}`);
+    return this.requestApi<Record<string, unknown>>(`/api/characters/${encodeURIComponent(id)}`);
   }
 
-  async createCharacter(name: string, templateId?: string | null): Promise<Record<string, unknown>> {
-    return this.request<Record<string, unknown>>("/api/characters", {
+  async createCharacter(name: string, templateId?: string | null, sheetVersionId?: string, systemId?: string): Promise<Record<string, unknown>> {
+    return this.requestApi<Record<string, unknown>>("/api/characters", {
       method: "POST",
-      body: JSON.stringify({ name, templateId: templateId ?? null }),
+      body: JSON.stringify({ name, ...(templateId ? { templateId } : {}), sheetVersionId, systemId }),
     });
   }
 
@@ -170,7 +221,7 @@ export class MyCharacterClient {
     id: string,
     updates: { name?: string; isPublic?: boolean }
   ): Promise<Record<string, unknown>> {
-    return this.request<Record<string, unknown>>(`/api/characters/${encodeURIComponent(id)}`, {
+    return this.requestApi<Record<string, unknown>>(`/api/characters/${encodeURIComponent(id)}`, {
       method: "PATCH",
       body: JSON.stringify(updates),
     });
@@ -185,7 +236,7 @@ export class MyCharacterClient {
       value: unknown;
     }
   ): Promise<Record<string, unknown>> {
-    return this.request<Record<string, unknown>>(
+    return this.requestApi<Record<string, unknown>>(
       `/api/characters/${encodeURIComponent(id)}/fields/${encodeURIComponent(input.fieldId)}`,
       {
         method: "PUT",
@@ -200,22 +251,22 @@ export class MyCharacterClient {
 
   // Systems / Templates
   async listSystems(): Promise<Record<string, unknown>[]> {
-    const result = await this.request<{ templates?: Record<string, unknown>[] }>("/api/templates");
+    const result = await this.requestApi<{ templates?: Record<string, unknown>[] }>("/api/templates");
     return result.templates ?? [];
   }
 
   async getSystem(id: string): Promise<Record<string, unknown>> {
-    return this.request<Record<string, unknown>>(`/api/templates/${encodeURIComponent(id)}`);
+    return this.requestApi<Record<string, unknown>>(`/api/templates/${encodeURIComponent(id)}`);
   }
 
   // Posts & Feed
   async listFeedPosts(): Promise<SocialPost[]> {
-    const result = await this.request<{ posts: SocialPost[] }>("/api/posts");
+    const result = await this.requestApi<{ posts: SocialPost[] }>("/api/posts");
     return result.posts;
   }
 
   async getPost(username: string, slug: string): Promise<SocialPost> {
-    const result = await this.request<{ post: SocialPost }>(
+    const result = await this.requestApi<{ post: SocialPost }>(
       `/api/public/posts/${encodeURIComponent(username)}/${encodeURIComponent(slug)}`
     );
     return result.post;
@@ -230,7 +281,7 @@ export class MyCharacterClient {
     const blob = new Blob([fileBuffer as unknown as BlobPart], { type: mediaType });
     formData.append("image", blob, filename);
 
-    const result = await this.request<{ success: number; file: { id: string; url: string } }>(
+    const result = await this.requestApi<{ success: number; file: { id: string; url: string } }>(
       "/api/posts/images",
       {
         method: "POST",
@@ -241,7 +292,7 @@ export class MyCharacterClient {
   }
 
   async createPost(blocks: PostBlock[]): Promise<SocialPost> {
-    return this.request<SocialPost>("/api/posts", {
+    return this.requestApi<SocialPost>("/api/posts", {
       method: "POST",
       body: JSON.stringify({ blocks }),
     });

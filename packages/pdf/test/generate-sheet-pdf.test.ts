@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { generateA4SheetPdf } from "../src/generate-sheet-pdf.js";
 import type { LayoutNode } from "@mycharacter/contracts";
-import { defaultBoxProps } from "@mycharacter/contracts";
+import { defaultBoxProps, layoutNodeSchema, componentVersionDetailsSchema } from "@mycharacter/contracts";
 import { PDFDocument } from "pdf-lib";
+import { extractPdfCatalog } from "../src/catalog.js";
 
 describe("generateA4SheetPdf", () => {
   it("generates a valid A4 PDF document containing all 12 node types with Cyrillic text", async () => {
@@ -243,6 +244,44 @@ describe("generateA4SheetPdf", () => {
     expect(Math.round(width)).toBe(595);
     expect(Math.round(height)).toBe(842);
     expect(doc.getTitle()).toBe("Эрис — Лист персонажа");
+  });
+
+  it("shares fixed print height between Fill fields without moving content below long text", async () => {
+    const frame = (children: LayoutNode[], height: number): LayoutNode => ({
+      id: crypto.randomUUID(), kind: "frame", children, direction: "vertical", gap: 0,
+      align: "stretch", justify: "start", wrap: false, collapseAdjacentStrokes: false,
+      ornamentStyle: "none", titleDock: { dock: "none", variant: "none" }, footerDock: { dock: "none", variant: "none" },
+      box: { ...defaultBoxProps, height: { mode: "fixed", value: height } },
+    });
+    const textarea = (key: string): LayoutNode => ({
+      id: crypto.randomUUID(), kind: "textarea", fieldBinding: key, label: "", placeholder: "", rows: 1,
+      variant: "plain", readOnly: false, box: { ...defaultBoxProps, height: { mode: "fill" } },
+    });
+    const layout = frame([frame([textarea("first"), textarea("second")], 120), {
+      id: crypto.randomUUID(), kind: "text", text: "AFTER", variant: "body", align: "left", weight: "normal",
+      fontFamily: "Noto Sans", uppercase: false, color: "ink", box: defaultBoxProps,
+    }], 842);
+    const normal = await extractPdfCatalog(await generateA4SheetPdf({ layout, fieldValues: { first: "FIRST", second: "SECOND" } }));
+    const first = normal.tokens.find(token => token.text === "FIRST")!;
+    const second = normal.tokens.find(token => token.text === "SECOND")!;
+    expect(second.rect[1] - first.rect[1]).toBeCloseTo(60 / 842, 3);
+    const long = await extractPdfCatalog(await generateA4SheetPdf({ layout, fieldValues: { first: "Overflow line ".repeat(300), second: "SECOND" } }));
+    expect(long.pageCount).toBe(1);
+    expect(long.tokens.find(token => token.text === "AFTER")?.rect).toEqual(normal.tokens.find(token => token.text === "AFTER")?.rect);
+    expect(long.tokens.filter(token => token.text.includes("Overflow")).every(token => token.rect[3] < second.rect[1])).toBe(true);
+  });
+
+  it("renders component exposed properties and screen-size field text in PDF", async () => {
+    const leaf = layoutNodeSchema.parse({ id: crypto.randomUUID(), kind: "text", text: "ORIGINAL", box: defaultBoxProps });
+    const root = layoutNodeSchema.parse({ id: crypto.randomUUID(), kind: "frame", children: [leaf], box: defaultBoxProps });
+    const version = componentVersionDetailsSchema.parse({ id: crypto.randomUUID(), componentId: crypto.randomUUID(), versionNumber: 1, schemaVersion: 1, layouts: { desktop: root, print: root, tablet: root, mobile: root }, exposedProperties: [{ propertyId: "title", type: "text", name: "Title", targetNodeId: leaf.id, targetPropPath: "text" }], dependencies: [], changelog: "", authorId: crypto.randomUUID(), createdAt: "now" });
+    const instance = layoutNodeSchema.parse({ id: crypto.randomUUID(), kind: "component-instance", componentId: version.componentId, componentVersionId: version.id, propertyOverrides: { title: "OVERRIDDEN" }, box: defaultBoxProps });
+    const field = layoutNodeSchema.parse({ id: crypto.randomUUID(), kind: "field-input", fieldBinding: "name", variant: "plain", box: { ...defaultBoxProps, height: { mode: "fixed", value: 24 } } });
+    const layout = layoutNodeSchema.parse({ ...root, box: { ...defaultBoxProps, height: { mode: "fixed", value: 842 } }, children: [instance, field] });
+    const catalog = await extractPdfCatalog(await generateA4SheetPdf({ layout, resolvedComponents: { [version.id]: version }, fieldValues: { name: "CHARACTER" } }));
+    expect(catalog.tokens.some((token) => token.text === "OVERRIDDEN")).toBe(true);
+    expect(catalog.tokens.some((token) => token.text === "ORIGINAL")).toBe(false);
+    expect(catalog.tokens.find((token) => token.text === "CHARACTER")?.fontSize).toBeCloseTo(14, 2);
   });
 
   it("handles multi-page pagination when repeater rows exceed single page height", async () => {

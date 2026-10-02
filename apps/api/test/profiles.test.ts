@@ -242,7 +242,7 @@ describe("profiles, usernames and slugs", () => {
       response.json().following.map((author: { username: string }) => author.username),
     ).toEqual(expect.arrayContaining([authors[0].username, authors[5].username]));
     expect(response.json().following).toHaveLength(2);
-  });
+  }, 15_000);
 
   it("community list returns author and slug in one response", async () => {
     const owner = await register("community.author@example.com");

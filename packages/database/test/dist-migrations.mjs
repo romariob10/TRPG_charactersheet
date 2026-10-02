@@ -19,6 +19,7 @@ await access(new URL("../dist/migrations/202607270002_indexes.js", import.meta.u
 await access(new URL("../dist/migrations/202608180002_social_posts.js", import.meta.url));
 await access(new URL("../dist/migrations/202608180013_template_reviews.js", import.meta.url));
 await access(new URL("../dist/migrations/202608260001_official_game_systems.js", import.meta.url));
+await access(new URL("../dist/migrations/202609081700_agent_tokens.js", import.meta.url));
 const rootDb = createDatabase(databaseUrl);
 let db;
 
@@ -31,12 +32,12 @@ try {
     select table_name
     from information_schema.tables
     where table_schema = ${schema}
-      and table_name in ('users', 'characters', 'ai_messages', 'posts', 'user_notifications', 'template_reviews')
+      and table_name in ('agent_tokens', 'users', 'characters', 'ai_messages', 'posts', 'user_notifications', 'template_reviews')
     order by table_name
   `.execute(db);
   const actualTables = rows.rows.map((row) => row.table_name).join(",");
   const expectedTables =
-    "ai_messages,characters,posts,template_reviews,user_notifications,users";
+    "agent_tokens,ai_messages,characters,posts,template_reviews,user_notifications,users";
   if (actualTables !== expectedTables) {
     throw new Error(
       `The built package did not apply every database migration. Expected ${expectedTables}; received ${actualTables}.`,

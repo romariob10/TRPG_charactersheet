@@ -145,30 +145,20 @@ jobs:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Sync production checkout
+      - name: Back up production before migrations
+        run: sudo /usr/local/sbin/mycharacter-backup-production
+      - name: Deploy verified images and check service health
         working-directory: /home/user/mycharacter
         run: |
-          if [ -n "$(git status --porcelain --untracked-files=normal)" ]; then
-            echo "Production checkout has local changes; refusing to overwrite them." >&2
-            exit 1
-          fi
           git fetch origin main:refs/remotes/origin/main
           if [ "$(git rev-parse refs/remotes/origin/main)" != "$DEPLOY_SHA" ]; then
             echo "Main has advanced; refusing an outdated deployment." >&2
             exit 1
           fi
-          git checkout --detach "$DEPLOY_SHA"
-      - name: Pull and start production
-        working-directory: /home/user/mycharacter
-        run: |
-          docker compose --env-file .env.prod -f compose.prod.yaml pull web api worker migrate
-          git fetch origin main:refs/remotes/origin/main
-          if [ "$(git rev-parse refs/remotes/origin/main)" != "$DEPLOY_SHA" ]; then
-            echo "Main has advanced; refusing an outdated deployment." >&2
-            exit 1
-          fi
-          docker compose --env-file .env.prod -f compose.prod.yaml up -d --no-build --remove-orphans --wait --wait-timeout 180
-          docker compose --env-file .env.prod -f compose.prod.yaml ps
+          deploy_script="$(mktemp)"
+          trap 'rm -f "$deploy_script"' EXIT
+          git show "$DEPLOY_SHA:scripts/deploy-production.sh" > "$deploy_script"
+          bash "$deploy_script"
 
       # Rollback from /home/user/mycharacter by replacing <prev> with a retained
       # full commit SHA, then verify health with `docker compose -f compose.prod.yaml ps`.

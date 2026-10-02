@@ -1,4 +1,26 @@
 {
+  "Agents": {
+    "syncError": "Agent presence could not be refreshed",
+    "title": "AI agents · MCP",
+    "description": "Connect your agent to MyCharacter. It can create and edit your systems, sheet templates and characters. Tokens last 90 days and do not grant access to security settings or administration.",
+    "name": "Agent name",
+    "create": "Create token",
+    "working": "Please wait…",
+    "error": "The request failed. Please try again.",
+    "once": "Copy this token now: it cannot be shown again. Share it only with your agent.",
+    "token": "New agent token",
+    "copy": "Copy",
+    "copied": "Copied",
+    "dismiss": "Dismiss",
+    "loading": "Loading agents…",
+    "empty": "No agents connected yet.",
+    "expires": "Until {date}",
+    "revoke": "Revoke",
+    "setup": "Connect via MCP",
+    "setupHelp": "Build with pnpm --filter @mycharacter/contracts build, then pnpm --filter @mycharacter/mcp build. In your agent's MCP settings, enter the absolute server path and replace TOKEN with the copied token. During work the agent calls set_presence to show its name and cursor, and leave_editor when finished.",
+    "online": "Connected agents",
+    "agent": "AI"
+  },
   "Common": {
     "appName": "MyCharacter",
     "save": "Save",
@@ -845,6 +867,27 @@
     "delete": "Delete"
   },
   "SheetBuilder": {
+    "exportJson": "Export JSON",
+    "importJson": "Import JSON",
+    "importFile": "Sheet template file",
+    "invalidImport": "Could not read the template. Use a valid MyCharacter JSON version 1 file up to 1 MB.",
+    "exportFailed": "Could not export the sheet. Check your connection and try again.",
+    "confirmImport": "Import template?",
+    "importSummary": "“{title}”, fields: {count}.",
+    "importReplaceWarning": "This replaces the current draft layouts and fields. Published sheets and characters are preserved. You can undo this change.",
+    "applyImport": "Replace draft",
+    "importSucceeded": "Template imported. The draft saves automatically; publish it to use it.",
+
+    "adaptConfirm": "Mobile, tablet and print layouts will be replaced with copies of the desktop layout. Use Undo in the editor toolbar to restore the previous layouts.",
+    "emptySheetTitle": "Build your character sheet",
+    "emptySheetHint": "Add a group for stats, a heading or a field. Select an element on the sheet to edit its properties.",
+    "startBuilding": "Add the first element",
+    "canvas": "Sheet",
+    "panels": "Editor panels",
+    "fitCanvas": "Fit sheet",
+    "unsaved": "Unsaved changes",
+    "retrySave": "Retry",
+    "publishAfterSave": "Wait for changes to save before publishing",
     "title": "Character Sheet Builder",
     "palette": "Add Elements",
     "layers": "Layers",
@@ -905,6 +948,7 @@
     }
   },
   "Inspector": {
+    "decorationsSection": "Decorations and title bars",
     "title": "Properties",
     "noSelection": "Select an element on canvas or in the layers tree to edit its properties.",
     "layoutSection": "Auto Layout",
@@ -1017,6 +1061,10 @@
     "defaultValuePlaceholder": "Optional default",
     "cancel": "Cancel",
     "saveAndBind": "Save and bind",
+    "checkboxShape": "Checkbox shape",
+    "checkboxSquare": "Square",
+    "checkboxCircle": "Circle",
+    "checkboxArc": "Fate arc",
     "showCheckboxBorder": "Show checkbox outline",
     "imageSection": "Image",
     "characterImageHint": "This defines an image slot. The character portrait is uploaded when a user creates or fills in the character.",
@@ -1149,5 +1197,28 @@
     "applyFailed": "Could not save the cropped portrait. Try again.",
     "cancel": "Cancel",
     "apply": "Apply crop"
+  },
+  "FateSheet": {
+    "highConcept": "High concept",
+    "trouble": "Trouble",
+    "mildConsequence": "Mild consequence (2)",
+    "moderateConsequence": "Moderate consequence (4)",
+    "severeConsequence": "Severe consequence (6)",
+    "physicalStress": "Physical stress",
+    "mentalStress": "Mental stress",
+    "skill": "Skill",
+
+    "characterName": "Character name",
+    "fatePoints": "Fate points",
+    "description": "Description",
+    "aspects": "Aspects",
+    "consequences": "Consequences",
+    "physical": "Physical",
+    "mental": "Mental",
+    "portrait": "Portrait",
+    "stunts": "Stunts",
+    "extras": "Extras",
+    "skills": "Skills",
+    "usePreset": "Use Fate Core sheet"
   }
 }

@@ -530,3 +530,8 @@ export type {
   SheetVersionSummary,
   UpdateSheetDefinitionRequest,
 } from "./sheet-builder-api.js";
+
+export * from "./agents.js";
+
+export * from "./sheet-transfer.js";
+export { ensureBoundFieldDefinitions } from "./sheet-fields.js";

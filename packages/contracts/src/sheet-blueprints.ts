@@ -32,7 +32,7 @@ const textAlignSchema = z.enum(["left", "center", "right"]);
 const textWeightSchema = z.enum(["normal", "medium", "bold"]);
 const inputVariantSchema = z.enum(["boxed", "underline", "plain"]);
 const numberInputVariantSchema = z.enum(["boxed", "underline", "circle", "plain"]);
-const checkboxShapeSchema = z.enum(["square", "circle"]);
+const checkboxShapeSchema = z.enum(["square", "circle", "arc"]);
 const imageFitSchema = z.enum(["cover", "contain", "fill"]);
 
 const baseNodeProps = {

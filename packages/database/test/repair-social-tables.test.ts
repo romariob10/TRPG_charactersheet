@@ -37,7 +37,9 @@ describe("social table repair migration", () => {
     return rows.map((row) => row.table_name).sort();
   }
 
-  async function applyRepairMigration(): Promise<void> {
+  // Exercise the repair itself. Rolling back unrelated later migrations can
+  // fall through search_path to public after a test table has been dropped.
+  async function migrateAgain(): Promise<void> {
     const db = createDatabase(testDb.databaseUrl, {
       searchPath: `${testDb.schema},public`,
     });
@@ -48,7 +50,7 @@ describe("social table repair migration", () => {
     }
   }
 
-  it("re-creates tables missing from a legacy schema", async () => {
+  it("re-creates tables that a ledger-only migration record left behind", async () => {
     for (const table of REPAIRED_TABLES) {
       await sql`drop table if exists ${sql.id(testDb.schema, table)} cascade`.execute(
         testDb.db,
@@ -56,13 +58,13 @@ describe("social table repair migration", () => {
     }
     expect(await presentTables()).toEqual([]);
 
-    await applyRepairMigration();
+    await migrateAgain();
 
     expect(await presentTables()).toEqual(REPAIRED_TABLES);
   });
 
   it("leaves an already consistent schema untouched", async () => {
-    await expect(applyRepairMigration()).resolves.toBeUndefined();
+    await expect(migrateAgain()).resolves.toBeUndefined();
 
     expect(await presentTables()).toEqual(REPAIRED_TABLES);
   });

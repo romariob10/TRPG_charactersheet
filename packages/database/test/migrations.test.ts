@@ -41,6 +41,7 @@ describe("initial migration", () => {
         "profiles",
         "sessions",
         "auth_tokens",
+        "agent_tokens",
         "object_files",
         "pdf_templates",
         "pdf_fields",

@@ -31,7 +31,7 @@ interface InspectorViewProps {
   onUpdateNode: (updated: LayoutNode) => void;
   onSaveAsComponent: (node: LayoutNode) => void;
   draftFields?: SheetFieldDefinition[];
-  onUpdateDraftFields?: (fields: SheetFieldDefinition[]) => void;
+  onUpdateDraftFields?: (fields: SheetFieldDefinition[], updatedNode?: LayoutNode) => void;
 }
 
 function CommitNumberInput({
@@ -89,6 +89,7 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
   onUpdateDraftFields,
 }) => {
   const t = useTranslations("Inspector");
+  const builderT = useTranslations("SheetBuilder");
   const [linkPadding, setLinkPadding] = useState(true);
   const [linkStroke, setLinkStroke] = useState(true);
   const [linkRadius, setLinkRadius] = useState(true);
@@ -145,16 +146,11 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
     };
 
     const updated = [...draftFields.filter((f) => f.key !== key), newField];
-    onUpdateDraftFields(updated);
-
-    // Bind current node to this key
-    if ("fieldBinding" in selectedNode && selectedNode.kind !== "image") {
-      onUpdateNode({
-        ...selectedNode,
-        fieldBinding: key,
-        label: selectedNode.label || newField.label,
-      } as LayoutNode);
-    }
+    // The definition and its binding are one undoable change.
+    const boundNode = "fieldBinding" in selectedNode && selectedNode.kind !== "image"
+      ? { ...selectedNode, fieldBinding: key, label: selectedNode.label || newField.label }
+      : undefined;
+    onUpdateDraftFields(updated, boundNode);
 
     setNewFieldKey("");
     setNewFieldLabel("");
@@ -168,7 +164,7 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
       <div className="flex flex-col gap-2 pb-3 border-b border-border">
         <div className="flex items-center justify-between">
           <span className="font-bold uppercase tracking-wider text-[11px] text-muted-foreground">
-            {selectedNode.kind}
+            {builderT(`nodeKind.${selectedNode.kind}`)}
           </span>
           <button
             type="button"
@@ -184,7 +180,8 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
             type="text"
             value={selectedNode.name || ""}
             onChange={(e) => onUpdateNode({ ...selectedNode, name: e.target.value })}
-            placeholder={selectedNode.kind}
+            aria-label={t("name")}
+            placeholder={builderT(`nodeKind.${selectedNode.kind}`)}
             className="w-full mt-0.5 px-2 py-1 bg-background border border-border rounded"
           />
         </div>
@@ -201,6 +198,7 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
             <label className="text-[10px] font-medium text-muted-foreground">{t("textContent")}</label>
             <input
               type="text"
+              aria-label={t("textContent")}
               value={selectedNode.text}
               onChange={(e) => onUpdateNode({ ...selectedNode, text: e.target.value })}
               className="w-full mt-0.5 px-2 py-1 bg-background border border-border rounded"
@@ -449,7 +447,9 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
 
       {/* Frame Corner & Edge Ornaments */}
       {selectedNode.kind === "frame" && (
-        <div className="flex flex-col gap-3 pb-3 border-b border-border">
+        <details key={selectedNode.id} className="border-b border-border pb-3">
+          <summary className="cursor-pointer py-1 font-bold text-[11px] text-muted-foreground uppercase tracking-wider">{t("decorationsSection")}</summary>
+          <div className="mt-3 flex flex-col gap-3">
           <h4 className="font-bold text-[11px] text-muted-foreground uppercase tracking-wider">
             {t("cornerOrnamentsSection")}
           </h4>
@@ -797,7 +797,8 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
               />
             </div>
           </div>
-        </div>
+          </div>
+        </details>
       )}
 
       {/* Field Binding & Widget Settings */}
@@ -859,6 +860,7 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
             <label className="text-[10px] font-medium text-muted-foreground">{t("fieldLabel")}</label>
             <input
               type="text"
+              aria-label={t("fieldLabel")}
               value={selectedNode.label || ""}
               onChange={(e) =>
                 onUpdateNode({ ...selectedNode, label: e.target.value } as LayoutNode)
@@ -882,6 +884,23 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
       )}
 
       {selectedNode.kind === "checkbox" && (
+        <div className="flex flex-col gap-3 border-b border-border pb-3">
+          <label className="text-[11px]">
+            {t("checkboxShape")}
+            <select
+              aria-label={t("checkboxShape")}
+              value={selectedNode.shape}
+              onChange={event => {
+                const shape = event.target.value;
+                if (shape === "square" || shape === "circle" || shape === "arc") onUpdateNode({ ...selectedNode, shape });
+              }}
+              className="mt-1 w-full rounded border border-border bg-background px-2 py-1"
+            >
+              <option value="square">{t("checkboxSquare")}</option>
+              <option value="circle">{t("checkboxCircle")}</option>
+              <option value="arc">{t("checkboxArc")}</option>
+            </select>
+          </label>
         <label className="flex items-center gap-1.5 border-b border-border pb-3 cursor-pointer select-none">
           <input
             type="checkbox"
@@ -891,6 +910,7 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
           />
           <span className="text-[11px]">{t("showCheckboxBorder")}</span>
         </label>
+        </div>
       )}
 
       {selectedNode.kind === "image" && (
@@ -1005,6 +1025,7 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
           <div>
             <label className="text-[10px] font-medium text-muted-foreground">{t("width")}</label>
             <select
+              aria-label={t("width")}
               value={selectedNode.box.width.mode}
               onChange={(e) => {
                 const mode = e.target.value as SizingMode;
@@ -1037,6 +1058,7 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
           <div>
             <label className="text-[10px] font-medium text-muted-foreground">{t("height")}</label>
             <select
+              aria-label={t("height")}
               value={selectedNode.box.height.mode}
               onChange={(e) => {
                 const mode = e.target.value as SizingMode;
@@ -1269,6 +1291,7 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
                   type="text"
                   required
                   placeholder={t("fieldKeyPlaceholder")}
+                  aria-label={t("fieldKey")}
                   value={newFieldKey}
                   onChange={(e) => setNewFieldKey(e.target.value)}
                   className="w-full mt-1 px-2.5 py-1.5 bg-background border border-border rounded text-xs font-mono"
@@ -1280,6 +1303,7 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
                 <input
                   type="text"
                   placeholder={t("fieldLabelPlaceholder")}
+                  aria-label={t("fieldLabel")}
                   value={newFieldLabel}
                   onChange={(e) => setNewFieldLabel(e.target.value)}
                   className="w-full mt-1 px-2.5 py-1.5 bg-background border border-border rounded text-xs"
@@ -1290,6 +1314,7 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
                 <div>
                   <label className="text-[11px] font-medium">{t("fieldKind")}</label>
                   <select
+                    aria-label={t("fieldKind")}
                     value={newFieldKind}
                     onChange={(e) =>
                       setNewFieldKind(
@@ -1311,6 +1336,7 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
                   <input
                     type="text"
                     placeholder={t("defaultValuePlaceholder")}
+                    aria-label={t("defaultValue")}
                     value={newFieldDefault}
                     onChange={(e) => setNewFieldDefault(e.target.value)}
                     className="w-full mt-1 px-2.5 py-1.5 bg-background border border-border rounded text-xs"

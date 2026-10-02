@@ -16,6 +16,8 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CharacterSheetPlayer } from "./character-sheet-player";
 
+vi.mock("@/components/agent-presence", () => ({ AgentPresence: () => null }));
+
 vi.mock("next-intl", () => ({
   useTranslations: () => (key: string) => key,
 }));
@@ -317,27 +319,9 @@ describe("CharacterSheetPlayer", () => {
     );
 
     const textarea = screen.getByPlaceholderText("Notes");
-    vi.spyOn(textarea, "getBoundingClientRect").mockReturnValueOnce({
-      x: 0,
-      y: 0,
-      width: 300,
-      height: 100,
-      top: 0,
-      right: 300,
-      bottom: 100,
-      left: 0,
-      toJSON: () => ({}),
-    }).mockReturnValue({
-      x: 0,
-      y: 0,
-      width: 300,
-      height: 180,
-      top: 0,
-      right: 300,
-      bottom: 180,
-      left: 0,
-      toJSON: () => ({}),
-    });
+    vi.spyOn(textarea, "offsetHeight", "get")
+      .mockReturnValueOnce(100)
+      .mockReturnValue(180);
     fireEvent.pointerDown(textarea);
     fireEvent.pointerUp(textarea);
 

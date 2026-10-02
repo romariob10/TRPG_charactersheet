@@ -29,6 +29,7 @@ import { registerAuthRoutes } from "./modules/auth/routes.js";
 import { registerCharacterRoutes } from "./modules/characters/routes.js";
 import { registerInvitationRoutes } from "./modules/invitations/routes.js";
 import { registerTemplateRoutes } from "./modules/templates/routes.js";
+import { registerAgentRoutes } from "./modules/agents/routes.js";
 import { registerProfileRoutes } from "./modules/profiles/routes.js";
 import { registerSocialRoutes } from "./modules/social/routes.js";
 import { registerPdfRoutes } from "./modules/pdf/routes.js";
@@ -143,6 +144,7 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
   await registerCharacterRoutes(app);
   await registerTemplateRoutes(app);
   await registerProfileRoutes(app);
+  await registerAgentRoutes(app);
   await registerSocialRoutes(app);
   await registerPostRoutes(app, aiSettings);
   await registerSearchRoutes(app);

@@ -5,7 +5,7 @@ import {
 } from "@mycharacter/database";
 import type { Kysely } from "kysely";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { defaultBoxProps } from "@mycharacter/contracts";
+import { componentVersionDetailsSchema, defaultBoxProps } from "@mycharacter/contracts";
 import { AuthService } from "../src/modules/auth/service.js";
 import { GameSystemsService } from "../src/modules/systems/service.js";
 import { SheetBuilderService } from "../src/modules/sheet-builder/service.js";
@@ -216,6 +216,21 @@ describe("Sheet Builder & Component Library Services", () => {
     );
 
     expect(pubRes.versionNumber).toBe(1);
+    const version = componentVersionDetailsSchema.parse(await componentService.getComponentVersion(user1Id, pubRes.versionId));
+    expect(version.exposedProperties).toEqual([]);
+    // Keep old empty publications usable without rewriting stored user data.
+    await db.updateTable("component_versions").set({ exposed_properties: JSON.stringify({}) }).where("id", "=", pubRes.versionId).execute();
+    expect((await componentService.getComponentVersion(user1Id, pubRes.versionId)).exposedProperties).toEqual([]);
+    const resolved = await sheetBuilderService.resolveComponentDependencies({ desktop: {
+      id: crypto.randomUUID(), kind: "component-instance", componentId: comp.id,
+      componentVersionId: pubRes.versionId, propertyOverrides: {}, box: defaultBoxProps,
+    } });
+    expect(componentVersionDetailsSchema.parse(resolved[pubRes.versionId]).exposedProperties).toEqual([]);
+
+    const property = { propertyId: "title", type: "text" as const, name: "Title", label: "", targetNodeId: version.layouts.desktop.id, targetPropPath: "name", options: [], defaultValue: "Sample" };
+    await componentService.autosaveComponentDraft(user1Id, comp.id, { expectedRevision: 1, layouts: version.layouts, exposedProperties: [property] });
+    const next = await componentService.publishComponentVersion(user1Id, comp.id, { changelog: "Properties" });
+    expect(componentVersionDetailsSchema.parse(await componentService.getComponentVersion(user1Id, next.versionId)).exposedProperties).toEqual([property]);
 
     // User2 forks public component
     const forked = await componentService.forkComponent(user2Id, comp.id, {

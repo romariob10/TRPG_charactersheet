@@ -2,6 +2,7 @@ import type { Database } from "@mycharacter/database";
 import "fastify";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { Kysely } from "kysely";
+import { hashAgentToken } from "../modules/agents/service.js";
 import { AppError } from "../errors.js";
 import { findActiveSession, touchSessionIfStale } from "../modules/auth/session-repository.js";
 
@@ -12,6 +13,7 @@ export const sessionCookieName = "mycharacter_session";
 export const sessionCookieMaxAge = 60 * 60 * 24 * 30;
 
 export interface Actor {
+  agentTokenId?: string;
   userId: string;
   sessionId: string;
   role: SiteRole;
@@ -41,7 +43,35 @@ export async function registerAuth(
   const allowedOrigins = new Set(options.allowedOrigins);
   app.decorateRequest("actor", null);
 
+  const agentRateLimit = app.rateLimit({ max: 120, timeWindow: "1 minute", keyGenerator: request => request.actor?.agentTokenId ?? request.ip });
+  app.addHook("preHandler", async (request, reply) => {
+    if (request.actor?.agentTokenId) await agentRateLimit.call(app, request, reply);
+  });
+
   app.addHook("onRequest", async (request) => {
+    const authorization = request.headers.authorization;
+    if (authorization !== undefined) {
+      const match = /^Bearer (mcp_[A-Za-z0-9_-]{43})$/i.exec(authorization);
+      if (!match) throw new AppError("INVALID_AGENT_TOKEN", 401, "Invalid or expired agent token.");
+      const agent = await db.selectFrom("agent_tokens")
+        .innerJoin("users", "users.id", "agent_tokens.user_id")
+        .innerJoin("profiles", "profiles.id", "users.id")
+        .select(["agent_tokens.id", "agent_tokens.user_id", "agent_tokens.last_used_at", "profiles.username", "profiles.display_name"])
+        .where("token_hash", "=", hashAgentToken(match[1]))
+        .where("expires_at", ">", new Date()).where("users.status", "=", "active")
+        .executeTakeFirst();
+      if (!agent) throw new AppError("INVALID_AGENT_TOKEN", 401, "Invalid or expired agent token.");
+      const path = request.url.split("?")[0];
+      if (/^\/api\/(auth|admin|agent-tokens)(\/|$)/.test(path)) {
+        throw new AppError("SESSION_REQUIRED", 403, "This action requires a browser session.");
+      }
+      request.actor = { userId: agent.user_id, sessionId: agent.id, agentTokenId: agent.id,
+        role: "user", isAdmin: false, username: agent.username, displayName: agent.display_name };
+      if (!agent.last_used_at || agent.last_used_at.getTime() < Date.now() - 60_000) {
+        await db.updateTable("agent_tokens").set({ last_used_at: new Date() }).where("id", "=", agent.id).execute();
+      }
+      return;
+    }
     const token = request.cookies[sessionCookieName];
     if (!token) {
       return;

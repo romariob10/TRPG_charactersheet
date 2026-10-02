@@ -1,3 +1,4 @@
+import { AgentTokenSettings } from "@/components/agent-token-settings";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ExternalLink, ShieldCheck, UserCheck } from "lucide-react";
@@ -80,6 +81,7 @@ export default async function ProfileSettingsPage() {
           </div>
 
           <ProfileSettingsForm initial={p} />
+          <AgentTokenSettings />
 
           {p.isAdmin && (
             <div className="mt-8 border-t border-[var(--border)] pt-5">
