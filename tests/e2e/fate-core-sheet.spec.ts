@@ -46,7 +46,7 @@ test("Fate preset saves bindings, grows with text, adapts to mobile, and exports
         );
         return data.draft.fields.length;
       })
-      .toBe(31);
+      .toBe(33);
     await expect(page.getByRole("button", { name: "Экспорт JSON", exact: true })).toBeEnabled();
     const exportedPromise = page.waitForEvent("download");
     await page.getByRole("button", { name: "Экспорт JSON", exact: true }).click();
@@ -57,7 +57,7 @@ test("Fate preset saves bindings, grows with text, adapts to mobile, and exports
     for await (const chunk of jsonStream) jsonChunks.push(Buffer.from(chunk));
     const jsonBytes = Buffer.concat(jsonChunks);
     const document = sheetTransferDocumentSchema.parse(JSON.parse(jsonBytes.toString("utf8")));
-    expect(document.fields).toHaveLength(31);
+    expect(document.fields).toHaveLength(33);
     expect(document.fields.find((field) => field.key === "aspect_1")?.label).toBe("Концепция");
     expect(document.fields.find((field) => field.key === "consequence_1")?.label).toBe("Лёгкое последствие (2)");
 
@@ -68,15 +68,15 @@ test("Fate preset saves bindings, grows with text, adapts to mobile, and exports
     await page.getByLabel("Файл шаблона листа", { exact: true }).setInputFiles({ name: "invalid.json", mimeType: "application/json", buffer: Buffer.from('{"formatVersion":99}') });
     await expect(page.getByRole("alert").filter({ hasText: "Не удалось прочитать" })).toContainText("Не удалось прочитать");
     await page.getByLabel("Файл шаблона листа", { exact: true }).setInputFiles({ name: "fate.mycharacter.json", mimeType: "application/json", buffer: jsonBytes });
-    await expect(page.getByRole("dialog")).toContainText("полей: 31");
+    await expect(page.getByRole("dialog")).toContainText("полей: 33");
     await page.getByRole("button", { name: "Заменить черновик", exact: true }).click();
     const importedEditor = async () => sheetEditorDataResponseSchema.parse(await (await owner.api.get(`/api/sheet-definitions/${copied.defaultSheetId}/editor`)).json());
-    await expect.poll(async () => (await importedEditor()).draft.fields.length).toBe(31);
+    await expect.poll(async () => (await importedEditor()).draft.fields.length).toBe(33);
     expect((await importedEditor()).draft.layouts).toEqual(document.layouts);
     await page.getByRole("button", { name: "Отменить", exact: true }).click();
     await expect.poll(async () => (await importedEditor()).draft.fields.length).toBe(0);
     await page.getByRole("button", { name: "Повторить", exact: true }).click();
-    await expect.poll(async () => (await importedEditor()).draft.fields.length).toBe(31);
+    await expect.poll(async () => (await importedEditor()).draft.fields.length).toBe(33);
     const stale = await owner.api.post(`/api/sheet-definitions/${copied.defaultSheetId}/import`, { data: { expectedRevision: 0, document } });
     await expectStatus(stale, 409);
     const invalid = await owner.api.post(`/api/sheet-definitions/${copied.defaultSheetId}/import`, { data: { expectedRevision: (await importedEditor()).draft.revision, document: { ...document, formatVersion: 99 } } });
@@ -123,13 +123,14 @@ test("Fate preset saves bindings, grows with text, adapts to mobile, and exports
       fontSize: getComputedStyle(element).fontSize,
     }));
     expect(skillSize.height).toBe(skillSize.cellHeight);
-    expect(skillSize.fontSize).toBe("12px");
-    const fontControl = page.getByRole("slider", { name: "Шрифт персонажа", exact: true });
+    expect(Number.parseFloat(skillSize.fontSize)).toBeGreaterThan(12);
+    const fontControl = page.getByRole("slider", { name: "Шрифт многострочного текста", exact: true });
     await fontControl.press("ArrowLeft");
     await fontControl.press("ArrowLeft");
     await fontControl.press("Tab");
     await expect.poll(async () => (await (await owner.api.get(`/api/characters/${character.id}/sheet-state`)).json()).values.__layout_main_font_size__).toBe(10);
-    await expect(skill).toHaveCSS("font-size", "10px");
+    await expect(skill).toHaveCSS("font-size", skillSize.fontSize);
+    await expect(page.getByRole("textbox", { name: "Описание", exact: true })).toHaveCSS("font-size", "10px");
     const portraitSlotRatio = await page.getByLabel("Загрузить портрет персонажа", { exact: true }).evaluate((input) => {
       const slot = input.closest("[data-node-id]")!;
       return slot.clientWidth / slot.clientHeight;

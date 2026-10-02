@@ -1,9 +1,9 @@
 "use client";
 
-import { CHARACTER_FONT_SIZE_FIELD, getCharacterFontSize, characterSheetStateSchema } from "@mycharacter/contracts";
+import { CHARACTER_FONT_SIZE_FIELD, getCharacterFontSize, upgradeLegacyFateTextLists, characterSheetStateSchema } from "@mycharacter/contracts";
 import { apiFetch } from "@/lib/api/client";
 import { AgentPresence } from "@/components/agent-presence";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Download, Printer } from "lucide-react";
 import type {
@@ -434,8 +434,10 @@ export const CharacterSheetPlayer: React.FC<CharacterSheetPlayerProps> = ({
     }
   };
 
-  const rootNode =
-    versionDetails?.layouts[target] ?? versionDetails?.layouts.desktop;
+  const rootNode = useMemo(() => {
+    const layout = versionDetails?.layouts[target] ?? versionDetails?.layouts.desktop;
+    return layout ? upgradeLegacyFateTextLists(layout) : undefined;
+  }, [versionDetails, target]);
 
   return (
     <div className="flex flex-col min-h-screen bg-background">

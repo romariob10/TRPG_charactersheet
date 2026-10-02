@@ -4,7 +4,8 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import Image from "next/image";
 import dynamic from "next/dynamic";
-import { getCharacterFontSize } from "@mycharacter/contracts";
+import { getTextareaFontSize, getSingleLineFontSize, TEXTAREA_LINE_HEIGHT } from "@mycharacter/contracts";
+import { RenderTextareaList } from "./textarea-list";
 import { Crop, ImageUp } from "lucide-react";
 import type {
   CheckboxNode,
@@ -78,22 +79,38 @@ export const RenderFieldInput: React.FC<{ node: FieldInputNode }> = ({ node }) =
   const value = typeof rawValue === "string" ? rawValue : "";
 
   const isReadOnly = mode === "readonly" || mode === "print" || node.readOnly;
-  const fontSize = getCharacterFontSize(fieldValues);
-  const fillsHeight = node.box.height.mode !== "hug";
-  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const inputRef = useRef<HTMLDivElement>(null);
+  const [fontSize, setFontSize] = useState(getSingleLineFontSize(node.box.height.mode === "fixed" ? node.box.height.value : 24));
   useLayoutEffect(() => {
-    const input = inputRef.current;
-    if (!input) return;
-    const resize = () => {
-      input.style.height = "auto";
-      input.style.height = `${input.scrollHeight + input.offsetHeight - input.clientHeight}px`;
+    const wrapper = inputRef.current;
+    if (!wrapper) return;
+    const slot = wrapper.closest<HTMLElement>("[data-node-id]") ?? wrapper;
+    const measure = () => {
+      if (node.box.height.mode === "hug") {
+        setFontSize(getSingleLineFontSize(24));
+        return;
+      }
+      const height = slot.clientHeight - (node.label ? 16 : 0);
+      if (height <= 0) return;
+      const baseSize = getSingleLineFontSize(height);
+      let fittedSize = baseSize;
+      if (value && typeof CanvasRenderingContext2D !== "undefined") {
+        const context = document.createElement("canvas").getContext("2d");
+        if (context) {
+          context.font = `${baseSize}px Arial`;
+          const textWidth = context.measureText(value).width;
+          if (textWidth > 0) fittedSize = Math.max(8, Math.min(baseSize, Math.floor(baseSize * Math.max(1, slot.clientWidth - 16) / textWidth)));
+        }
+      }
+      setFontSize(fittedSize);
     };
-    resize();
+    measure();
+    if (node.box.height.mode === "hug") return;
     if (typeof ResizeObserver === "undefined") return;
-    const observer = new ResizeObserver(resize);
-    observer.observe(input.parentElement ?? input);
+    const observer = new ResizeObserver(measure);
+    observer.observe(slot);
     return () => observer.disconnect();
-  }, [value, mode, isReadOnly, fontSize]);
+  }, [node.label, node.box.height, value]);
 
   const inputClass = `min-w-0 w-full px-2 ${node.variant === "boxed" ? "py-1" : "py-0"} text-sm focus:outline-none focus:ring-1 focus:ring-primary ${
     node.variant === "underline" ? "border-b border-border rounded-none"
@@ -102,39 +119,24 @@ export const RenderFieldInput: React.FC<{ node: FieldInputNode }> = ({ node }) =
   }`;
 
   return (
-    <div className={`flex flex-col gap-1 w-full ${fillsHeight ? "min-h-full" : "min-h-0"}`} style={{ fontFamily: "Arial, sans-serif", fontSize, lineHeight: 1.5 }}>
+    <div ref={inputRef} className="flex h-full min-h-5 w-full flex-col gap-1" style={{ fontFamily: "Arial, sans-serif", fontSize, lineHeight: 1.2 }}>
       {node.label && (
         <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
           {node.label}
         </label>
       )}
       {isReadOnly ? (
-        <div className={`flex-auto min-h-[1.5rem] whitespace-pre-wrap wrap-anywhere px-2 py-0 text-sm text-foreground ${node.variant === "underline" ? "border-b border-border" : ""}`} style={{ borderColor: node.box.strokeColor === "ink" ? "#000" : undefined, fontSize, lineHeight: 1.5 }}>
+        <div className={`flex-auto min-h-5 truncate px-2 py-0 text-sm text-foreground ${node.variant === "underline" ? "border-b border-border" : ""}`} style={{ borderColor: node.box.strokeColor === "ink" ? "#000" : undefined, fontSize, lineHeight: 1.2 }}>
           {value || (node.variant === "boxed" ? "—" : "")}
         </div>
-      ) : mode === "player" ? (
-        <textarea
-          ref={inputRef}
-          rows={1}
-          value={value}
-          aria-label={node.label || node.name || node.fieldBinding}
-          placeholder={node.placeholder}
-          onChange={(e) => onFieldValueChange?.(node.fieldBinding, e.target.value)}
-          onBlur={() => onFieldCommit?.(node.fieldBinding)}
-          className={`${inputClass} flex-auto resize-none overflow-hidden`}
-          style={{ borderColor: node.box.strokeColor === "ink" ? "#000" : undefined, fontSize, lineHeight: 1.5 }}
-        />
       ) : (
-        <input
-          type="text"
-          value={value}
+        <input type="text" value={value}
           aria-label={node.label || node.name || node.fieldBinding}
           placeholder={node.placeholder}
-          disabled={isReadOnly}
-          onChange={(e) => onFieldValueChange?.(node.fieldBinding, e.target.value)}
+          onChange={(event) => onFieldValueChange?.(node.fieldBinding, event.target.value)}
           onBlur={() => onFieldCommit?.(node.fieldBinding)}
-          className={inputClass}
-        />
+          className={`${inputClass} flex-auto min-h-0`}
+          style={{ borderColor: node.box.strokeColor === "ink" ? "#000" : undefined, fontSize, lineHeight: 1.2 }} />
       )}
     </div>
   );
@@ -174,7 +176,7 @@ export const RenderNumberInput: React.FC<{ node: NumberInputNode }> = ({ node })
   const inputProps = {
     "aria-label": node.label || node.name || node.fieldBinding,
     defaultValue: committedValue,
-    style: { fontSize: getCharacterFontSize(fieldValues) },
+    style: { fontSize: 16 },
     min: node.min,
     max: node.max,
     step: node.step ?? 1,
@@ -197,7 +199,7 @@ export const RenderNumberInput: React.FC<{ node: NumberInputNode }> = ({ node })
         </label>
       )}
       {isReadOnly ? (
-        <div className="font-bold text-foreground text-center" style={{ fontSize: getCharacterFontSize(fieldValues) }}>
+        <div className="font-bold text-foreground text-center" style={{ fontSize: 16 }}>
           {formattedDisplay}
         </div>
       ) : node.variant === "circle" ? (
@@ -227,24 +229,17 @@ export const RenderNumberInput: React.FC<{ node: NumberInputNode }> = ({ node })
   );
 };
 
-export const RenderTextarea: React.FC<{ node: TextareaNode }> = ({ node }) => {
+const RenderPlainTextarea: React.FC<{ node: TextareaNode }> = ({ node }) => {
   const t = useTranslations("Player");
   const { fieldValues, onFieldValueChange, onFieldCommit, mode } = useSheetRender();
   const rawValue = fieldValues?.[node.fieldBinding];
-  const value = typeof rawValue === "string" ? rawValue : "";
+  const value = typeof rawValue === "string" ? rawValue : Array.isArray(rawValue) ? rawValue.join("\n") : "";
   const isReadOnly = mode === "readonly" || mode === "print" || node.readOnly;
   const heightFieldKey = `__layout_height__:${node.fieldBinding}`;
   const fontSizeFieldKey = `__layout_font_size__:${node.fieldBinding}`;
   const savedHeight = fieldValues?.[heightFieldKey];
-  const savedFontSize = fieldValues?.[fontSizeFieldKey];
-  const textareaHeight =
-    typeof savedHeight === "number" && savedHeight >= 48
-      ? savedHeight
-      : undefined;
-  const fontSize =
-    typeof savedFontSize === "number" && savedFontSize >= 8 && savedFontSize <= 32
-      ? savedFontSize
-      : getCharacterFontSize(fieldValues);
+  const textareaHeight = typeof savedHeight === "number" && savedHeight >= 48 ? savedHeight : undefined;
+  const fontSize = getTextareaFontSize(node, fieldValues);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const pointerStartHeight = useRef<number | null>(null);
 
@@ -303,8 +298,8 @@ export const RenderTextarea: React.FC<{ node: TextareaNode }> = ({ node }) => {
       )}
       {isReadOnly ? (
         <div
-          className={`text-sm whitespace-pre-wrap wrap-anywhere text-foreground px-2 py-1.5 ${mode === "print" ? "overflow-hidden" : ""}`}
-          style={{ minHeight: textareaHeight, fontSize, fontFamily: "Arial, sans-serif", lineHeight: 1.5 }}
+          className={`text-sm whitespace-pre-wrap wrap-anywhere text-foreground px-2 py-1 ${mode === "print" ? "overflow-hidden" : ""}`}
+          style={{ minHeight: textareaHeight, fontSize, fontFamily: "Arial, sans-serif", lineHeight: TEXTAREA_LINE_HEIGHT }}
         >
           {value || (node.variant === "boxed" ? "—" : "")}
         </div>
@@ -347,14 +342,17 @@ export const RenderTextarea: React.FC<{ node: TextareaNode }> = ({ node }) => {
               pointerStartHeight.current = mode === "player" ? event.currentTarget.offsetHeight : null;
             }}
             onBlur={() => onFieldCommit?.(node.fieldBinding)}
-            style={{ fontSize, fontFamily: "Arial, sans-serif", lineHeight: 1.5 }}
-            className={`min-h-12 w-full px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-primary ${node.variant === "plain" ? "border-none bg-transparent" : node.variant === "underline" ? "border-b border-border" : "rounded-md border border-border bg-background/50"} ${mode === "builder" ? "resize-none flex-1" : `${node.variant === "plain" ? "resize-none" : "resize-y"} flex-auto`}`}
+            style={{ fontSize, fontFamily: "Arial, sans-serif", lineHeight: TEXTAREA_LINE_HEIGHT }}
+            className={`min-h-12 w-full px-2 py-1 focus:outline-none focus:ring-1 focus:ring-primary ${node.variant === "plain" ? "border-none bg-transparent" : node.variant === "underline" ? "border-b border-border" : "rounded-md border border-border bg-background/50"} ${mode === "builder" ? "resize-none flex-1" : `${node.variant === "plain" ? "resize-none" : "resize-y"} flex-auto`}`}
           />
         </>
       )}
     </div>
   );
 };
+
+export const RenderTextarea: React.FC<{ node: TextareaNode }> = ({ node }) =>
+  node.listStyle && node.listStyle !== "none" ? <RenderTextareaList node={node} /> : <RenderPlainTextarea node={node} />;
 
 export const RenderCheckbox: React.FC<{ node: CheckboxNode }> = ({ node }) => {
   const { fieldValues, onFieldValueChange, mode } = useSheetRender();
@@ -413,11 +411,11 @@ export const RenderSelect: React.FC<{ node: SelectNode }> = ({ node }) => {
         </label>
       )}
       {isReadOnly ? (
-        <div className="font-medium text-foreground" style={{ fontSize: getCharacterFontSize(fieldValues) }}>{value || "—"}</div>
+        <div className="font-medium text-foreground" style={{ fontSize: 14 }}>{value || "—"}</div>
       ) : (
         <select
           aria-label={node.label || node.name || node.fieldBinding}
-          style={{ fontSize: getCharacterFontSize(fieldValues) }}
+          style={{ fontSize: 14 }}
           value={value}
           disabled={isReadOnly}
           onChange={(e) => onFieldValueChange?.(node.fieldBinding, e.target.value)}
@@ -603,12 +601,12 @@ export const RenderTable: React.FC<{ node: TableNode }> = ({ node }) => {
             }`}
           >
             {isHeader || isReadOnly ? (
-              <span className="whitespace-pre-wrap" style={{ fontSize: isHeader ? 12 : getCharacterFontSize(fieldValues) }}>{isHeader ? label : value || "—"}</span>
+              <span className="whitespace-pre-wrap" style={{ fontSize: 12 }}>{isHeader ? label : value || "—"}</span>
             ) : (
               <input
                 type="text"
                 aria-label={label || `${node.name || node.fieldBindingPrefix} ${row + 1}:${column + 1}`}
-                style={{ fontSize: getCharacterFontSize(fieldValues) }}
+                style={{ fontSize: 12 }}
                 value={value}
                 placeholder={label}
                 onChange={(event) => onFieldValueChange?.(fieldKey, event.target.value)}

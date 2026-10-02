@@ -66,7 +66,7 @@ export const PaletteView: React.FC<PaletteViewProps> = ({
     onInsertNode(node);
   };
 
-  const createField = (kind: "text" | "number" | "textarea" | "checkbox" | "select") => {
+  const createField = (kind: "text" | "number" | "textarea" | "checkbox" | "select", listStyle?: "bulleted" | "numbered" | "lined") => {
     const fieldBinding = `field_${Math.floor(Math.random() * 10000)}`;
     let node: LayoutNode;
 
@@ -102,11 +102,14 @@ export const PaletteView: React.FC<PaletteViewProps> = ({
         node = {
           id: crypto.randomUUID(),
           kind: "textarea",
-          name: t("textArea"),
+          name: t(listStyle === "bulleted" ? "bulletedTextarea" : listStyle === "numbered" ? "numberedTextarea" : listStyle === "lined" ? "linedTextarea" : "textArea"),
           fieldBinding,
           label: t("notes"),
           placeholder: t("defaultTextareaPlaceholder"),
           rows: 3,
+          listStyle,
+          itemCount: listStyle ? 3 : undefined,
+          allowItemCountChange: false,
           variant: "boxed",
           readOnly: false,
           box: defaultBoxProps,
@@ -420,6 +423,14 @@ export const PaletteView: React.FC<PaletteViewProps> = ({
               <div className="text-[10px] text-muted-foreground">{t("textAreaHint")}</div>
             </div>
           </button>
+
+          {(["bulleted", "numbered", "lined"] as const).map(style => (
+            <button key={style} type="button" onClick={() => createField("textarea", style)}
+              className="flex items-center gap-2 p-2 rounded border border-border bg-card hover:border-primary/50 text-left transition-colors">
+              <span aria-hidden="true">{style === "bulleted" ? "•" : style === "numbered" ? "1." : "—"}</span>
+              <span className="text-xs font-semibold">{t(style === "bulleted" ? "bulletedTextarea" : style === "numbered" ? "numberedTextarea" : "linedTextarea")}</span>
+            </button>
+          ))}
 
           <button
             type="button"

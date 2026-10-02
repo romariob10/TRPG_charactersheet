@@ -47,7 +47,7 @@ export const fieldValueSchema = z.union([
   z.string().max(20_000),
   z.number(),
   z.boolean(),
-  z.array(z.string().max(2_000)).max(200),
+  z.array(z.string().max(20_000)).max(200),
   z.null(),
 ]);
 

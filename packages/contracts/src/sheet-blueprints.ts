@@ -94,6 +94,11 @@ export const textareaNodeSchema = z.object({
   label: z.string().trim().max(120).default(""),
   placeholder: z.string().trim().max(120).default(""),
   rows: z.number().int().min(1).max(20).default(3),
+  listStyle: z.enum(["none", "bulleted", "numbered", "lined"]).optional(),
+  itemCount: z.number().int().min(1).max(50).optional(),
+  allowItemCountChange: z.boolean().optional(),
+  itemBindings: z.array(z.string().trim().min(1).max(64)).min(1).max(50).optional(),
+  itemLabels: z.array(z.string().max(120)).max(50).optional(),
   variant: inputVariantSchema.default("boxed"),
   readOnly: z.boolean().default(false),
 });

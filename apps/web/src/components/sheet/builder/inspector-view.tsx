@@ -883,6 +883,34 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
         </div>
       )}
 
+      {selectedNode.kind === "textarea" && (
+        <div className="flex flex-col gap-3 border-b border-border pb-3">
+          <label className="text-[11px]">{t("textareaFormat")}
+            <select aria-label={t("textareaFormat")} value={selectedNode.listStyle ?? "none"}
+              onChange={event => {
+                const listStyle = event.target.value;
+                if (listStyle === "none" || listStyle === "bulleted" || listStyle === "numbered" || listStyle === "lined") onUpdateNode({ ...selectedNode, listStyle });
+              }} className="mt-1 w-full rounded border border-border bg-background px-2 py-1">
+              <option value="none">{t("textArea")}</option>
+              <option value="bulleted">{t("bulletedTextarea")}</option>
+              <option value="numbered">{t("numberedTextarea")}</option>
+              <option value="lined">{t("linedTextarea")}</option>
+            </select>
+          </label>
+          {selectedNode.listStyle && selectedNode.listStyle !== "none" && <>
+            <label className="text-[11px]">{t("textareaItemCount")}
+              <CommitNumberInput value={selectedNode.itemCount ?? 3} min={1} max={50}
+                onCommit={itemCount => onUpdateNode({ ...selectedNode, itemCount: Math.round(itemCount) })} />
+            </label>
+            <label className="flex items-center gap-2 text-[11px]">
+              <input type="checkbox" checked={selectedNode.allowItemCountChange ?? false}
+                onChange={event => onUpdateNode({ ...selectedNode, allowItemCountChange: event.target.checked })} />
+              {t("textareaUserItemCount")}
+            </label>
+          </>}
+        </div>
+      )}
+
       {selectedNode.kind === "checkbox" && (
         <div className="flex flex-col gap-3 border-b border-border pb-3">
           <label className="text-[11px]">
