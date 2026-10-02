@@ -435,8 +435,8 @@ export const CharacterSheetPlayer: React.FC<CharacterSheetPlayerProps> = ({
   return (
     <div className="flex flex-col min-h-screen bg-background">
       {/* Player Header */}
-      <header className="sticky top-0 z-30 flex items-center justify-between px-6 py-3 bg-card/90 backdrop-blur border-b border-border shadow-sm print:hidden">
-        <div className="flex items-center gap-3">
+      <header className="sticky top-0 z-30 flex flex-wrap items-center justify-between gap-3 px-3 sm:px-6 py-3 bg-card/90 backdrop-blur border-b border-border shadow-sm print:hidden">
+        <div className="flex min-w-0 items-center gap-3">
           <a
             href="/dashboard"
             className="text-xs font-semibold text-muted-foreground hover:text-foreground"
@@ -498,10 +498,10 @@ export const CharacterSheetPlayer: React.FC<CharacterSheetPlayerProps> = ({
             data-sheet-target={target}
             style={
               target === "print"
-                ? { width: PRINT_CANVAS_WIDTH, height: PRINT_CANVAS_HEIGHT }
+                ? { width: PRINT_CANVAS_WIDTH, height: rootNode.box.height.mode === "fixed" ? rootNode.box.height.value : PRINT_CANVAS_HEIGHT }
                 : undefined
             }
-            className={`relative w-full ${
+            className={`relative flex flex-col items-center w-full ${
               target === "mobile"
                 ? "max-w-md"
                 : target === "print"

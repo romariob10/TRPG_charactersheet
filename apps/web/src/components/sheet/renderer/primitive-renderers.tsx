@@ -76,33 +76,60 @@ export const RenderFieldInput: React.FC<{ node: FieldInputNode }> = ({ node }) =
   const value = typeof rawValue === "string" ? rawValue : "";
 
   const isReadOnly = mode === "readonly" || mode === "print" || node.readOnly;
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  useLayoutEffect(() => {
+    const input = inputRef.current;
+    if (!input) return;
+    const resize = () => {
+      input.style.height = "auto";
+      input.style.height = `${input.scrollHeight + input.offsetHeight - input.clientHeight}px`;
+    };
+    resize();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(resize);
+    observer.observe(input.parentElement ?? input);
+    return () => observer.disconnect();
+  }, [value, mode, isReadOnly]);
+
+  const inputClass = `min-w-0 w-full px-2 ${node.variant === "boxed" ? "py-1" : "py-0"} text-sm focus:outline-none focus:ring-1 focus:ring-primary ${
+    node.variant === "underline" ? "border-b border-border rounded-none"
+      : node.variant === "boxed" ? "border border-border rounded-md bg-background/50"
+        : "border-none bg-transparent"
+  }`;
 
   return (
-    <div className="flex flex-col gap-1 w-full">
+    <div className="flex flex-col gap-1 w-full" style={{ fontFamily: "Arial, sans-serif" }}>
       {node.label && (
         <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
           {node.label}
         </label>
       )}
       {isReadOnly ? (
-        <div className="text-sm font-medium text-foreground min-h-[1.5rem] py-0.5 border-b border-muted">
-          {value || "—"}
+        <div className={`min-h-[1.5rem] whitespace-pre-wrap wrap-anywhere px-2 py-0 text-sm text-foreground ${node.variant === "underline" ? "border-b border-border" : ""}`} style={{ borderColor: node.box.strokeColor === "ink" ? "#000" : undefined }}>
+          {value || (node.variant === "boxed" ? "—" : "")}
         </div>
+      ) : mode === "player" ? (
+        <textarea
+          ref={inputRef}
+          rows={1}
+          value={value}
+          aria-label={node.label || node.name || node.fieldBinding}
+          placeholder={node.placeholder}
+          onChange={(e) => onFieldValueChange?.(node.fieldBinding, e.target.value)}
+          onBlur={() => onFieldCommit?.(node.fieldBinding)}
+          className={`${inputClass} resize-none overflow-hidden`}
+          style={{ borderColor: node.box.strokeColor === "ink" ? "#000" : undefined }}
+        />
       ) : (
         <input
           type="text"
           value={value}
+          aria-label={node.label || node.name || node.fieldBinding}
           placeholder={node.placeholder}
           disabled={isReadOnly}
           onChange={(e) => onFieldValueChange?.(node.fieldBinding, e.target.value)}
           onBlur={() => onFieldCommit?.(node.fieldBinding)}
-          className={`w-full px-2 py-1 text-sm bg-background/50 focus:outline-none focus:ring-1 focus:ring-primary ${
-            node.variant === "underline"
-              ? "border-b border-border rounded-none focus:border-primary"
-              : node.variant === "boxed"
-              ? "border border-border rounded-md"
-              : "border-none bg-transparent"
-          }`}
+          className={inputClass}
         />
       )}
     </div>
@@ -141,6 +168,7 @@ export const RenderNumberInput: React.FC<{ node: NumberInputNode }> = ({ node })
   };
 
   const inputProps = {
+    "aria-label": node.label || node.name || node.fieldBinding,
     defaultValue: committedValue,
     min: node.min,
     max: node.max,
@@ -157,7 +185,7 @@ export const RenderNumberInput: React.FC<{ node: NumberInputNode }> = ({ node })
   };
 
   return (
-    <div className="flex flex-col items-center gap-1">
+    <div className="flex flex-col items-center gap-1" style={{ fontFamily: "Arial, sans-serif" }}>
       {node.label && (
         <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground text-center">
           {node.label}
@@ -182,9 +210,10 @@ export const RenderNumberInput: React.FC<{ node: NumberInputNode }> = ({ node })
           type="number"
           {...inputProps}
           placeholder={node.placeholder}
-          className={`w-16 text-center py-1 text-sm font-bold bg-background focus:outline-none focus:ring-1 focus:ring-primary ${
+          className={`${node.box.width.mode === "hug" ? "w-16" : "w-full min-w-0"} text-center ${node.variant === "plain" ? "py-0" : "py-1"} text-sm font-bold bg-background focus:outline-none focus:ring-1 focus:ring-primary ${
             node.variant === "underline"
               ? "border-b border-border rounded-none"
+              : node.variant === "plain" ? "border-none bg-transparent"
               : "border border-border rounded-md"
           }`}
         />
@@ -217,8 +246,15 @@ export const RenderTextarea: React.FC<{ node: TextareaNode }> = ({ node }) => {
   useLayoutEffect(() => {
     const textarea = textareaRef.current;
     if (!textarea || mode === "builder") return;
-    textarea.style.height = "auto";
-    textarea.style.height = `${Math.max(textareaHeight ?? 48, textarea.scrollHeight + textarea.offsetHeight - textarea.clientHeight)}px`;
+    const resize = () => {
+      textarea.style.height = "auto";
+      textarea.style.height = `${Math.max(textareaHeight ?? 48, textarea.scrollHeight + textarea.offsetHeight - textarea.clientHeight)}px`;
+    };
+    resize();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(resize);
+    observer.observe(textarea.parentElement ?? textarea);
+    return () => observer.disconnect();
   }, [fontSize, textareaHeight, value, mode]);
 
   useEffect(() => {
@@ -254,7 +290,7 @@ export const RenderTextarea: React.FC<{ node: TextareaNode }> = ({ node }) => {
   };
 
   return (
-    <div className={`relative flex min-h-0 w-full flex-col gap-1 ${mode === "builder" && node.box.height.mode !== "hug" ? "h-full" : ""}`}>
+    <div className={`relative flex min-h-0 w-full flex-col gap-1 ${node.box.height.mode !== "hug" ? "h-full" : ""}`}>
       {node.label && (
         <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
           {node.label}
@@ -262,14 +298,14 @@ export const RenderTextarea: React.FC<{ node: TextareaNode }> = ({ node }) => {
       )}
       {isReadOnly ? (
         <div
-          className="text-sm whitespace-pre-wrap text-foreground py-1"
-          style={{ minHeight: textareaHeight, fontSize }}
+          className={`text-sm whitespace-pre-wrap wrap-anywhere text-foreground px-2 py-1.5 ${mode === "print" ? "overflow-hidden" : ""}`}
+          style={{ minHeight: textareaHeight, fontSize, fontFamily: "Arial, sans-serif", lineHeight: 1.5 }}
         >
-          {value || "—"}
+          {value || (node.variant === "boxed" ? "—" : "")}
         </div>
       ) : (
         <>
-          {mode === "player" && (
+          {mode === "player" && node.variant !== "plain" && (
             <div className="absolute right-1 top-1 z-10 flex items-center overflow-hidden rounded border border-border bg-background/90 shadow-sm">
               <button
                 type="button"
@@ -298,6 +334,7 @@ export const RenderTextarea: React.FC<{ node: TextareaNode }> = ({ node }) => {
             ref={textareaRef}
             rows={node.rows ?? 3}
             value={value}
+            aria-label={node.label || node.name || node.fieldBinding}
             placeholder={node.placeholder}
             disabled={isReadOnly}
             onChange={(e) => onFieldValueChange?.(node.fieldBinding, e.target.value)}
@@ -305,8 +342,8 @@ export const RenderTextarea: React.FC<{ node: TextareaNode }> = ({ node }) => {
               pointerStartHeight.current = mode === "player" ? event.currentTarget.offsetHeight : null;
             }}
             onBlur={() => onFieldCommit?.(node.fieldBinding)}
-            style={{ fontSize }}
-            className={`min-h-12 w-full overflow-auto rounded-md border border-border bg-background/50 px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-primary ${mode === "builder" ? "resize-none flex-1" : "resize-y"}`}
+            style={{ fontSize, fontFamily: "Arial, sans-serif", lineHeight: 1.5 }}
+            className={`min-h-12 w-full px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-primary ${node.variant === "plain" ? "border-none bg-transparent" : node.variant === "underline" ? "border-b border-border" : "rounded-md border border-border bg-background/50"} ${mode === "builder" ? "resize-none flex-1" : `${node.variant === "plain" ? "resize-none" : "resize-y"} flex-auto`}`}
           />
         </>
       )}
@@ -319,17 +356,34 @@ export const RenderCheckbox: React.FC<{ node: CheckboxNode }> = ({ node }) => {
   const checked = Boolean(fieldValues?.[node.fieldBinding]);
   const isReadOnly = mode === "readonly" || mode === "print" || node.readOnly;
 
+  if (node.shape === "arc") {
+    return (
+      <label className="relative block h-6 min-w-6 cursor-pointer text-foreground">
+        <input type="checkbox" checked={checked} disabled={isReadOnly}
+          aria-label={node.name || node.label || node.fieldBinding}
+          onChange={event => onFieldValueChange?.(node.fieldBinding, event.target.checked)}
+          className="peer absolute inset-0 z-10 h-6 w-6 cursor-pointer opacity-0" />
+        <svg width="24" height="24" viewBox="0 0 32 32" aria-hidden="true" className="rounded-full peer-focus-visible:outline-2 peer-focus-visible:outline-primary">
+          {node.showBorder !== false && <path d="M5 22 A12 12 0 1 1 15 28" fill="none" stroke="currentColor" strokeWidth="0.7" />}
+          {checked && <path d="M9 14L14 19L23 9" fill="none" stroke="currentColor" strokeWidth="2" />}
+        </svg>
+        <span className="absolute bottom-0 left-1 text-[10px] leading-none">{node.label}</span>
+      </label>
+    );
+  }
+
   return (
     <label className="flex items-center gap-2 cursor-pointer select-none">
       <input
         type="checkbox"
+        aria-label={node.name || node.label || node.fieldBinding}
         checked={checked}
         disabled={isReadOnly}
         onChange={(e) =>
           onFieldValueChange?.(node.fieldBinding, e.target.checked)
         }
         className={`w-4 h-4 text-primary bg-background border-border focus:ring-primary ${
-          node.shape === "circle" ? "rounded-full" : "rounded"
+          node.shape === "circle" ? "appearance-none border checked:bg-primary rounded-full" : "rounded"
         }`}
         style={node.showBorder === false ? { border: 0 } : undefined}
       />
@@ -423,20 +477,20 @@ export const RenderImage: React.FC<{ node: ImageNode }> = ({ node }) => {
   ) : null;
 
   if (!imageUrl) {
+    const paperPortrait = node.box.fill === "surface";
     if (!editable) {
       return (
-        <div className="flex h-full min-h-24 w-full flex-col items-center justify-center gap-2 rounded bg-muted/40 text-xs text-muted-foreground">
-          <ImageUp className="size-5" aria-hidden="true" />
-          <span>{t("portraitPlaceholder")}</span>
+        <div className={`flex h-full min-h-24 w-full flex-col items-center justify-center gap-2 text-xs text-muted-foreground ${paperPortrait ? "bg-transparent" : "rounded bg-muted/40"}`}>
+          {!paperPortrait && <><ImageUp className="size-5" aria-hidden="true" /><span>{t("portraitPlaceholder")}</span></>}
         </div>
       );
     }
     return (<>
-      <label className="flex h-full min-h-24 w-full cursor-pointer flex-col items-center justify-center gap-2 rounded bg-muted/40 text-xs text-muted-foreground hover:bg-muted/60">
-        <ImageUp className="size-5" aria-hidden="true" />
-        <span>{t("portraitPlaceholder")}</span>
+      <label className={`group flex h-full min-h-24 w-full cursor-pointer flex-col items-center justify-center gap-2 text-xs text-muted-foreground ${paperPortrait ? "bg-transparent hover:bg-muted/10" : "rounded bg-muted/40 hover:bg-muted/60"}`}>
+        <span className={`flex flex-col items-center gap-2 ${paperPortrait ? "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100" : ""}`}><ImageUp className="size-5" aria-hidden="true" />{t("portraitPlaceholder")}</span>
         <input
           type="file"
+          aria-label={t("portraitPlaceholder")}
           accept="image/png,image/jpeg"
           className="sr-only"
           onChange={(event) => {

@@ -2,7 +2,7 @@
 
 import { AgentPresence } from "@/components/agent-presence";
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Layers, Plus, Redo2, Undo2 } from "lucide-react";
+import { Copy, Download, Upload, Layers, PanelLeft, PanelRight, Plus, Redo2, Trash2, Undo2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import type {
   ComponentSummary,
@@ -12,12 +12,14 @@ import type {
   SheetFieldDefinition,
   TargetLayoutKind,
   TargetLayoutMap,
+  SheetTransferDocument,
 } from "@mycharacter/contracts";
-import { apiFetch } from "@/lib/api/client";
-import { sheetEditorDataResponseSchema, defaultBoxProps } from "@mycharacter/contracts";
+import { ApiClientError, apiFetch } from "@/lib/api/client";
+import { autosaveSheetDraftResponseSchema, sheetEditorDataResponseSchema, defaultBoxProps, MAX_SHEET_TRANSFER_BYTES, sheetTransferDocumentSchema } from "@mycharacter/contracts";
 import {
   duplicateNode,
   findNode,
+  findNodeAndParent,
   getAncestorIds,
   insertNode,
   moveNode,
@@ -25,6 +27,7 @@ import {
   renameNode,
 } from "../../../lib/tree-utils";
 import { InspectorView } from "./inspector-view";
+import { createFateCorePreset, fateCoreLabelKeys, type FateCoreLabels } from "./fate-core-preset";
 import { PaletteView } from "./palette-view";
 import { TreeView } from "./tree-view";
 import { SheetNodeRenderer } from "../renderer/sheet-node-renderer";
@@ -32,6 +35,11 @@ import { SheetRenderProvider } from "../renderer/sheet-render-context";
 import { ComponentLibraryBrowser } from "../library/component-library-browser";
 import { SaveComponentModal } from "../library/save-component-modal";
 import { SheetViewSwitcher, type SheetViewMode } from "../sheet-view-switcher";
+
+interface DraftSnapshot {
+  layouts: TargetLayoutMap;
+  fields: SheetFieldDefinition[];
+}
 
 const PRINT_CANVAS_WIDTH = 595;
 const PRINT_CANVAS_HEIGHT = 874;
@@ -63,6 +71,7 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
   systemId,
 }) => {
   const t = useTranslations("SheetBuilder");
+  const fateT = useTranslations("FateSheet");
   const [layouts, setLayouts] = useState<TargetLayoutMap>(
     initialData.draft.layouts,
   );
@@ -76,7 +85,13 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
     "idle" | "saving" | "saved" | "error" | "conflict"
   >("saved");
   const [zoom, setZoom] = useState(1);
+  const [fitCanvas, setFitCanvas] = useState(true);
+  const [canvasSpace, setCanvasSpace] = useState(896);
+  const canvasRef = useRef<HTMLElement>(null);
+  const [mobilePanel, setMobilePanel] = useState<"canvas" | "layers" | "palette" | "inspector">("canvas");
   const [activeTab, setActiveTab] = useState<"layers" | "palette">("layers");
+  const [showLayers, setShowLayers] = useState(true);
+  const [showInspector, setShowInspector] = useState(true);
   const [sidebarWidth, setSidebarWidth] = useState(280);
   const isResizingRef = useRef(false);
   const resizeStartRef = useRef({ pointerX: 0, width: 280 });
@@ -99,10 +114,11 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
   });
 
   // Undo / Redo history
-  const [history, setHistory] = useState<TargetLayoutMap[]>([]);
-  const [future, setFuture] = useState<TargetLayoutMap[]>([]);
+  const [history, setHistory] = useState<DraftSnapshot[]>([]);
+  const [future, setFuture] = useState<DraftSnapshot[]>([]);
 
   // Modals
+  const [showAdaptModal, setShowAdaptModal] = useState(false);
   const [showLibrary, setShowLibrary] = useState(false);
   const [saveComponentNode, setSaveComponentNode] = useState<LayoutNode | null>(
     null,
@@ -110,7 +126,13 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
   const [showPublishModal, setShowPublishModal] = useState(false);
   const [publishChangelog, setPublishChangelog] = useState("");
   const [publishing, setPublishing] = useState(false);
+  const [publishSucceeded, setPublishSucceeded] = useState(false);
   const [publishError, setPublishError] = useState<string | null>(null);
+  const importFileRef = useRef<HTMLInputElement>(null);
+  const [transferBusy, setTransferBusy] = useState(false);
+  const [transferError, setTransferError] = useState<string | null>(null);
+  const [pendingImport, setPendingImport] = useState<SheetTransferDocument | null>(null);
+  const [importSucceeded, setImportSucceeded] = useState(false);
 
   // Resolved component versions initialized from server response
   const [resolvedComponents, setResolvedComponents] = useState<
@@ -129,38 +151,41 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
 
   const currentRoot = layouts[activeTarget];
 
-  // Record history and update layout
+  // Layout and field definitions belong to the same undoable draft.
+  const recordHistory = useCallback(() => {
+    setHistory((h) => [...h.slice(-19), { layouts, fields: draftFields }]);
+    setFuture([]);
+    setSaveStatus("idle");
+  }, [layouts, draftFields]);
+
   const setTargetLayout = useCallback(
     (newRoot: LayoutNode) => {
-      setLayouts((prev) => {
-        setHistory((h) => [...h.slice(-20), prev]);
-        setFuture([]);
-        return { ...prev, [activeTarget]: newRoot };
-      });
-      setSaveStatus("idle");
+      if (newRoot === layouts[activeTarget]) return;
+      recordHistory();
+      setLayouts({ ...layouts, [activeTarget]: newRoot });
     },
-    [activeTarget],
+    [activeTarget, layouts, recordHistory],
   );
 
   const undo = useCallback(() => {
-    if (history.length === 0) return;
-    const prevLayouts = history[history.length - 1];
-    if (!prevLayouts) return;
+    const previous = history.at(-1);
+    if (!previous) return;
     setHistory((h) => h.slice(0, -1));
-    setFuture((f) => [layouts, ...f]);
-    setLayouts(prevLayouts);
+    setFuture((f) => [{ layouts, fields: draftFields }, ...f]);
+    setLayouts(previous.layouts);
+    setDraftFields(previous.fields);
     setSaveStatus("idle");
-  }, [history, layouts]);
+  }, [history, layouts, draftFields]);
 
   const redo = useCallback(() => {
-    if (future.length === 0) return;
-    const nextLayouts = future[0];
-    if (!nextLayouts) return;
+    const next = future[0];
+    if (!next) return;
     setFuture((f) => f.slice(1));
-    setHistory((h) => [...h, layouts]);
-    setLayouts(nextLayouts);
+    setHistory((h) => [...h.slice(-19), { layouts, fields: draftFields }]);
+    setLayouts(next.layouts);
+    setDraftFields(next.fields);
     setSaveStatus("idle");
-  }, [future, layouts]);
+  }, [future, layouts, draftFields]);
 
   // Keyboard shortcuts (Cmd+Z, Cmd+Shift+Z, Ctrl+Z, Ctrl+Y)
   useEffect(() => {
@@ -192,6 +217,7 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
   const selectNode = useCallback(
     (id: string | null) => {
       setSelectedNodeId(id);
+      if (id) { setMobilePanel("inspector"); setShowInspector(true); }
       if (id) {
         const ancestors = getAncestorIds(currentRoot, id);
         if (ancestors.length > 0) {
@@ -227,14 +253,24 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
 
   // Insert node
   const handleInsertNode = (newNode: LayoutNode) => {
-    if (selectedNode && selectedNode.kind === "frame") {
-      const updated = insertNode(currentRoot, selectedNode.id, newNode);
-      setTargetLayout(updated);
-    } else if (currentRoot.kind === "frame") {
-      const updated = insertNode(currentRoot, currentRoot.id, newNode);
-      setTargetLayout(updated);
-    }
-    selectNode(newNode.id);
+    const selected = selectedNodeId
+      ? findNodeAndParent(currentRoot, selectedNodeId)
+      : null;
+    const parent = selected?.node?.kind === "frame"
+      ? selected.node
+      : selected?.parent?.kind === "frame"
+        ? selected.parent
+        : currentRoot.kind === "frame" ? currentRoot : null;
+    if (!parent) return;
+    const index = selected?.parent?.id === parent.id ? selected.index + 1 : undefined;
+    setTargetLayout(insertNode(currentRoot, parent.id, newNode, index));
+    setSelectedNodeId(newNode.id);
+    setExpandedNodesByTarget((prev) => ({
+      ...prev,
+      [activeTarget]: new Set([...prev[activeTarget], ...getAncestorIds(currentRoot, parent.id), parent.id]),
+    }));
+    setMobilePanel("inspector");
+    setShowInspector(true);
   };
 
   // Delete node
@@ -270,9 +306,7 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
 
   // Auto-generate mobile/tablet/print from desktop layout
   const handleAutoGenerateTargets = () => {
-    if (!confirm(t("adaptTargets") + "?")) {
-      return;
-    }
+    setShowAdaptModal(false);
 
     const desktopRoot = layouts.desktop;
 
@@ -291,6 +325,7 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
       return clone;
     };
 
+    recordHistory();
     setLayouts({
       desktop: desktopRoot,
       mobile: adaptForMobile(desktopRoot),
@@ -325,36 +360,24 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
     const draft = latestDraftRef.current;
 
     try {
-      const res = await fetch(
+      const data = autosaveSheetDraftResponseSchema.parse(await apiFetch<unknown>(
         `/api/sheet-definitions/${initialData.sheetDefinition.id}/draft`,
         {
           method: "PUT",
-          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             expectedRevision: revisionRef.current,
             layouts: draft.layouts,
             fields: draft.fields,
           }),
         },
-      );
+      ));
 
-      if (res.status === 409) {
-        pendingSaveRef.current = false;
-        setSaveStatus("conflict");
-        return;
-      }
-
-      if (!res.ok) {
-        setSaveStatus("error");
-        return;
-      }
-
-      const data = (await res.json()) as { revision: number };
       revisionRef.current = data.revision;
       setRevision(data.revision);
       if (!pendingSaveRef.current) setSaveStatus("saved");
-    } catch {
-      setSaveStatus("error");
+    } catch (error: unknown) {
+      pendingSaveRef.current = false;
+      setSaveStatus(error instanceof ApiClientError && error.status === 409 ? "conflict" : "error");
     } finally {
       saveInFlightRef.current = false;
       if (pendingSaveRef.current) {
@@ -384,6 +407,16 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
       if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
     };
   }, [layouts, draftFields, flushAutosave]);
+
+  useEffect(() => {
+    if (saveStatus === "saved") return;
+    const warnBeforeLeaving = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warnBeforeLeaving);
+    return () => window.removeEventListener("beforeunload", warnBeforeLeaving);
+  }, [saveStatus]);
 
   const syncAgentDraft = async (signal: AbortSignal) => {
     if (saveStatus !== "saved" || pendingSaveRef.current || saveInFlightRef.current) return;
@@ -432,28 +465,21 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
 
   // Publish sheet version
   const handlePublish = async () => {
+    if (saveStatus !== "saved" || pendingSaveRef.current || saveInFlightRef.current) return;
     setPublishing(true);
     setPublishError(null);
+    setPublishSucceeded(false);
     try {
-      const res = await fetch(
+      await apiFetch(
         `/api/sheet-definitions/${initialData.sheetDefinition.id}/publish`,
         {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            changelog: publishChangelog || t("defaultChangelog"),
-          }),
+          body: JSON.stringify({ changelog: publishChangelog || t("defaultChangelog") }),
         },
       );
 
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.message || t("publishFailed"));
-      }
-
       setShowPublishModal(false);
-      alert(t("publishSucceeded"));
-      window.location.reload();
+      setPublishSucceeded(true);
     } catch (err: unknown) {
       setPublishError(err instanceof Error ? err.message : t("publishFailed"));
     } finally {
@@ -501,11 +527,72 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
     print: PRINT_CANVAS_WIDTH,
   }[activeTarget];
 
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const observer = new ResizeObserver(([entry]) => {
+      if (entry && entry.contentRect.width > 0) setCanvasSpace(entry.contentRect.width);
+    });
+    observer.observe(canvas);
+    return () => observer.disconnect();
+  }, []);
+
+  const effectiveZoom = fitCanvas ? Math.min(1, canvasSpace / canvasWidth) : zoom;
+  const exportSheet = async () => {
+    setTransferBusy(true);
+    setTransferError(null);
+    try {
+      const document = sheetTransferDocumentSchema.parse(await apiFetch<unknown>(`/api/sheet-definitions/${initialData.sheetDefinition.id}/export`));
+      const blob = new Blob([JSON.stringify(document, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const link = window.document.createElement("a");
+      link.href = url;
+      link.download = `${initialData.sheetDefinition.slug || "character-sheet"}.mycharacter.json`;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch {
+      setTransferError(t("exportFailed"));
+    } finally {
+      setTransferBusy(false);
+    }
+  };
+
+  const readImport = async (file: File) => {
+    setTransferBusy(true);
+    setTransferError(null);
+    setImportSucceeded(false);
+    try {
+      if (file.size > MAX_SHEET_TRANSFER_BYTES) throw new Error("File too large");
+      const parsed = sheetTransferDocumentSchema.safeParse(JSON.parse(await file.text()));
+      if (!parsed.success) throw new Error("Invalid document");
+      setPendingImport(parsed.data);
+    } catch {
+      setTransferError(t("invalidImport"));
+    } finally {
+      setTransferBusy(false);
+    }
+  };
+
+  const applyImport = () => {
+    if (!pendingImport) return;
+    recordHistory();
+    setLayouts(pendingImport.layouts);
+    setDraftFields(pendingImport.fields);
+    setSelectedNodeId(null);
+    setExpandedNodesByTarget(Object.fromEntries(Object.entries(pendingImport.layouts).map(([target, root]) => [target, new Set([root.id])])) as Record<TargetLayoutKind, Set<string>>);
+    setPendingImport(null);
+    setImportSucceeded(true);
+  };
+
+  const canPublish = saveStatus === "saved" && !publishing;
+  const selectedInfo = selectedNodeId ? findNodeAndParent(currentRoot, selectedNodeId) : null;
+  const canModifySelected = selectedInfo?.parent?.kind === "frame";
+
   return (
-    <div className="flex flex-col h-[calc(100vh-64px)] w-full bg-background overflow-hidden">
+    <div className="flex flex-col h-[calc(100dvh-64px)] min-h-0 w-full bg-background overflow-hidden">
       {/* Top Action Bar */}
-      <header className="flex items-center justify-between px-4 py-2.5 border-b border-border bg-card">
-        <div className="flex items-center gap-3">
+      <header className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 border-b border-border bg-card">
+        <div className="flex min-w-0 flex-wrap items-center gap-3">
           <a
             href={`/dashboard/systems/${systemId}/workspace`}
             className="text-xs font-semibold text-muted-foreground hover:text-foreground flex items-center gap-1"
@@ -524,7 +611,7 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
         {/* Target Switcher */}
         <SheetViewSwitcher
           value={viewMode}
-          onChange={setViewMode}
+          onChange={(mode) => { setViewMode(mode); setSelectedNodeId(null); setMobilePanel("canvas"); }}
           adaptiveLabel={t("targetAdaptive")}
           mobileLabel={t("targetMobile")}
           desktopLabel={t("targetDesktop")}
@@ -533,7 +620,11 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
         />
 
         {/* Actions & Status */}
-        <div className="flex items-center gap-3">
+        <div className="flex min-w-0 flex-wrap items-center gap-3">
+          <div className="hidden items-center gap-1 lg:flex">
+            <button type="button" aria-label={t("layers")} title={t("layers")} aria-pressed={showLayers} onClick={() => setShowLayers((visible) => !visible)} className="rounded p-2 hover:bg-muted"><PanelLeft className="size-4" /></button>
+            <button type="button" aria-label={t("inspector")} title={t("inspector")} aria-pressed={showInspector} onClick={() => setShowInspector((visible) => !visible)} className="rounded p-2 hover:bg-muted"><PanelRight className="size-4" /></button>
+          </div>
           {/* Undo / Redo */}
           <div className="flex items-center gap-0.5 border border-border rounded p-0.5">
             <button
@@ -562,16 +653,16 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
           <div className="flex items-center gap-1 text-xs text-muted-foreground">
             <button
               type="button"
-              onClick={() => setZoom((z) => Math.max(0.5, z - 0.1))}
+              onClick={() => { setFitCanvas(false); setZoom(Math.max(0.2, effectiveZoom - 0.1)); }}
               className="p-1 hover:text-foreground"
               aria-label={t("zoomOut")}
             >
               -
             </button>
-            <span>{Math.round(zoom * 100)}%</span>
+            <span>{Math.round(effectiveZoom * 100)}%</span>
             <button
               type="button"
-              onClick={() => setZoom((z) => Math.min(1.5, z + 0.1))}
+              onClick={() => { setFitCanvas(false); setZoom(Math.min(1.5, effectiveZoom + 0.1)); }}
               className="p-1 hover:text-foreground"
               aria-label={t("zoomIn")}
             >
@@ -579,18 +670,34 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
             </button>
           </div>
 
+          <button type="button" onClick={() => setFitCanvas(true)} aria-pressed={fitCanvas} className="rounded border border-border px-2 py-1 text-xs hover:bg-muted">{t("fitCanvas")}</button>
+
           {/* Auto-generate variants button */}
           <button
             type="button"
-            onClick={handleAutoGenerateTargets}
+            onClick={() => setShowAdaptModal(true)}
             className="text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded border border-border"
             title={t("adaptTargetsHint")}
           >
             {t("adaptTargets")}
           </button>
 
+          <button type="button" onClick={() => void exportSheet()} disabled={saveStatus !== "saved" || transferBusy} className="flex items-center gap-1 rounded border border-border px-2 py-1 text-xs disabled:opacity-50">
+            <Download className="size-3.5" />{t("exportJson")}
+          </button>
+          <button type="button" onClick={() => importFileRef.current?.click()} disabled={transferBusy || !initialData.isOwner} className="flex items-center gap-1 rounded border border-border px-2 py-1 text-xs disabled:opacity-50">
+            <Upload className="size-3.5" />{t("importJson")}
+          </button>
+          <input ref={importFileRef} type="file" accept=".json,application/json" className="sr-only" aria-label={t("importFile")} onChange={(event) => {
+            const file = event.target.files?.[0];
+            event.target.value = "";
+            if (file) void readImport(file);
+          }} />
+
           {/* Save Status indicator */}
-          <div className="flex items-center gap-1.5 text-xs">
+          <div role="status" aria-live="polite" className="flex items-center gap-1.5 text-xs">
+            {saveStatus === "idle" && <span className="text-muted-foreground">{t("unsaved")}</span>}
+            {saveStatus === "error" && <button type="button" className="underline" onClick={() => { if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current); void flushAutosave(); }}>{t("retrySave")}</button>}
             {saveStatus === "saving" && (
               <span className="text-muted-foreground">{t("saving")}</span>
             )}
@@ -612,24 +719,52 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
           <button
             type="button"
             onClick={() => setShowPublishModal(true)}
-            className="px-3.5 py-1.5 bg-primary text-primary-foreground font-semibold text-xs rounded-md hover:bg-primary/90 shadow-sm transition-colors"
+            disabled={!canPublish}
+            title={!canPublish ? t("publishAfterSave") : undefined}
+            className="px-3.5 py-1.5 bg-primary text-primary-foreground font-semibold text-xs rounded-md hover:bg-primary/90 shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {t("publish")}
           </button>
         </div>
       </header>
 
+      {transferError && <p role="alert" className="border-b border-border px-4 py-2 text-sm text-destructive">{transferError}</p>}
+      {importSucceeded && <p role="status" className="border-b border-border px-4 py-2 text-sm text-primary">{t("importSucceeded")}</p>}
+      {pendingImport && (
+        <div role="dialog" aria-modal="true" aria-labelledby="sheet-import-title" className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-lg border border-border bg-card p-5 shadow-xl">
+            <h3 id="sheet-import-title" className="font-semibold">{t("confirmImport")}</h3>
+            <p className="mt-3 text-sm">{t("importSummary", { title: pendingImport.title, count: pendingImport.fields.length })}</p>
+            <p className="mt-2 text-sm text-muted-foreground">{t("importReplaceWarning")}</p>
+            <div className="mt-5 flex justify-end gap-3">
+              <button type="button" onClick={() => setPendingImport(null)} className="rounded border border-border px-3 py-2 text-sm">{t("cancel")}</button>
+              <button type="button" onClick={applyImport} className="rounded bg-primary px-3 py-2 text-sm text-primary-foreground">{t("applyImport")}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {publishSucceeded && <p role="status" className="border-b border-border bg-card px-4 py-2 text-sm text-primary">{t("publishSucceeded")}</p>}
+
+      <nav aria-label={t("panels")} className="flex shrink-0 overflow-x-auto border-b border-border bg-card lg:hidden">
+        {(["canvas", "layers", "palette", "inspector"] as const).map((panel) => (
+          <button key={panel} type="button" aria-pressed={mobilePanel === panel} onClick={() => { setMobilePanel(panel); if (panel === "layers" || panel === "palette") setActiveTab(panel); }} className={`flex-1 whitespace-nowrap px-3 py-3 text-xs font-semibold ${mobilePanel === panel ? "bg-muted text-primary" : "text-muted-foreground"}`}>
+            {t(panel)}
+          </button>
+        ))}
+      </nav>
+
       {/* Main Workspace Layout */}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex min-h-0 flex-1 overflow-hidden">
         {/* Left Sidebar (Layers / Add Elements) */}
         <aside
-          style={{ width: `${sidebarWidth}px` }}
-          className="border-r border-border bg-card flex flex-col shrink-0 relative"
+          style={{ "--sidebar-width": `${sidebarWidth}px` } as React.CSSProperties}
+          className={`${mobilePanel === "layers" || mobilePanel === "palette" ? "flex" : "hidden"} w-full min-h-0 border-r border-border bg-card flex-col shrink-0 relative ${showLayers ? "lg:flex" : "lg:hidden"} lg:w-[var(--sidebar-width)]`}
         >
           <div className="flex border-b border-border">
             <button
               type="button"
-              onClick={() => setActiveTab("layers")}
+              onClick={() => { setActiveTab("layers"); setMobilePanel("layers"); }}
               className={`flex-1 py-2.5 text-xs font-bold text-center border-b-2 transition-colors flex items-center justify-center gap-1.5 ${
                 activeTab === "layers"
                   ? "border-primary text-primary"
@@ -641,7 +776,7 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
             </button>
             <button
               type="button"
-              onClick={() => setActiveTab("palette")}
+              onClick={() => { setActiveTab("palette"); setMobilePanel("palette"); }}
               className={`flex-1 py-2.5 text-xs font-bold text-center border-b-2 transition-colors flex items-center justify-center gap-1.5 ${
                 activeTab === "palette"
                   ? "border-primary text-primary"
@@ -680,7 +815,7 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
             onPointerMove={handleResizePointerMove}
             onPointerUp={handleResizePointerUp}
             onKeyDown={handleResizeKeyDown}
-            className="absolute top-0 right-0 bottom-0 w-1.5 cursor-col-resize hover:bg-primary/40 active:bg-primary z-20"
+            className="absolute hidden lg:block top-0 right-0 bottom-0 w-1.5 cursor-col-resize hover:bg-primary/40 active:bg-primary z-20"
             title={t("resizePanel")}
             aria-label={t("resizePanel")}
             role="separator"
@@ -694,17 +829,45 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
 
         {/* Central Visual Canvas */}
         <main
-          className="min-w-0 flex-1 bg-muted/30 p-8 overflow-auto relative"
+          ref={canvasRef}
+          className={`${mobilePanel === "canvas" ? "block" : "hidden"} min-w-0 flex-1 bg-muted/30 p-4 overflow-auto relative lg:block lg:p-6`}
           onClick={() => setSelectedNodeId(null)}
         >
+          {currentRoot.kind === "frame" && currentRoot.children.length === 0 && (
+            <div className="mx-auto mb-6 max-w-md rounded-[var(--radius-card)] border border-dashed border-border bg-card p-6 text-center" onClick={(event) => event.stopPropagation()}>
+              <Layers className="mx-auto mb-3 size-6 text-muted-foreground" />
+              <h3 className="text-base font-semibold">{t("emptySheetTitle")}</h3>
+              <p className="mt-2 text-sm text-muted-foreground">{t("emptySheetHint")}</p>
+              {draftFields.length === 0 &&
+                Object.values(layouts).every(root => root.kind === "frame" && root.children.length === 0) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const labels = Object.fromEntries(
+                        fateCoreLabelKeys.map(key => [key, fateT(key)]),
+                      ) as FateCoreLabels;
+                      const preset = createFateCorePreset(labels);
+                      recordHistory();
+                      setLayouts(preset.layouts);
+                      setDraftFields(preset.fields);
+                      setSelectedNodeId(null);
+                    }}
+                    className="mt-4 mr-2 rounded-[var(--radius-control)] border border-border px-4 py-2 text-sm font-semibold hover:bg-muted"
+                  >
+                    {fateT("usePreset")}
+                  </button>
+                )}
+              <button type="button" onClick={() => { setActiveTab("palette"); setMobilePanel("palette"); setShowLayers(true); }} className="mt-4 rounded-[var(--radius-control)] bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90">{t("startBuilding")}</button>
+            </div>
+          )}
           <div className="mx-auto w-fit">
             <div
               data-sheet-page
               data-sheet-target={activeTarget}
               style={{
                 width: canvasWidth,
-                height: activeTarget === "print" ? PRINT_CANVAS_HEIGHT : undefined,
-                zoom,
+                height: activeTarget === "print" ? currentRoot.box.height.mode === "fixed" ? currentRoot.box.height.value : PRINT_CANVAS_HEIGHT : undefined,
+                zoom: effectiveZoom,
               }}
               className={activeTarget === "print" ? "relative bg-white text-black shadow-2xl" : "relative"}
             >
@@ -725,12 +888,17 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
         </main>
 
         {/* Right Sidebar (Property Inspector) */}
-        <aside className="w-80 border-l border-border bg-card flex flex-col shrink-0">
+        <aside className={`${mobilePanel === "inspector" ? "flex" : "hidden"} w-full min-h-0 border-l border-border bg-card flex-col shrink-0 ${showInspector ? "lg:flex" : "lg:hidden"} lg:w-72 xl:w-80`}>
           <header className="p-3 border-b border-border">
             <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
               {t("inspector")}
             </h3>
           </header>
+          {selectedNode && <div className="flex items-center gap-2 border-b border-border p-3">
+            <span className="min-w-0 flex-1 truncate text-xs font-semibold">{selectedNode.name || t(`nodeKind.${selectedNode.kind}`)}</span>
+            <button type="button" aria-label={t("duplicate")} title={t("duplicate")} disabled={!canModifySelected} onClick={() => handleDuplicateNode(selectedNode.id)} className="rounded p-2 hover:bg-muted disabled:opacity-30"><Copy className="size-4" /></button>
+            <button type="button" aria-label={t("delete")} title={t("delete")} disabled={!canModifySelected} onClick={() => handleDeleteNode(selectedNode.id)} className="rounded p-2 text-destructive hover:bg-muted disabled:opacity-30"><Trash2 className="size-4" /></button>
+          </div>}
           <InspectorView
             selectedNode={selectedNode}
             onUpdateNode={(updated) => {
@@ -738,13 +906,27 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
             }}
             onSaveAsComponent={(node) => setSaveComponentNode(node)}
             draftFields={draftFields}
-            onUpdateDraftFields={(fields) => {
+            onUpdateDraftFields={(fields, updatedNode) => {
+              recordHistory();
               setDraftFields(fields);
-              setSaveStatus("idle");
+              if (updatedNode) setLayouts({ ...layouts, [activeTarget]: updateNodeInTree(currentRoot, updatedNode) });
             }}
           />
         </aside>
       </div>
+
+      {showAdaptModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <div role="dialog" aria-modal="true" aria-labelledby="adapt-title" aria-describedby="adapt-description" className="w-full max-w-md rounded-[var(--radius-card)] border border-border bg-background p-6 shadow-2xl" onKeyDown={(event) => { if (event.key === "Escape") setShowAdaptModal(false); }}>
+            <h3 id="adapt-title" className="text-lg font-bold">{t("adaptTargets")}</h3>
+            <p id="adapt-description" className="mt-2 text-sm text-muted-foreground">{t("adaptConfirm")}</p>
+            <div className="mt-6 flex justify-end gap-3">
+              <button autoFocus type="button" onClick={() => setShowAdaptModal(false)} className="rounded border border-border px-4 py-2 text-sm hover:bg-muted">{t("cancel")}</button>
+              <button type="button" onClick={handleAutoGenerateTargets} className="rounded bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90">{t("adaptTargets")}</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Component Library Modal */}
       {showLibrary && (
@@ -807,7 +989,7 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
               <button
                 type="button"
                 onClick={handlePublish}
-                disabled={publishing}
+                disabled={!canPublish}
                 className="px-4 py-2 text-xs font-semibold rounded bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm"
               >
                 {publishing ? t("publishing") : t("confirmPublish")}

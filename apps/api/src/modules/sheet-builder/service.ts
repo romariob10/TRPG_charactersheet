@@ -8,66 +8,20 @@ import type {
   PublishSheetVersionRequest,
   PublishSheetVersionResponse,
   SheetEditorDataResponse,
-  SheetFieldDefinition,
   SheetVersionSummary,
   WorkspaceSheetSummary,
 } from "@mycharacter/contracts";
 import {
   defaultBoxProps,
+  createSheetTransferDocument,
+  ensureBoundFieldDefinitions,
   targetLayoutMapSchema,
   validateLayoutNodeConstraints,
 } from "@mycharacter/contracts";
 import type { Kysely } from "kysely";
 import { sql } from "kysely";
+import { parseComponentExposedProperties } from "../components/exposed-properties.js";
 import { AppError } from "../../errors.js";
-
-function ensureBoundFieldDefinitions(
-  layouts: Record<string, LayoutNode>,
-  fields: SheetFieldDefinition[],
-): SheetFieldDefinition[] {
-  const result = [...fields];
-  const keys = new Set(result.map((field) => field.key));
-  const visit = (node: LayoutNode): void => {
-    if (node.kind === "table") {
-      for (let row = 0; row < node.rows; row += 1) {
-        for (let column = 0; column < node.columns; column += 1) {
-          if (row < node.headerRows || column < node.headerColumns) continue;
-          const key = `${node.fieldBindingPrefix}_${row}_${column}`;
-          if (keys.has(key)) continue;
-          result.push({
-            id: crypto.randomUUID(),
-            key,
-            label: node.cellLabels[row * node.columns + column] || `${node.name || "Table"} ${row + 1}:${column + 1}`,
-            kind: "text",
-            options: [],
-            readOnly: node.readOnly,
-          });
-          keys.add(key);
-        }
-      }
-    }
-    if ("fieldBinding" in node && !keys.has(node.fieldBinding)) {
-      const kind = node.kind === "image" ? "avatar"
-        : node.kind === "number-input" ? "number"
-        : node.kind === "checkbox" ? "checkbox"
-        : node.kind === "select" ? "select"
-        : node.kind === "textarea" ? "multiline" : "text";
-      result.push({
-        id: crypto.randomUUID(),
-        key: node.fieldBinding,
-        label: ("label" in node && node.label) || node.name || node.fieldBinding,
-        kind,
-        options: node.kind === "select" ? node.options.map((option) => option.value) : [],
-        readOnly: node.kind === "image" ? false : node.readOnly,
-      });
-      keys.add(node.fieldBinding);
-    }
-    if ("children" in node) node.children.forEach(visit);
-    if ("rowTemplate" in node) visit(node.rowTemplate);
-  };
-  Object.values(layouts).forEach(visit);
-  return result;
-}
 
 export class SheetBuilderService {
   private readonly db: Kysely<Database>;
@@ -413,10 +367,7 @@ export class SheetBuilderService {
           versionNumber: row.version_number,
           schemaVersion: row.schema_version,
           layouts: parsedLayouts,
-          exposedProperties:
-            typeof row.exposed_properties === "string"
-              ? JSON.parse(row.exposed_properties)
-              : (row.exposed_properties ?? []),
+          exposedProperties: parseComponentExposedProperties(row.exposed_properties),
           dependencies:
             typeof row.dependencies === "string"
               ? JSON.parse(row.dependencies)
@@ -450,6 +401,16 @@ export class SheetBuilderService {
 
     await resolveRecursive(initialIds);
     return resolved;
+  }
+
+  async exportSheet(userId: string, sheetDefinitionId: string) {
+    const editor = await this.getSheetEditorData(userId, sheetDefinitionId);
+    return createSheetTransferDocument(
+      editor.sheetDefinition.title,
+      editor.draft.layouts,
+      ensureBoundFieldDefinitions(editor.draft.layouts, editor.draft.fields),
+      editor.resolvedComponents,
+    );
   }
 
   async autosaveSheetDraft(

@@ -19,6 +19,7 @@ import type {
   LayoutNode,
 } from "@mycharacter/contracts";
 import {
+  applyComponentOverrides,
   DND_CHEVRON_TITLE_ORNAMENT_GEOMETRY,
   DND_DIAMOND_TITLE_ORNAMENT_GEOMETRY,
   DND_TITLE_ORNAMENT_GEOMETRY,
@@ -66,6 +67,7 @@ interface FontSet {
   titleBoldFont: PDFFont;
   bodyFont: PDFFont;
   bodyBoldFont: PDFFont;
+  ornamentFonts: { latin: PDFFont; latinBold: PDFFont; cyrillic: PDFFont; cyrillicBold: PDFFont };
 }
 
 async function loadBundledFonts(doc: PDFDocument): Promise<FontSet> {
@@ -83,11 +85,17 @@ async function loadBundledFonts(doc: PDFDocument): Promise<FontSet> {
     doc.embedFont(boldBytes, { subset: true }),
   ]);
 
+  const ornamentRoot = dirname(require.resolve("@fontsource/montserrat-alternates/package.json"));
+  const ornamentFonts = await Promise.all(["latin-500", "latin-700", "cyrillic-500", "cyrillic-700"].map(async variant => {
+    const bytes = await readFile(join(ornamentRoot, `files/montserrat-alternates-${variant}-normal.woff`));
+    return doc.embedFont(bytes, { subset: true });
+  }));
   return {
     titleFont: regularFont,
     titleBoldFont: boldFont,
     bodyFont: regularFont,
     bodyBoldFont: boldFont,
+    ornamentFonts: { latin: ornamentFonts[0]!, latinBold: ornamentFonts[1]!, cyrillic: ornamentFonts[2]!, cyrillicBold: ornamentFonts[3]! },
   };
 }
 
@@ -154,8 +162,9 @@ export async function generateA4SheetPdf(
     images,
     DESIGN_HEIGHT,
   );
+  const fixedPage = options.layout.box.height.mode === "fixed";
   const contentHeight = Math.max(
-    DESIGN_HEIGHT,
+    options.layout.box.height.mode === "fixed" ? options.layout.box.height.value : DESIGN_HEIGHT,
     estimateNodeHeight(measuringContext, options.layout, DESIGN_WIDTH),
   );
   doc.removePage(0);
@@ -184,8 +193,8 @@ export async function generateA4SheetPdf(
   for (const sheet of sheets) {
     const page = output.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
     const scale = Math.min(
-      (PAGE_WIDTH - DEFAULT_MARGIN * 2) / sheet.width,
-      (PAGE_HEIGHT - DEFAULT_MARGIN * 2) / sheet.height,
+      (PAGE_WIDTH - (fixedPage ? 0 : DEFAULT_MARGIN * 2)) / sheet.width,
+      (PAGE_HEIGHT - (fixedPage ? 0 : DEFAULT_MARGIN * 2)) / sheet.height,
     );
     const width = sheet.width * scale;
     const height = sheet.height * scale;
@@ -214,7 +223,8 @@ function hasPopulatedRepeater(
   }
   if (node.kind === "component-instance") {
     const version = ctx.resolvedComponents[node.componentVersionId];
-    const root = version?.layouts.print ?? version?.layouts.desktop;
+    const template = version?.layouts.print ?? version?.layouts.desktop;
+    const root = template && version ? applyComponentOverrides(template, version.exposedProperties, node.propertyOverrides) : undefined;
     return root ? hasPopulatedRepeater(ctx, root) : false;
   }
   return false;
@@ -227,6 +237,11 @@ function renderNode(
   y: number,
   availableWidth: number,
 ): number {
+  const pad = node.box.padding;
+  if (node.kind !== "frame" && node.kind !== "repeater" && (pad.top || pad.right || pad.bottom || pad.left)) {
+    const content: LayoutNode = { ...node, box: { ...node.box, padding: { top: 0, right: 0, bottom: 0, left: 0 }, height: node.box.height.mode === "fixed" ? { mode: "fixed", value: Math.max(0, node.box.height.value - pad.top - pad.bottom) } : node.box.height } };
+    return pad.top + renderNode(ctx, content, x + pad.left, y - pad.top, Math.max(1, availableWidth - pad.left - pad.right)) + pad.bottom;
+  }
   switch (node.kind) {
     case "frame":
       return renderFrameNode(ctx, node, x, y, availableWidth);
@@ -266,6 +281,7 @@ function estimateNodeHeight(
   node: LayoutNode,
   availableWidth: number,
 ): number {
+  if (node.box.height.mode === "fixed") return node.box.height.value;
   let intrinsicHeight: number;
   switch (node.kind) {
     case "text": {
@@ -322,7 +338,7 @@ function estimateNodeHeight(
       intrinsicHeight = node.rows * 22 + 6;
       break;
     case "frame": {
-      const pad = node.box.padding;
+      const pad = frameContentInsets(node);
       const innerWidth = Math.max(10, availableWidth - pad.left - pad.right);
       const gapTotal = Math.max(0, node.children.length - 1) * node.gap;
       if (node.direction === "horizontal") {
@@ -367,7 +383,8 @@ function estimateNodeHeight(
     }
     case "component-instance": {
       const version = ctx.resolvedComponents[node.componentVersionId];
-      const root = version?.layouts.print ?? version?.layouts.desktop;
+      const template = version?.layouts.print ?? version?.layouts.desktop;
+      const root = template && version ? applyComponentOverrides(template, version.exposedProperties, node.propertyOverrides) : undefined;
       intrinsicHeight = root
         ? estimateNodeHeight(ctx, root, availableWidth)
         : 28;
@@ -377,13 +394,7 @@ function estimateNodeHeight(
       intrinsicHeight = 30;
   }
 
-  const fixedHeight =
-    node.box.height.mode === "fixed" ? node.box.height.value : 0;
-  return Math.max(
-    intrinsicHeight,
-    fixedHeight,
-    node.box.minHeight ?? 0,
-  );
+  return Math.max(intrinsicHeight, node.box.minHeight ?? 0);
 }
 
 function resolveVerticalChildWidth(
@@ -455,100 +466,26 @@ function drawCornerTurnbacksPdf(
   const outerWidth = FATE_CORNER_TURNBACK_GEOMETRY.outerArcStrokeWidth;
   const innerWidth = FATE_CORNER_TURNBACK_GEOMETRY.innerArcStrokeWidth;
 
-  // Top-Left Corner
-  if (corners.topLeft) {
-    ctx.page.drawRectangle({ x, y: y - size, width: size, height: size, color: maskColor });
-    ctx.page.drawSvgPath(FATE_CORNER_TURNBACK_GEOMETRY.outerArcPath, {
-      x,
-      y,
-      borderColor: color,
-      borderWidth: outerWidth,
+  const paths = {
+    topLeft: ["M9.75 0A9.75 9.75 0 0 1 0 9.75", "M7.5 0A7.5 7.5 0 0 1 0 7.5", "M7 7L5 5"],
+    topRight: ["M10 9.75A9.75 9.75 0 0 1 0.25 0", "M10 7.5A7.5 7.5 0 0 1 2.5 0", "M3 7L5 5"],
+    bottomRight: ["M0.25 10A9.75 9.75 0 0 1 10 0.25", "M2.5 10A7.5 7.5 0 0 1 10 2.5", "M3 3L5 5"],
+    bottomLeft: ["M0 0.25A9.75 9.75 0 0 1 9.75 10", "M0 2.5A7.5 7.5 0 0 1 7.5 10", "M7 3L5 5"],
+  } as const;
+  for (const corner of ["topLeft", "topRight", "bottomRight", "bottomLeft"] as const) {
+    if (!corners[corner]) continue;
+    const cornerX = corner.endsWith("Right") ? x + width - size : x;
+    const cornerY = corner.startsWith("top") ? y : y - height + size;
+    ctx.page.drawRectangle({
+      x: cornerX - (corner.endsWith("Left") ? 0.5 : 0),
+      y: cornerY - size - (corner.startsWith("bottom") ? 0.5 : 0),
+      width: size + 0.5,
+      height: size + 0.5,
+      color: maskColor,
     });
-    ctx.page.drawSvgPath(FATE_CORNER_TURNBACK_GEOMETRY.innerArcPath, {
-      x,
-      y,
-      borderColor: color,
-      borderWidth: innerWidth,
-    });
-    ctx.page.drawSvgPath(FATE_CORNER_TURNBACK_GEOMETRY.diagonalPath, {
-      x,
-      y,
-      borderColor: color,
-      borderWidth: FATE_CORNER_TURNBACK_GEOMETRY.diagonalStrokeWidth,
-    });
-  }
-
-  // Top-Right Corner
-  if (corners.topRight) {
-    const cornerX = x + width - size;
-    ctx.page.drawRectangle({ x: cornerX, y: y - size, width: size, height: size, color: maskColor });
-    ctx.page.drawSvgPath("M0 0.25A9.75 9.75 0 0 1 9.75 10", {
-      x: cornerX,
-      y,
-      borderColor: color,
-      borderWidth: outerWidth,
-    });
-    ctx.page.drawSvgPath("M0 2.5A7.5 7.5 0 0 1 7.5 10", {
-      x: cornerX,
-      y,
-      borderColor: color,
-      borderWidth: innerWidth,
-    });
-    ctx.page.drawSvgPath("M7 3L5 5", {
-      x: cornerX,
-      y,
-      borderColor: color,
-      borderWidth: FATE_CORNER_TURNBACK_GEOMETRY.diagonalStrokeWidth,
-    });
-  }
-
-  // Bottom-Left Corner
-  if (corners.bottomLeft) {
-    const cornerTop = y - height + size;
-    ctx.page.drawRectangle({ x, y: y - height, width: size, height: size, color: maskColor });
-    ctx.page.drawSvgPath("M2.5 0A7.5 7.5 0 0 0 10 7.5", {
-      x,
-      y: cornerTop,
-      borderColor: color,
-      borderWidth: innerWidth,
-    });
-    ctx.page.drawSvgPath("M0.25 0A9.75 9.75 0 0 0 10 9.75", {
-      x,
-      y: cornerTop,
-      borderColor: color,
-      borderWidth: outerWidth,
-    });
-    ctx.page.drawSvgPath("M3 7L5 5", {
-      x,
-      y: cornerTop,
-      borderColor: color,
-      borderWidth: FATE_CORNER_TURNBACK_GEOMETRY.diagonalStrokeWidth,
-    });
-  }
-
-  // Bottom-Right Corner
-  if (corners.bottomRight) {
-    const cornerX = x + width - size;
-    const cornerTop = y - height + size;
-    ctx.page.drawRectangle({ x: cornerX, y: y - height, width: size, height: size, color: maskColor });
-    ctx.page.drawSvgPath("M7.5 0A7.5 7.5 0 0 1 0 7.5", {
-      x: cornerX,
-      y: cornerTop,
-      borderColor: color,
-      borderWidth: innerWidth,
-    });
-    ctx.page.drawSvgPath("M9.75 0A9.75 9.75 0 0 1 0 9.75", {
-      x: cornerX,
-      y: cornerTop,
-      borderColor: color,
-      borderWidth: outerWidth,
-    });
-    ctx.page.drawSvgPath("M7 7L5 5", {
-      x: cornerX,
-      y: cornerTop,
-      borderColor: color,
-      borderWidth: FATE_CORNER_TURNBACK_GEOMETRY.diagonalStrokeWidth,
-    });
+    for (const [index, path] of paths[corner].entries()) {
+      ctx.page.drawSvgPath(path, { x: cornerX, y: cornerY, borderColor: color, borderWidth: index === 0 ? outerWidth : index === 1 ? innerWidth : FATE_CORNER_TURNBACK_GEOMETRY.diagonalStrokeWidth });
+    }
   }
 }
 
@@ -564,6 +501,15 @@ type PdfEdgeGeometry = {
   innerTopLineY: number;
   innerBottomLineY: number;
 };
+
+function ornamentCharacterFont(ctx: PdfRenderContext, ornament: EdgeOrnament, character: string): PDFFont {
+  const bold = ornament.fontWeight === "bold" || ornament.fontWeight === "700";
+  if (ornament.fontFamily !== "Montserrat Alternates") return bold ? ctx.fonts.bodyBoldFont : ctx.fonts.bodyFont;
+  const cyrillic = /[\u0400-\u04ff]/.test(character);
+  const fonts = ctx.fonts.ornamentFonts;
+  const font = cyrillic ? bold ? fonts.cyrillicBold : fonts.cyrillic : bold ? fonts.latinBold : fonts.latin;
+  return font.getCharacterSet().includes(character.codePointAt(0)!) ? font : bold ? ctx.fonts.bodyBoldFont : ctx.fonts.bodyFont;
+}
 
 function drawEdgeOrnamentPdf(
   ctx: PdfRenderContext,
@@ -597,17 +543,9 @@ function drawEdgeOrnamentPdf(
       : ornament.preset === "dnd-diamond"
         ? DND_DIAMOND_TITLE_ORNAMENT_GEOMETRY
         : DND_CHEVRON_TITLE_ORNAMENT_GEOMETRY;
-  const font =
-    ornament.fontFamily === "Montserrat Alternates"
-      ? ornament.fontWeight === "bold" || ornament.fontWeight === "700"
-        ? ctx.fonts.titleBoldFont
-        : ctx.fonts.titleFont
-      : ornament.fontWeight === "bold" || ornament.fontWeight === "700"
-        ? ctx.fonts.bodyBoldFont
-        : ctx.fonts.bodyFont;
   const fontSize = ornament.fontSize;
   const text = ornament.text;
-  const rawTextWidth = font.widthOfTextAtSize(text, fontSize);
+  const rawTextWidth = Array.from(text).reduce((width, character) => width + ornamentCharacterFont(ctx, ornament, character).widthOfTextAtSize(character, fontSize), 0);
   const textWidth = Math.max(
     10,
     rawTextWidth + Math.max(0, text.length - 1) * ornament.letterSpacingPx,
@@ -639,31 +577,6 @@ function drawEdgeOrnamentPdf(
     borderColor: color,
     borderWidth: geometry.innerStrokeWidth,
   });
-  ctx.page.drawRectangle({
-    x: centerX,
-    y: badgeBottom,
-    width: centerWidth,
-    height: geometry.height,
-    color: maskColor,
-  });
-  for (const lineY of [
-    0,
-    geometry.innerTopLineY,
-    geometry.innerBottomLineY,
-    geometry.height,
-  ]) {
-    const inner =
-      lineY === geometry.innerTopLineY ||
-      lineY === geometry.innerBottomLineY;
-    ctx.page.drawLine({
-      start: { x: centerX, y: badgeTop - lineY },
-      end: { x: centerX + centerWidth, y: badgeTop - lineY },
-      thickness: inner
-        ? geometry.innerStrokeWidth
-        : geometry.outerStrokeWidth,
-      color,
-    });
-  }
   const rightX = centerX + centerWidth;
   ctx.page.drawSvgPath(geometry.rightOuterPath, {
     x: rightX,
@@ -678,13 +591,37 @@ function drawEdgeOrnamentPdf(
     borderColor: color,
     borderWidth: geometry.innerStrokeWidth,
   });
-  ctx.page.drawText(text, {
-    x: centerX + (centerWidth - textWidth) / 2,
-    y: badgeBottom + (geometry.height - fontSize) / 2 + 1.5,
-    size: fontSize,
-    font,
-    color: rgb(0, 0, 0),
+  ctx.page.drawRectangle({
+    x: centerX,
+    y: badgeBottom,
+    width: centerWidth,
+    height: geometry.height,
+    color: maskColor,
   });
+  for (const lineY of [
+    0.5,
+    geometry.innerTopLineY,
+    geometry.innerBottomLineY,
+    geometry.height - 0.5,
+  ]) {
+    const inner =
+      lineY === geometry.innerTopLineY ||
+      lineY === geometry.innerBottomLineY;
+    ctx.page.drawLine({
+      start: { x: centerX, y: badgeTop - lineY },
+      end: { x: centerX + centerWidth, y: badgeTop - lineY },
+      thickness: inner
+        ? geometry.innerStrokeWidth
+        : geometry.outerStrokeWidth,
+      color,
+    });
+  }
+  let textX = centerX + (centerWidth - textWidth) / 2;
+  for (const character of text) {
+    const characterFont = ornamentCharacterFont(ctx, ornament, character);
+    ctx.page.drawText(character, { x: textX, y: badgeBottom + (geometry.height - fontSize) / 2 + 1.5, size: fontSize, font: characterFont, color: rgb(0, 0, 0) });
+    textX += characterFont.widthOfTextAtSize(character, fontSize) + ornament.letterSpacingPx;
+  }
 }
 
 function drawLegacyEdgeOrnamentPdf(
@@ -710,10 +647,22 @@ function drawLegacyEdgeOrnamentPdf(
 
   const fontSize = ornament.fontSize ?? 10;
   const text = ornament.text;
-  const rawTextWidth = font.widthOfTextAtSize(text, fontSize);
+  const rawTextWidth = Array.from(text).reduce((width, character) => width + ornamentCharacterFont(ctx, ornament, character).widthOfTextAtSize(character, fontSize), 0);
   const letterSpacing = ornament.letterSpacingPx ?? -0.9;
   const textWidth = Math.max(10, rawTextWidth + (text.length - 1) * letterSpacing);
 
+  if (ornament.preset === "legacy-pill") {
+    const textX = ornament.align === "center" ? x + (frameWidth - textWidth) / 2 : ornament.align === "end" ? x + frameWidth - textWidth - 5 : x + 5;
+    const textY = dock === "top" ? startY - fontSize / 3 : startY - frameHeight - fontSize / 3;
+    ctx.page.drawRectangle({ x: textX - 2, y: textY - 2, width: textWidth + 4, height: fontSize + 4, color: rgb(1, 1, 1) });
+    let cursorX = textX + ornament.offset;
+    for (const character of text) {
+      const characterFont = ornamentCharacterFont(ctx, ornament, character);
+      ctx.page.drawText(character, { x: cursorX, y: textY, size: fontSize, font: characterFont, color });
+      cursorX += characterFont.widthOfTextAtSize(character, fontSize) + letterSpacing;
+    }
+    return;
+  }
   const white = rgb(1, 1, 1);
   const ornHeight = ornament.preset === "dnd" ? DND_TITLE_ORNAMENT_GEOMETRY.height : FATE_TITLE_ORNAMENT_GEOMETRY.height;
   const capWidth = ornament.preset === "dnd" ? DND_TITLE_ORNAMENT_GEOMETRY.capWidth : FATE_TITLE_ORNAMENT_GEOMETRY.capWidth;
@@ -914,6 +863,16 @@ function drawLegacyEdgeOrnamentPdf(
   });
 }
 
+function frameContentInsets(node: LayoutNode) {
+  const { padding, strokeWidth } = node.box;
+  return {
+    top: padding.top + strokeWidth.top,
+    right: padding.right + strokeWidth.right,
+    bottom: padding.bottom + strokeWidth.bottom,
+    left: padding.left + strokeWidth.left,
+  };
+}
+
 function renderFrameNode(
   ctx: PdfRenderContext,
   node: LayoutNode & { kind: "frame" },
@@ -921,7 +880,7 @@ function renderFrameNode(
   y: number,
   availableWidth: number,
 ): number {
-  const pad = node.box?.padding ?? { top: 0, right: 0, bottom: 0, left: 0 };
+  const pad = frameContentInsets(node);
   const gap = node.gap ?? 8;
   const innerWidth = Math.max(10, availableWidth - pad.left - pad.right);
 
@@ -934,7 +893,7 @@ function renderFrameNode(
   const fillColor = parseColorToken(node.box?.fill ?? "transparent");
   const strokeColor = parseColorToken(node.box?.strokeColor ?? "none");
   const ornamentMaskColor = fillColor ?? rgb(1, 1, 1);
-  const strokeTop = node.box?.strokeWidth?.top ?? (strokeColor ? 1 : 0);
+  const strokes = node.box.strokeWidth;
 
   if (fillColor) {
     ctx.page.drawRectangle({
@@ -946,16 +905,24 @@ function renderFrameNode(
     });
   }
 
-  if (strokeColor && strokeTop > 0) {
-    ctx.page.drawRectangle({
-      x,
-      y: startY - measuredHeight,
-      width: availableWidth,
-      height: measuredHeight,
-      borderColor: strokeColor,
-      borderWidth: strokeTop,
-    });
+  if (strokeColor) {
+    for (const [side, thickness] of Object.entries(strokes)) {
+      if (thickness <= 0) continue;
+      const horizontal = side === "top" || side === "bottom";
+      const edgeX = side === "right" ? x + availableWidth : x;
+      const edgeY = side === "bottom" ? startY - measuredHeight : startY;
+      ctx.page.drawLine({
+        start: { x: edgeX, y: edgeY },
+        end: { x: horizontal ? x + availableWidth : edgeX, y: horizontal ? edgeY : startY - measuredHeight },
+        color: strokeColor,
+        thickness,
+      });
+    }
   }
+  const innerHeight = Math.max(0, measuredHeight - pad.top - pad.bottom);
+  const allocateHeight = (child: LayoutNode, height: number): LayoutNode => ({
+    ...child, box: { ...child.box, height: { mode: "fixed", value: height } },
+  });
 
   // Render children
   if (node.direction === "horizontal" && node.children.length > 0) {
@@ -966,16 +933,21 @@ function renderFrameNode(
     for (let index = 0; index < node.children.length; index += 1) {
       const child = node.children[index]!;
       const childWidth = childWidths[index] ?? innerWidth;
-      const childHeight = renderNode(ctx, child, childX, contentY, childWidth);
+      const resolvedChild = child.box.height.mode === "fill" ? allocateHeight(child, innerHeight) : child;
+      const childHeight = renderNode(ctx, resolvedChild, childX, contentY, childWidth);
       if (childHeight > maxChildHeight) maxChildHeight = childHeight;
       childX += childWidth + gap;
     }
     contentY -= maxChildHeight;
   } else {
+    const fillCount = node.children.filter(child => child.box.height.mode === "fill").length;
+    const usedHeight = node.children.reduce((sum, child) => sum + (child.box.height.mode === "fill" ? 0 : estimateNodeHeight(ctx, child, resolveVerticalChildWidth(child, innerWidth))), 0);
+    const fillHeight = Math.max(0, (innerHeight - usedHeight - Math.max(0, node.children.length - 1) * gap) / Math.max(1, fillCount));
     for (const child of node.children) {
+      const resolvedChild = child.box.height.mode === "fill" ? allocateHeight(child, fillHeight) : child;
       const childHeight = renderNode(
         ctx,
-        child,
+        resolvedChild,
         x + pad.left,
         contentY,
         resolveVerticalChildWidth(child, innerWidth),
@@ -987,7 +959,7 @@ function renderFrameNode(
     }
   }
 
-  const finalHeight = Math.max(startY - contentY + pad.bottom, measuredHeight);
+  const finalHeight = node.box.height.mode === "fixed" ? measuredHeight : Math.max(startY - contentY + pad.bottom, measuredHeight);
 
   // Draw Corner Ornaments (Fate turnbacks)
   const defaultCorners: CornerOrnaments = {
@@ -1106,7 +1078,7 @@ function renderFieldInputNode(
     curY -= 12;
   }
 
-  const boxHeight = 18;
+  const boxHeight = node.box.height.mode === "fixed" ? Math.max(0, node.box.height.value - (node.label ? 12 : 0)) : 18;
   const boxY = curY - boxHeight;
 
   if (node.variant === "boxed") {
@@ -1119,34 +1091,31 @@ function renderFieldInputNode(
       borderWidth: 1,
       color: rgb(0.98, 0.99, 0.98),
     });
-  } else {
+  } else if (node.variant === "underline") {
     ctx.page.drawLine({
       start: { x, y: boxY },
       end: { x: x + availableWidth, y: boxY },
-      color: rgb(0.7, 0.73, 0.7),
+      color: parseColorToken(node.box.strokeColor, rgb(0.7, 0.73, 0.7))!,
       thickness: 1,
     });
   }
 
-  if (displayVal) {
-    ctx.page.drawText(displayVal, {
-      x: x + 4,
-      y: boxY + 4,
-      size: 10,
-      font,
-      color: rgb(0.1, 0.1, 0.1),
-    });
-  } else if (node.placeholder) {
-    ctx.page.drawText(node.placeholder, {
-      x: x + 4,
-      y: boxY + 4,
-      size: 9,
-      font,
-      color: rgb(0.65, 0.65, 0.65),
-    });
+  const text = displayVal || node.placeholder;
+  if (text) {
+    const fontSize = 14;
+    const lines = wrapText(font, text, fontSize, Math.max(1, availableWidth - 16));
+    let lineY = curY - 15;
+    for (const line of lines) {
+      if (lineY < boxY) break;
+      ctx.page.drawText(line, {
+        x: x + 8, y: lineY, size: fontSize, font,
+        color: displayVal ? rgb(0.1, 0.1, 0.1) : rgb(0.65, 0.65, 0.65),
+      });
+      lineY -= 20;
+    }
   }
 
-  return (y - boxY) + 6;
+  return node.box.height.mode === "fixed" ? node.box.height.value : (y - boxY) + 6;
 }
 
 function renderNumberInputNode(
@@ -1172,7 +1141,7 @@ function renderNumberInputNode(
     curY -= 12;
   }
 
-  const boxSize = Math.min(36, availableWidth);
+  const boxSize = Math.min(36, availableWidth, node.box.height.mode === "fixed" ? node.box.height.value : 36);
   const boxY = curY - boxSize;
 
   if (node.variant === "circle") {
@@ -1185,7 +1154,7 @@ function renderNumberInputNode(
       borderWidth: 1.5,
       color: rgb(0.98, 0.99, 0.98),
     });
-  } else {
+  } else if (node.variant !== "plain") {
     ctx.page.drawRectangle({
       x,
       y: boxY,
@@ -1206,11 +1175,11 @@ function renderNumberInputNode(
       y: boxY + (boxSize - numSize) / 2 + 2,
       size: numSize,
       font: numFont,
-      color: rgb(0.06, 0.24, 0.09),
+      color: node.box.strokeColor === "ink" ? rgb(0, 0, 0) : rgb(0.06, 0.24, 0.09),
     });
   }
 
-  return (y - boxY) + 6;
+  return node.box.height.mode === "fixed" ? node.box.height.value : (y - boxY) + 6;
 }
 
 function renderTextareaNode(
@@ -1223,12 +1192,11 @@ function renderTextareaNode(
   const font = ctx.fonts.bodyFont;
   const val = ctx.fieldValues[node.fieldBinding] ?? "";
   const displayVal = typeof val === "string" ? val : String(val ?? "");
-  const rows = node.rows ?? 3;
   const savedFontSize = ctx.fieldValues[`__layout_font_size__:${node.fieldBinding}`];
   const fontSize = typeof savedFontSize === "number" ? savedFontSize : 14;
   const totalHeight = estimateNodeHeight(ctx, node, availableWidth);
   const labelHeight = node.label ? 12 : 0;
-  const boxHeight = Math.max(rows * 16 + 8, totalHeight - labelHeight - 6);
+  const boxHeight = Math.max(0, totalHeight - labelHeight);
 
   let curY = y;
   if (node.label) {
@@ -1244,6 +1212,7 @@ function renderTextareaNode(
 
   const boxY = curY - boxHeight;
 
+  if (node.variant === "boxed") {
   ctx.page.drawRectangle({
     x,
     y: boxY,
@@ -1253,23 +1222,25 @@ function renderTextareaNode(
     borderWidth: 1,
     color: rgb(0.99, 0.99, 0.99),
   });
+  }
 
   if (displayVal) {
-    const lines = wrapText(font, displayVal, fontSize, availableWidth - 8);
-    let lineY = boxY + boxHeight - fontSize - 3;
+    const lines = wrapText(font, displayVal, fontSize, Math.max(1, availableWidth - 16));
+    let lineY = boxY + boxHeight - fontSize - 6;
     for (let i = 0; i < lines.length; i++) {
+      if (lineY < boxY) break;
       ctx.page.drawText(lines[i]!, {
-        x: x + 4,
+        x: x + 8,
         y: lineY,
         size: fontSize,
         font,
         color: rgb(0.1, 0.1, 0.1),
       });
-      lineY -= fontSize * 1.35;
+      lineY -= fontSize * 1.5;
     }
   } else if (node.placeholder) {
     ctx.page.drawText(node.placeholder, {
-      x: x + 4,
+      x: x + 8,
       y: boxY + boxHeight - 12,
       size: fontSize,
       font,
@@ -1292,6 +1263,13 @@ function renderCheckboxNode(
   const size = 12;
   const boxY = y - size - 2;
 
+  if (node.shape === "arc") {
+    const color = rgb(0.1, 0.1, 0.1);
+    if (node.showBorder !== false) ctx.page.drawSvgPath("M5 22 A12 12 0 1 1 15 28", { x, y, scale: 0.75, borderColor: color, borderWidth: 0.7 });
+    if (isChecked) ctx.page.drawSvgPath("M9 15 L14 20 L24 9", { x, y, scale: 0.75, borderColor: color, borderWidth: 1.5 });
+    ctx.page.drawText(node.label || "", { x: x + 3, y: y - 24, size: 10, font: ctx.fonts.bodyFont, color });
+    return 24;
+  }
   if (node.shape === "circle") {
     ctx.page.drawEllipse({
       x: x + size / 2,
@@ -1416,6 +1394,7 @@ function renderImageNode(
   const height = estimateNodeHeight(ctx, node, availableWidth);
   const boxY = y - height;
 
+  if (node.box.fill !== "surface") {
   ctx.page.drawRectangle({
     x,
     y: boxY,
@@ -1425,6 +1404,7 @@ function renderImageNode(
     borderWidth: 1,
     color: rgb(0.96, 0.97, 0.96),
   });
+  }
 
   const image = ctx.images[node.fieldBinding];
   if (image) {
@@ -1441,7 +1421,7 @@ function renderImageNode(
         height: imageHeight,
       });
     }
-  } else {
+  } else if (node.box.fill !== "surface") {
     const label = node.alt || "Character portrait";
     ctx.page.drawText(label, {
       x: x + 8,
@@ -1596,35 +1576,37 @@ function renderComponentInstanceNode(
     return boxHeight + 4;
   }
 
-  const originalFieldValues = ctx.fieldValues;
-  if (node.propertyOverrides && Object.keys(node.propertyOverrides).length > 0) {
-    ctx.fieldValues = {
-      ...ctx.fieldValues,
-      ...node.propertyOverrides,
-    };
-  }
-
-  const componentRoot = version.layouts.print ?? version.layouts.desktop;
-  const height = renderNode(ctx, componentRoot, x, y, availableWidth);
-  ctx.fieldValues = originalFieldValues;
-  return height;
+  const componentRoot = applyComponentOverrides(
+    version.layouts.print ?? version.layouts.desktop,
+    version.exposedProperties,
+    node.propertyOverrides,
+  );
+  componentRoot.box.width = node.box.width.mode === "hug" ? componentRoot.box.width : node.box.width;
+  componentRoot.box.height = node.box.height.mode === "hug" ? componentRoot.box.height : node.box.height;
+  return renderNode(ctx, componentRoot, x, y, availableWidth);
 }
 
 function wrapText(font: PDFFont, text: string, fontSize: number, maxWidth: number): string[] {
-  const words = text.split(/\s+/);
   const lines: string[] = [];
-  let currentLine = "";
-
-  for (const word of words) {
-    const testLine = currentLine ? `${currentLine} ${word}` : word;
-    const testWidth = font.widthOfTextAtSize(testLine, fontSize);
-    if (testWidth <= maxWidth) {
-      currentLine = testLine;
-    } else {
+  for (const paragraph of text.replace(/\r\n?/g, "\n").split("\n")) {
+    let currentLine = "";
+    for (const word of paragraph.split(/\s+/).filter(Boolean)) {
+      const testLine = currentLine ? `${currentLine} ${word}` : word;
+      if (font.widthOfTextAtSize(testLine, fontSize) <= maxWidth) {
+        currentLine = testLine;
+        continue;
+      }
       if (currentLine) lines.push(currentLine);
-      currentLine = word;
+      currentLine = "";
+      for (const character of word) {
+        if (currentLine && font.widthOfTextAtSize(currentLine + character, fontSize) > maxWidth) {
+          lines.push(currentLine);
+          currentLine = "";
+        }
+        currentLine += character;
+      }
     }
+    lines.push(currentLine);
   }
-  if (currentLine) lines.push(currentLine);
-  return lines.length > 0 ? lines : [text];
+  return lines;
 }

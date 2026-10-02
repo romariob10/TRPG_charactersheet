@@ -2,6 +2,7 @@
 
 import React from "react";
 import { useTranslations } from "next-intl";
+import { applyComponentOverrides } from "@mycharacter/contracts";
 import type { LayoutNode } from "@mycharacter/contracts";
 import { FrameDecorator } from "../decorators/frame-decorators";
 import {
@@ -17,48 +18,7 @@ import {
   RenderTextarea,
 } from "./primitive-renderers";
 import { RepeaterRenderer } from "./repeater-renderer";
-import { useSheetRender } from "./sheet-render-context";
-
-function applyComponentOverrides(
-  root: LayoutNode,
-  exposedProperties: Array<{
-    propertyId: string;
-    targetNodeId: string;
-    targetPropPath: string;
-  }>,
-  overrides: Record<string, string | number | boolean | null>,
-): LayoutNode {
-  const clone = structuredClone(root);
-  const findNode = (node: LayoutNode, id: string): LayoutNode | undefined => {
-    if (node.id === id) return node;
-    if ("children" in node) {
-      for (const child of node.children) {
-        const found = findNode(child, id);
-        if (found) return found;
-      }
-    }
-    if ("rowTemplate" in node) return findNode(node.rowTemplate, id);
-    return undefined;
-  };
-  for (const property of exposedProperties) {
-    if (!(property.propertyId in overrides)) continue;
-    const targetNode = findNode(clone, property.targetNodeId);
-    if (!targetNode) continue;
-    const parts = property.targetPropPath.split(".");
-    let target: Record<string, unknown> = targetNode as unknown as Record<
-      string,
-      unknown
-    >;
-    for (const part of parts.slice(0, -1)) {
-      const next = target[part];
-      if (!next || typeof next !== "object" || Array.isArray(next)) break;
-      target = next as Record<string, unknown>;
-    }
-    const leaf = parts.at(-1);
-    if (leaf) target[leaf] = overrides[property.propertyId];
-  }
-  return clone;
-}
+import { SheetRenderProvider, useSheetRender } from "./sheet-render-context";
 
 const ALIGN_MAP = {
   start: "items-start",
@@ -97,10 +57,18 @@ const MASK_COLOR_MAP = {
 export const SheetNodeRenderer: React.FC<{
   node: LayoutNode;
   parentDirection?: "horizontal" | "vertical";
-}> = ({ node, parentDirection }) => {
+  parentSizing?: { width: boolean; height: boolean };
+}> = ({ node, parentDirection, parentSizing }) => {
   const t = useTranslations("SheetBuilder");
-  const { target, mode, fieldValues, selectedNodeId, onSelectNode, resolvedComponents } =
-    useSheetRender();
+  const context = useSheetRender();
+  const {
+    target,
+    mode,
+    fieldValues,
+    selectedNodeId,
+    onSelectNode,
+    resolvedComponents,
+  } = context;
 
   // Hidden on current target?
   if (node.box?.hiddenOnTargets?.includes(target)) {
@@ -111,40 +79,6 @@ export const SheetNodeRenderer: React.FC<{
   const isHiddenInBuilder =
     mode === "builder" && node.box?.hiddenOnTargets?.includes(target);
 
-  // Compute inline styles from box model
-  const sizingStyle: React.CSSProperties = {
-    minWidth: node.box.minWidth,
-    maxWidth: node.box.maxWidth,
-    minHeight: node.box.minHeight,
-    maxHeight: node.box.maxHeight,
-    boxSizing: "border-box",
-  };
-
-  const contentBoxStyle: React.CSSProperties = {
-    paddingTop: node.box.padding.top,
-    paddingRight: node.box.padding.right,
-    paddingBottom: node.box.padding.bottom,
-    paddingLeft: node.box.padding.left,
-    overflow: node.box.overflow,
-    boxSizing: "border-box",
-  };
-
-  if (node.box.width.mode === "fixed") {
-    sizingStyle.width = `${node.box.width.value}px`;
-    sizingStyle.flexShrink = 0;
-  }
-  if (node.box.height.mode === "fixed") {
-    if (mode === "builder") {
-      sizingStyle.height = `${node.box.height.value}px`;
-    } else {
-      sizingStyle.minHeight = Math.max(
-        node.box.minHeight ?? 0,
-        node.box.height.value,
-      );
-    }
-    sizingStyle.flexShrink = 0;
-  }
-
   const savedImageAspectRatio =
     node.kind === "image"
       ? fieldValues?.[`__image_aspect_ratio__:${node.fieldBinding}`]
@@ -154,27 +88,88 @@ export const SheetNodeRenderer: React.FC<{
     node.kind === "image" &&
     typeof savedImageAspectRatio === "number" &&
     savedImageAspectRatio > 0;
+
+  // Fill divides the available main axis; on the cross axis it stretches.
+  // A Hug parent has no free space to divide, so Fill uses its content size.
+  const available = parentSizing ?? { width: true, height: target === "print" };
+  const widthConstrained =
+    node.box.width.mode === "fixed" ||
+    (node.box.width.mode === "fill" && available.width) ||
+    (node.box.minWidth ?? 0) > 0;
+  const exactHeight = mode === "builder" || mode === "print";
+  const heightConstrained =
+    !followsSavedImageAspectRatio &&
+      ((node.box.height.mode === "fixed" && exactHeight) ||
+      (node.box.height.mode === "fill" && available.height) ||
+        (exactHeight && (node.box.minHeight ?? 0) > 0));
+  const fillsMainAxis =
+    parentDirection === "horizontal"
+      ? node.box.width.mode === "fill"
+      : parentDirection === "vertical" &&
+        node.box.height.mode === "fill" &&
+        !followsSavedImageAspectRatio;
+  const fillsCrossAxis =
+    parentDirection === "horizontal"
+      ? node.box.height.mode === "fill" && !followsSavedImageAspectRatio
+      : parentDirection === "vertical" && node.box.width.mode === "fill";
+  const parentMainAxisConstrained =
+    parentDirection === "horizontal" ? available.width : available.height;
+
+  const sizingStyle: React.CSSProperties = {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr)",
+    gridTemplateRows: heightConstrained ? "minmax(0, 1fr)" : undefined,
+    minWidth:
+      node.box.minWidth ?? (node.box.width.mode === "fill" ? 0 : undefined),
+    maxWidth: node.box.maxWidth,
+    minHeight:
+      node.box.minHeight ?? (node.box.height.mode === "fill" ? 0 : undefined),
+    maxHeight: node.box.maxHeight,
+    boxSizing: "border-box",
+    flexGrow: fillsMainAxis ? 1 : 0,
+    flexShrink: fillsMainAxis ? 1 : 0,
+    flexBasis: fillsMainAxis && parentMainAxisConstrained ? 0 : "auto",
+    alignSelf: fillsCrossAxis ? "stretch" : undefined,
+    width:
+      node.box.width.mode === "fixed"
+        ? node.box.width.value
+        : node.box.width.mode === "hug"
+          ? "fit-content"
+          : parentDirection
+            ? undefined
+            : "100%",
+    height:
+      node.box.height.mode === "hug"
+        ? "fit-content"
+        : node.box.height.mode === "fill" &&
+            !parentDirection &&
+            available.height
+          ? "100%"
+          : undefined,
+  };
+  if (node.box.height.mode === "fixed") {
+    if (mode === "builder" || mode === "print")
+      sizingStyle.height = node.box.height.value;
+    else
+      sizingStyle.minHeight = Math.max(
+        node.box.minHeight ?? 0,
+        node.box.height.value,
+      );
+  }
   if (followsSavedImageAspectRatio) {
     sizingStyle.height = undefined;
     sizingStyle.minHeight = undefined;
     sizingStyle.maxHeight = undefined;
   }
 
-  const widthClass =
-    node.box.width.mode === "fill"
-      ? `w-full min-w-0 ${parentDirection === "horizontal" ? "flex-1" : ""}`
-      : node.box.width.mode === "hug"
-        ? "w-fit max-w-full"
-        : "";
-
-  const heightClass =
-    followsSavedImageAspectRatio
-      ? ""
-      : node.box.height.mode === "fill"
-      ? `${mode === "builder" ? "h-full" : ""} min-h-0 ${parentDirection === "vertical" ? "flex-1" : ""}`
-      : node.box.height.mode === "hug"
-        ? "h-fit"
-        : "";
+  const contentBoxStyle: React.CSSProperties = {
+    paddingTop: node.box.padding.top,
+    paddingRight: node.box.padding.right,
+    paddingBottom: node.box.padding.bottom,
+    paddingLeft: node.box.padding.left,
+    overflow: mode === "print" && node.kind !== "frame" && heightConstrained ? "hidden" : node.box.overflow,
+    boxSizing: "border-box",
+  };
 
   const fillClass = FILL_MAP[node.box.fill] || "bg-transparent";
 
@@ -210,8 +205,8 @@ export const SheetNodeRenderer: React.FC<{
         const wrapClass = node.wrap ? "flex-wrap" : "flex-nowrap";
         const collapseClass = node.collapseAdjacentStrokes
           ? node.direction === "horizontal"
-            ? "[&>*+*]:-ml-px"
-            : "[&>*+*]:-mt-px"
+            ? "[&>[data-node-id]+[data-node-id]]:-ml-px"
+            : "[&>[data-node-id]+[data-node-id]]:-mt-px"
           : "";
 
         return (
@@ -228,32 +223,28 @@ export const SheetNodeRenderer: React.FC<{
             }
             titleDock={node.titleDock}
             footerDock={node.footerDock}
-            className={`${fillClass} w-full ${
-              node.box.height.mode === "hug" ? "" : "h-full min-h-0"
-            }`}
+            style={{
+              ...contentBoxStyle,
+              gap: node.collapseAdjacentStrokes ? 0 : node.gap,
+            }}
+            className={`${fillClass} ${directionClass} ${alignClass} ${justifyClass} ${wrapClass} ${collapseClass} min-w-0 min-h-0`}
           >
-            <div
-              style={{
-                ...contentBoxStyle,
-                gap: `${node.collapseAdjacentStrokes ? 0 : (node.gap ?? 0)}px`,
-              }}
-              className={`${directionClass} ${alignClass} ${justifyClass} ${wrapClass} ${collapseClass} w-full ${
-                node.box.height.mode === "hug" ? "" : "h-full min-h-0"
-              }`}
-            >
-              {node.children.map((child) => (
-                <SheetNodeRenderer
-                  key={child.id}
-                  node={child}
-                  parentDirection={node.direction}
-                />
-              ))}
-              {node.children.length === 0 && mode === "builder" && (
-                <div className="w-full py-4 border border-dashed border-muted-foreground/30 rounded text-center text-xs text-muted-foreground italic select-none">
-                  {t("emptyFrame")}
-                </div>
-              )}
-            </div>
+            {node.children.map((child) => (
+              <SheetNodeRenderer
+                key={child.id}
+                node={child}
+                parentDirection={node.direction}
+                parentSizing={{
+                  width: widthConstrained,
+                  height: heightConstrained,
+                }}
+              />
+            ))}
+            {node.children.length === 0 && mode === "builder" && (
+              <div className="w-full py-4 border border-dashed border-muted-foreground/30 rounded text-center text-xs text-muted-foreground italic select-none">
+                {t("emptyFrame")}
+              </div>
+            )}
           </FrameDecorator>
         );
       }
@@ -275,7 +266,40 @@ export const SheetNodeRenderer: React.FC<{
           node.propertyOverrides,
         );
 
-        return <SheetNodeRenderer node={overriddenRoot} />;
+        // The instance controls the component's outer size. Its template keeps
+        // the padding, layout and appearance inside that allocated space.
+        const instanceRoot: LayoutNode = {
+          ...overriddenRoot,
+          box: {
+            ...overriddenRoot.box,
+            width:
+              node.box.width.mode === "hug"
+                ? overriddenRoot.box.width
+                : { mode: "fill" },
+            height:
+              node.box.height.mode === "hug"
+                ? overriddenRoot.box.height
+                : { mode: "fill" },
+          },
+        };
+        return (
+          <SheetRenderProvider
+            value={{
+              ...context,
+              selectedNodeId: null,
+              onSelectNode: () => onSelectNode?.(node.id),
+            }}
+          >
+            <SheetNodeRenderer
+              node={instanceRoot}
+              parentDirection="vertical"
+              parentSizing={{
+                width: widthConstrained,
+                height: heightConstrained,
+              }}
+            />
+          </SheetRenderProvider>
+        );
       }
       default:
         return null;
@@ -295,7 +319,7 @@ export const SheetNodeRenderer: React.FC<{
             ? sizingStyle
             : { ...sizingStyle, ...contentBoxStyle }
         }
-        className={`relative transition-all cursor-pointer ${widthClass} ${heightClass} ${
+        className={`relative transition-all cursor-pointer ${
           isSelected
             ? "ring-2 ring-primary ring-offset-1 z-20"
             : "hover:ring-1 hover:ring-primary/40"
@@ -318,7 +342,7 @@ export const SheetNodeRenderer: React.FC<{
           ? sizingStyle
           : { ...sizingStyle, ...contentBoxStyle }
       }
-      className={`${widthClass} ${heightClass}`}
+      data-node-id={node.id}
     >
       {renderContent()}
     </div>

@@ -17,6 +17,7 @@ import {
   validateLayoutNodeConstraints,
   type LayoutNode,
 } from "@mycharacter/contracts";
+import { parseComponentExposedProperties } from "./exposed-properties.js";
 import type { Kysely } from "kysely";
 import { sql } from "kysely";
 import { AppError } from "../../errors.js";
@@ -466,7 +467,7 @@ export class ComponentLibraryService {
           version_number: nextVersionNumber,
           schema_version: draft.schema_version,
           layouts: JSON.stringify(parsedLayouts.data),
-          exposed_properties: draft.exposed_properties,
+          exposed_properties: JSON.stringify(parseComponentExposedProperties(draft.exposed_properties)),
           dependencies: JSON.stringify(dependencies),
           changelog: input.changelog,
           author_id: userId,
@@ -528,11 +529,7 @@ export class ComponentLibraryService {
         : sourceVersion.layouts)
       : undefined;
 
-    const exposedProperties = sourceVersion
-      ? typeof sourceVersion.exposed_properties === "string"
-        ? JSON.parse(sourceVersion.exposed_properties)
-        : sourceVersion.exposed_properties
-      : [];
+    const exposedProperties = parseComponentExposedProperties(sourceVersion?.exposed_properties);
 
     return this.createComponent(userId, {
       name: input.name ?? `${original.name} (Fork)`,
@@ -563,10 +560,7 @@ export class ComponentLibraryService {
         : version.layouts;
     const layouts = targetLayoutMapSchema.parse(storedLayouts);
 
-    const exposedProperties =
-      typeof version.exposed_properties === "string"
-        ? JSON.parse(version.exposed_properties)
-        : version.exposed_properties;
+    const exposedProperties = parseComponentExposedProperties(version.exposed_properties);
 
     const dependencies =
       typeof version.dependencies === "string"

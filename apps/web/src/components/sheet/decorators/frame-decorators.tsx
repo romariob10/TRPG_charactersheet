@@ -33,6 +33,7 @@ interface FrameDecoratorProps {
   footerDock?: TitleDock;
   children: React.ReactNode;
   className?: string;
+  style?: React.CSSProperties;
 }
 
 const STROKE_COLORS: Record<StrokeToken, string> = {
@@ -53,7 +54,8 @@ const FateCornerTurnback: React.FC<{
   corner: Corner;
   color: string;
   maskColor: string;
-}> = ({ corner, color, maskColor }) => {
+  strokeWidth: FrameDecoratorProps["strokeWidth"];
+}> = ({ corner, color, maskColor, strokeWidth }) => {
   const geometry = FATE_CORNER_TURNBACK_GEOMETRY;
   const positionStyle: React.CSSProperties = {
     position: "absolute",
@@ -63,10 +65,10 @@ const FateCornerTurnback: React.FC<{
     zIndex: 10,
   };
 
-  if (corner.includes("top")) positionStyle.top = geometry.offsetPx;
-  else positionStyle.bottom = geometry.offsetPx;
-  if (corner.includes("Left")) positionStyle.left = geometry.offsetPx;
-  else positionStyle.right = geometry.offsetPx;
+  if (corner.includes("top")) positionStyle.top = geometry.offsetPx - strokeWidth.top;
+  else positionStyle.bottom = geometry.offsetPx - strokeWidth.bottom;
+  if (corner.includes("Left")) positionStyle.left = geometry.offsetPx - strokeWidth.left;
+  else positionStyle.right = geometry.offsetPx - strokeWidth.right;
 
   return (
     <svg
@@ -156,7 +158,8 @@ const RenderEdgeOrnament: React.FC<{
   dock: "top" | "bottom";
   color: string;
   maskColor: string;
-}> = ({ ornament, dock, color, maskColor }) => {
+  borderWidth: number;
+}> = ({ ornament, dock, color, maskColor, borderWidth }) => {
   if (ornament.preset === "none" || !ornament.text.trim()) return null;
 
   const { preset, align, offset, text, fontFamily, fontSize, fontWeight, letterSpacingPx } =
@@ -178,7 +181,7 @@ const RenderEdgeOrnament: React.FC<{
     alignItems: "stretch",
     whiteSpace: "nowrap",
     userSelect: "none",
-    [dock]: -geometry.height / 2,
+    [dock]: -geometry.height / 2 - borderWidth / 2,
   };
   if (align === "center") {
     containerStyle.left = `calc(50% + ${offset}px)`;
@@ -212,7 +215,11 @@ const RenderEdgeOrnament: React.FC<{
   if (!isFate && !isDnd) {
     return (
       <div
-        style={{ ...containerStyle, backgroundColor: maskColor }}
+        style={{
+          ...containerStyle,
+          [dock]: -fontSize / 2 - 2 - borderWidth / 2,
+          backgroundColor: maskColor,
+        }}
         className="px-0.5 py-0.5"
       >
         <span
@@ -239,25 +246,32 @@ const RenderEdgeOrnament: React.FC<{
           height: geometry.height,
           minWidth: 24,
           backgroundColor: maskColor,
-          borderTop: `${geometry.outerStrokeWidth}px solid ${color}`,
-          borderBottom: `${geometry.outerStrokeWidth}px solid ${color}`,
         }}
       >
-        <span
-          className="absolute left-0 right-0"
-          style={{
-            top: geometry.innerTopLineY,
-            borderTop: `${geometry.innerStrokeWidth}px solid ${color}`,
-          }}
-        />
+        <svg
+          className="absolute inset-0 h-full w-full"
+          viewBox={`0 0 100 ${geometry.height}`}
+          preserveAspectRatio="none"
+          aria-hidden="true"
+        >
+          {[
+            0.5,
+            geometry.height - 0.5,
+            geometry.innerTopLineY,
+            geometry.innerBottomLineY,
+          ].map((y, index) => (
+            <line
+              key={y}
+              x1="0"
+              x2="100"
+              y1={y}
+              y2={y}
+              stroke={color}
+              strokeWidth={index < 2 ? geometry.outerStrokeWidth : geometry.innerStrokeWidth}
+            />
+          ))}
+        </svg>
         <span style={typographyStyle}>{text}</span>
-        <span
-          className="absolute left-0 right-0"
-          style={{
-            top: geometry.innerBottomLineY,
-            borderTop: `${geometry.innerStrokeWidth}px solid ${color}`,
-          }}
-        />
       </div>
       <EdgeCap
         geometry={geometry}
@@ -282,6 +296,7 @@ export const FrameDecorator: React.FC<FrameDecoratorProps> = ({
   footerDock,
   children,
   className = "",
+  style,
 }) => {
   const color = STROKE_COLORS[strokeColor] || STROKE_COLORS.default;
   const activeCorners: CornerOrnaments = cornerOrnaments ?? {
@@ -322,6 +337,7 @@ export const FrameDecorator: React.FC<FrameDecoratorProps> = ({
     <div
       className={`relative box-border transition-colors ${className}`}
       style={{
+        ...style,
         borderTopWidth: strokeWidth.top,
         borderRightWidth: strokeWidth.right,
         borderBottomWidth: strokeWidth.bottom,
@@ -342,6 +358,7 @@ export const FrameDecorator: React.FC<FrameDecoratorProps> = ({
               <FateCornerTurnback
                 key={corner}
                 corner={corner}
+                strokeWidth={strokeWidth}
                 color={color}
                 maskColor={maskColor}
               />
@@ -350,6 +367,7 @@ export const FrameDecorator: React.FC<FrameDecoratorProps> = ({
 
       <RenderEdgeOrnament
         ornament={activeTop}
+        borderWidth={strokeWidth.top}
         dock="top"
         color={color}
         maskColor={maskColor}
@@ -357,6 +375,7 @@ export const FrameDecorator: React.FC<FrameDecoratorProps> = ({
       {children}
       <RenderEdgeOrnament
         ornament={activeBottom}
+        borderWidth={strokeWidth.bottom}
         dock="bottom"
         color={color}
         maskColor={maskColor}
