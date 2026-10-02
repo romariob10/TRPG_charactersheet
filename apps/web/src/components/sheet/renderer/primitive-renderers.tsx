@@ -357,6 +357,7 @@ export const RenderTextarea: React.FC<{ node: TextareaNode }> = ({ node }) =>
 export const RenderCheckbox: React.FC<{ node: CheckboxNode }> = ({ node }) => {
   const { fieldValues, onFieldValueChange, mode } = useSheetRender();
   const checked = Boolean(fieldValues?.[node.fieldBinding]);
+  const controlSize = Math.min(16, node.box.width.mode === "fixed" ? node.box.width.value : 16, node.box.height.mode === "fixed" ? node.box.height.value : 16);
   const isReadOnly = mode === "readonly" || mode === "print" || node.readOnly;
 
   if (node.shape === "arc") {
@@ -388,7 +389,9 @@ export const RenderCheckbox: React.FC<{ node: CheckboxNode }> = ({ node }) => {
         className={`w-4 h-4 text-primary bg-background border-border focus:ring-primary ${
           node.shape === "circle" ? "appearance-none border checked:bg-primary rounded-full" : "rounded"
         }`}
-        style={node.showBorder === false ? { border: 0 } : undefined}
+        style={{ ...(node.showBorder === false ? { border: 0 } : {}),
+          ...(node.box.strokeColor === "ink" ? { borderColor: "#000", backgroundColor: checked ? "#000" : "#fff", accentColor: "#000" } : {}),
+          width: controlSize, height: controlSize, flexShrink: 0 }}
       />
       {node.label && (
         <span className="text-xs font-medium text-foreground">{node.label}</span>

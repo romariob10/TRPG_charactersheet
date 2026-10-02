@@ -1,5 +1,6 @@
 "use client";
 
+import { createDnd5ePreset, dnd5eLabelKeys, type Dnd5eLabels } from "./dnd5e-preset";
 import { AgentPresence } from "@/components/agent-presence";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Copy, Download, Upload, Layers, PanelLeft, PanelRight, Plus, Redo2, Trash2, Undo2 } from "lucide-react";
@@ -72,6 +73,7 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
 }) => {
   const t = useTranslations("SheetBuilder");
   const fateT = useTranslations("FateSheet");
+  const dndT = useTranslations("DndSheet");
   const [layouts, setLayouts] = useState<TargetLayoutMap>(
     initialData.draft.layouts,
   );
@@ -840,6 +842,7 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
               <p className="mt-2 text-sm text-muted-foreground">{t("emptySheetHint")}</p>
               {draftFields.length === 0 &&
                 Object.values(layouts).every(root => root.kind === "frame" && root.children.length === 0) && (
+                  <>
                   <button
                     type="button"
                     onClick={() => {
@@ -856,6 +859,17 @@ export const SheetBuilderMain: React.FC<SheetBuilderMainProps> = ({
                   >
                     {fateT("usePreset")}
                   </button>
+                  <button type="button" onClick={() => {
+                    const labels = Object.fromEntries(dnd5eLabelKeys.map(key => [key, dndT(key)])) as Dnd5eLabels;
+                    const preset = createDnd5ePreset(labels);
+                    recordHistory();
+                    setLayouts(preset.layouts);
+                    setDraftFields(preset.fields);
+                    setSelectedNodeId(null);
+                  }} className="mt-4 mr-2 rounded-[var(--radius-control)] border border-border px-4 py-2 text-sm font-semibold hover:bg-muted">
+                    {dndT("usePreset")}
+                  </button>
+                  </>
                 )}
               <button type="button" onClick={() => { setActiveTab("palette"); setMobilePanel("palette"); setShowLayers(true); }} className="mt-4 rounded-[var(--radius-control)] bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90">{t("startBuilding")}</button>
             </div>

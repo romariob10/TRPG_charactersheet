@@ -414,6 +414,13 @@ export const InspectorView: React.FC<InspectorViewProps> = ({
             </div>
           </div>
 
+          <label className="flex items-center gap-1.5 cursor-pointer select-none">
+            <input type="checkbox" checked={selectedNode.printAsPage ?? false}
+              onChange={event => onUpdateNode({ ...selectedNode, printAsPage: event.target.checked })}
+              className="rounded" />
+            <span className="text-[11px]">{t("printAsPage")}</span>
+          </label>
+
           <div className="flex items-center gap-4 pt-1">
             <label className="flex items-center gap-1.5 cursor-pointer select-none">
               <input

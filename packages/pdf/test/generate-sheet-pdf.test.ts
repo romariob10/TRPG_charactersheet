@@ -6,6 +6,21 @@ import { PDFDocument } from "pdf-lib";
 import { extractPdfCatalog } from "../src/catalog.js";
 
 describe("generateA4SheetPdf", () => {
+  it("exports native page frames to separate A4 pages without losing sibling content", async () => {
+    const root = layoutNodeSchema.parse({ id: crypto.randomUUID(), kind: "frame", box: { ...defaultBoxProps, height: { mode: "fixed", value: 2526 } }, children: [
+      { id: crypto.randomUUID(), kind: "text", text: "Обложка", box: defaultBoxProps },
+      ...["Характеристики", "Биография", "Заклинания"].map(text => ({ id: crypto.randomUUID(), kind: "frame", printAsPage: true,
+        box: { ...defaultBoxProps, height: { mode: "fixed", value: 842 } },
+        children: [{ id: crypto.randomUUID(), kind: "text", text, box: defaultBoxProps }] })),
+    ] });
+    const bytes = await generateA4SheetPdf({ layout: root });
+    const pdf = await PDFDocument.load(bytes);
+    expect(pdf.getPageCount()).toBe(4);
+    for (const page of pdf.getPages()) { expect(page.getWidth()).toBeCloseTo(595.28); expect(page.getHeight()).toBeCloseTo(841.89); }
+    const catalog = await extractPdfCatalog(bytes);
+    expect(catalog.tokens.map(token => token.text).join(" ")).toContain("Обложка");
+    expect(catalog.tokens.map(token => token.text).join(" ")).toContain("Заклинания");
+  });
   it("generates a valid A4 PDF document containing all 12 node types with Cyrillic text", async () => {
     const layout: LayoutNode = {
       id: "550e8400-e29b-41d4-a716-446655440000",
