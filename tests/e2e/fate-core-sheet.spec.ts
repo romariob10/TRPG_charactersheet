@@ -15,7 +15,7 @@ test("Fate preset saves bindings, grows with text, adapts to mobile, and exports
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   page.on("console", (message) => {
-    if (message.type() === "error") errors.push(message.text());
+    if (message.type() === "error") errors.push(`${message.text()} (${message.location().url})`);
   });
   try {
     const response = await owner.api.post("/api/game-systems", {
@@ -114,6 +114,48 @@ test("Fate preset saves bindings, grows with text, adapts to mobile, and exports
     ).toBeVisible();
     expect((await root.boundingBox())?.width).toBe(595);
     await page.evaluate(() => document.fonts.ready);
+    const skill = page.getByRole("textbox", { name: "Навык (+4), 1", exact: true });
+    await skill.fill("Это текст");
+    await skill.press("Tab");
+    const skillSize = await skill.evaluate((element) => ({
+      height: element.clientHeight,
+      cellHeight: element.closest("[data-node-id]")!.clientHeight,
+      fontSize: getComputedStyle(element).fontSize,
+    }));
+    expect(skillSize.height).toBe(skillSize.cellHeight);
+    expect(skillSize.fontSize).toBe("12px");
+    const fontControl = page.getByRole("slider", { name: "Шрифт персонажа", exact: true });
+    await fontControl.press("ArrowLeft");
+    await fontControl.press("ArrowLeft");
+    await fontControl.press("Tab");
+    await expect.poll(async () => (await (await owner.api.get(`/api/characters/${character.id}/sheet-state`)).json()).values.__layout_main_font_size__).toBe(10);
+    await expect(skill).toHaveCSS("font-size", "10px");
+    const portraitSlotRatio = await page.getByLabel("Загрузить портрет персонажа", { exact: true }).evaluate((input) => {
+      const slot = input.closest("[data-node-id]")!;
+      return slot.clientWidth / slot.clientHeight;
+    });
+    await page.getByLabel("Загрузить портрет персонажа", { exact: true }).setInputFiles({
+      name: "portrait.png", mimeType: "image/png",
+      buffer: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAHgAAABaCAIAAAD8YgW4AAAA90lEQVR4nO3SAQ3CUBQEwUdTG6hAUz3URAUQNKECI7gY8sOOgsvmbufzmtUcj/usZvv1gH9RaKTQSKGRQiOFRgqNFBopNFJopNBIoZFCI4VGCo0UGik0Umik0EihkUIjhUYKjRQaKTRSaKTQSKGRQiOFRgqNFBopNFJopNBIoZFCI4VGCo0UGik0Umik0EihkUIj+yzo9f7Mano0Umik0EihkUIjhUYKjRQaKTRSaKTQSKGRQiOFRgqNFBopNFJopNBIoZFCI4VGCo0UGik0Umik0EihkUIjhUYKjRQaKTRSaKTQSKGRQiOFRgqNFBopNFJopNBjfAHPdwVUk6g8fQAAAABJRU5ErkJggg==", "base64"),
+    });
+    const cropDialog = page.getByRole("dialog", { name: "Обрезка портрета" });
+    await expect(cropDialog).toContainText(`${portraitSlotRatio.toFixed(2)}:1`);
+    await cropDialog.getByRole("slider", { name: /Масштаб/ }).press("ArrowRight");
+    await cropDialog.getByRole("button", { name: "Применить обрезку", exact: true }).click();
+    const portrait = page.getByRole("img", { name: "Портрет", exact: true });
+    await expect(portrait).toBeVisible();
+    const assertPortraitInsideFrame = async () => {
+      const bounds = await portrait.evaluate((image) => {
+        const slot = image.closest("[data-node-id]")!;
+        const picture = image.getBoundingClientRect();
+        const frame = slot.parentElement!.getBoundingClientRect();
+        return { overflow: picture.bottom - frame.bottom, width: picture.width, frameWidth: frame.width };
+      });
+      expect(bounds.overflow).toBeLessThanOrEqual(0);
+      expect(bounds.width).toBeLessThan(bounds.frameWidth);
+    };
+    await assertPortraitInsideFrame();
+
     const ornamentBounds = await page.getByText("жетоны судьбы", { exact: true }).evaluate((heading) => {
       const text = heading.getBoundingClientRect();
       const frame = heading.closest("[data-node-id]")!.getBoundingClientRect();
@@ -154,6 +196,14 @@ test("Fate preset saves bindings, grows with text, adapts to mobile, and exports
     await expect(aspect).toHaveValue(text);
     await page.setViewportSize({ width: 390, height: 844 });
     await expect(page.locator('[data-sheet-target="mobile"]')).toBeVisible();
+    await assertPortraitInsideFrame();
+    await page.getByRole("button", { name: "Обрезать снова", exact: true }).click();
+    const mobileRatio = await portrait.evaluate((image) => image.clientWidth / image.clientHeight);
+    await expect(cropDialog).toContainText(`${mobileRatio.toFixed(2)}:1`);
+    await cropDialog.getByRole("button", { name: "Отмена", exact: true }).first().press("Escape");
+    await expect(cropDialog).not.toBeVisible();
+    await expect(fontControl).toHaveValue("10");
+
     const overflowing = await page
       .locator("main textarea, main input[type=number]")
       .evaluateAll(

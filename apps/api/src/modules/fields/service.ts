@@ -1,3 +1,4 @@
+import { CHARACTER_FONT_SIZE_FIELD, characterFontSizeSchema } from "@mycharacter/contracts";
 import type {
   FieldMutationRequest,
   FieldMutationResponse,
@@ -226,11 +227,12 @@ export class FieldService {
           ? JSON.parse(versionRow.fields)
           : (versionRow.fields ?? []);
 
+      const isCharacterFontSize = fieldKey === CHARACTER_FONT_SIZE_FIELD;
       const layoutMetadata = parseLayoutMetadataFieldKey(fieldKey);
       const fieldDef = publishedFields.find(
         (field) => field.key === (layoutMetadata?.baseFieldKey ?? fieldKey),
       );
-      if (!fieldDef) {
+      if (!fieldDef && !isCharacterFontSize) {
         throw new AppError(
           "FIELD_NOT_FOUND",
           404,
@@ -238,11 +240,15 @@ export class FieldService {
         );
       }
 
-      if (fieldDef.readOnly) {
+      if (fieldDef?.readOnly) {
         throw new AppError("FIELD_READONLY", 403, `Field '${fieldKey}' is read-only.`);
       }
 
-      if (layoutMetadata) {
+      if (isCharacterFontSize && !characterFontSizeSchema.safeParse(input.value).success) {
+        throw new AppError("VALIDATION_FAILED", 400, "Character font size must be an integer between 8 and 24 pixels.");
+      }
+
+      if (layoutMetadata && fieldDef) {
         const numericValue = input.value;
         if (typeof numericValue !== "number" || !Number.isFinite(numericValue)) {
           throw new AppError("VALIDATION_FAILED", 400, "Layout metadata must be numeric.");
@@ -265,9 +271,9 @@ export class FieldService {
         }
         if (
           layoutMetadata.kind === "imageAspectRatio" &&
-          (fieldDef.kind !== "avatar" || numericValue < 0.4 || numericValue > 2.5)
+          (fieldDef.kind !== "avatar" || numericValue < 0.01 || numericValue > 100)
         ) {
-          throw new AppError("VALIDATION_FAILED", 400, "Image aspect ratio must be between 0.4 and 2.5.");
+          throw new AppError("VALIDATION_FAILED", 400, "Image aspect ratio must be between 0.01 and 100.");
         }
       }
 
