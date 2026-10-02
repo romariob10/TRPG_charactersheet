@@ -25,7 +25,11 @@ import type {
 } from "@mycharacter/contracts";
 import {
   applyComponentOverrides,
-  getCharacterFontSize,
+  getTextareaFontSize,
+  upgradeLegacyFateTextLists,
+  getTextareaListItems,
+  getSingleLineFontSize,
+  TEXTAREA_LINE_HEIGHT,
   DND_CHEVRON_TITLE_ORNAMENT_GEOMETRY,
   DND_DIAMOND_TITLE_ORNAMENT_GEOMETRY,
   DND_TITLE_ORNAMENT_GEOMETRY,
@@ -145,6 +149,7 @@ class PdfRenderContext {
 export async function generateA4SheetPdf(
   options: GenerateSheetPdfOptions,
 ): Promise<Uint8Array> {
+  options = { ...options, layout: upgradeLegacyFateTextLists(options.layout) };
   const doc = await PDFDocument.create();
   if (options.title) {
     doc.setTitle(options.title);
@@ -299,18 +304,19 @@ function estimateNodeHeight(
       break;
     }
     case "field-input":
-      intrinsicHeight = 36;
+      intrinsicHeight = node.label ? 42 : 30;
       break;
     case "number-input":
       intrinsicHeight = 42;
       break;
     case "textarea": {
       const savedHeight = ctx.fieldValues[`__layout_height__:${node.fieldBinding}`];
-      const savedFontSize = ctx.fieldValues[`__layout_font_size__:${node.fieldBinding}`];
-      const fontSize = typeof savedFontSize === "number" ? savedFontSize : getCharacterFontSize(ctx.fieldValues);
+      const fontSize = getTextareaFontSize(node, ctx.fieldValues);
       const value = ctx.fieldValues[node.fieldBinding];
-      const text = typeof value === "string" ? value : "";
-      const contentHeight = wrapText(ctx.fonts.bodyFont, text || " ", fontSize, availableWidth - 8).length * fontSize * 1.35 + 10;
+      const text = typeof value === "string" ? value : Array.isArray(value) ? value.join("\n") : "";
+      const contentHeight = node.listStyle && node.listStyle !== "none"
+        ? getTextareaListItems(node, ctx.fieldValues).reduce((height, item) => height + wrapText(ctx.fonts.bodyFont, item || " ", fontSize, Math.max(1, availableWidth - 24)).length * fontSize * TEXTAREA_LINE_HEIGHT + 8, 0)
+        : wrapText(ctx.fonts.bodyFont, text || " ", fontSize, Math.max(1, availableWidth - 16)).length * fontSize * TEXTAREA_LINE_HEIGHT + 8;
       intrinsicHeight =
         Math.max(
           typeof savedHeight === "number" && savedHeight >= 48 ? savedHeight : 0,
@@ -1084,7 +1090,7 @@ function renderFieldInputNode(
     curY -= 12;
   }
 
-  const boxHeight = node.box.height.mode === "fixed" ? Math.max(0, node.box.height.value - (node.label ? 12 : 0)) : 18;
+  const boxHeight = node.box.height.mode === "fixed" ? Math.max(0, node.box.height.value - (node.label ? 12 : 0)) : 24;
   const boxY = curY - boxHeight;
 
   if (node.variant === "boxed") {
@@ -1108,17 +1114,15 @@ function renderFieldInputNode(
 
   const text = displayVal || node.placeholder;
   if (text) {
-    const fontSize = getCharacterFontSize(ctx.fieldValues);
-    const lines = wrapText(font, text, fontSize, Math.max(1, availableWidth - 16));
-    let lineY = curY - fontSize - 1;
-    for (const line of lines) {
-      if (lineY < boxY) break;
-      ctx.page.drawText(line, {
-        x: x + 8, y: lineY, size: fontSize, font,
-        color: displayVal ? rgb(0.1, 0.1, 0.1) : rgb(0.65, 0.65, 0.65),
-      });
-      lineY -= fontSize * 1.5;
-    }
+    const baseSize = getSingleLineFontSize(Math.max(1, boxHeight - node.box.strokeWidth.top - node.box.strokeWidth.bottom));
+    const textWidth = font.widthOfTextAtSize(text.replace(/\r?\n/g, " "), baseSize);
+    const fontSize = textWidth > 0 ? Math.max(8, Math.min(baseSize, Math.floor(baseSize * Math.max(1, availableWidth - 16) / textWidth))) : baseSize;
+    ctx.page.pushOperators(pushGraphicsState(), rectangle(x, boxY, availableWidth, boxHeight), clip(), endPath());
+    ctx.page.drawText(text.replace(/\r?\n/g, " "), {
+      x: x + 8, y: boxY + Math.max(0, (boxHeight - fontSize) / 2), size: fontSize, font,
+      color: displayVal ? rgb(0.1, 0.1, 0.1) : rgb(0.65, 0.65, 0.65),
+    });
+    ctx.page.pushOperators(popGraphicsState());
   }
 
   return node.box.height.mode === "fixed" ? node.box.height.value : (y - boxY) + 6;
@@ -1174,7 +1178,7 @@ function renderNumberInputNode(
 
   if (displayVal) {
     const numFont = ctx.fonts.titleBoldFont;
-    const numSize = getCharacterFontSize(ctx.fieldValues);
+    const numSize = 16;
     const textWidth = numFont.widthOfTextAtSize(displayVal, numSize);
     ctx.page.drawText(displayVal, {
       x: x + Math.max(0, (availableWidth - textWidth) / 2),
@@ -1197,9 +1201,8 @@ function renderTextareaNode(
 ): number {
   const font = ctx.fonts.bodyFont;
   const val = ctx.fieldValues[node.fieldBinding] ?? "";
-  const displayVal = typeof val === "string" ? val : String(val ?? "");
-  const savedFontSize = ctx.fieldValues[`__layout_font_size__:${node.fieldBinding}`];
-  const fontSize = typeof savedFontSize === "number" ? savedFontSize : getCharacterFontSize(ctx.fieldValues);
+  const displayVal = typeof val === "string" ? val : Array.isArray(val) ? val.join("\n") : String(val ?? "");
+  const fontSize = getTextareaFontSize(node, ctx.fieldValues);
   const totalHeight = estimateNodeHeight(ctx, node, availableWidth);
   const labelHeight = node.label ? 12 : 0;
   const boxHeight = Math.max(0, totalHeight - labelHeight);
@@ -1230,6 +1233,30 @@ function renderTextareaNode(
   });
   }
 
+  if (node.listStyle && node.listStyle !== "none") {
+    const items = getTextareaListItems(node, ctx.fieldValues);
+    const minimums = items.map(item => wrapText(font, item || " ", fontSize, Math.max(1, availableWidth - 24)).length * fontSize * TEXTAREA_LINE_HEIGHT + 8);
+    const free = Math.max(0, boxHeight - minimums.reduce((sum, height) => sum + height, 0));
+    let top = curY;
+    for (const [index, item] of items.entries()) {
+      const height = node.box.height.mode === "fixed" ? boxHeight / items.length : minimums[index]! + free / items.length;
+      const bottom = Math.max(boxY, top - height);
+      if (top <= boxY) break;
+      const marker = node.listStyle === "numbered" ? `${index + 1}.` : node.listStyle === "bulleted" ? "•" : "";
+      const markerWidth = marker ? font.widthOfTextAtSize(marker, fontSize) + 4 : 0;
+      if (marker) ctx.page.drawText(marker, { x, y: top - fontSize - 4, font, size: fontSize });
+      let lineY = top - fontSize - 4;
+      for (const line of wrapText(font, item, fontSize, Math.max(1, availableWidth - markerWidth - 8))) {
+        if (lineY < bottom) break;
+        ctx.page.drawText(line, { x: x + markerWidth + 4, y: lineY, font, size: fontSize });
+        lineY -= fontSize * TEXTAREA_LINE_HEIGHT;
+      }
+      if (node.listStyle === "lined") ctx.page.drawLine({ start: { x, y: bottom }, end: { x: x + availableWidth, y: bottom }, thickness: 1, color: parseColorToken(node.box.strokeColor, rgb(0, 0, 0))! });
+      top -= height;
+    }
+    return totalHeight;
+  }
+
   if (displayVal) {
     const lines = wrapText(font, displayVal, fontSize, Math.max(1, availableWidth - 16));
     let lineY = boxY + boxHeight - fontSize - 6;
@@ -1242,7 +1269,7 @@ function renderTextareaNode(
         font,
         color: rgb(0.1, 0.1, 0.1),
       });
-      lineY -= fontSize * 1.5;
+      lineY -= fontSize * TEXTAREA_LINE_HEIGHT;
     }
   } else if (node.placeholder) {
     ctx.page.drawText(node.placeholder, {
@@ -1333,7 +1360,7 @@ function renderSelectNode(
     curY -= 12;
   }
 
-  const fontSize = getCharacterFontSize(ctx.fieldValues);
+  const fontSize = 14;
   const boxHeight = Math.max(18, fontSize + 8);
   const boxY = curY - boxHeight;
 
@@ -1497,7 +1524,7 @@ function renderTableNode(
       ctx.page.drawText(text.slice(0, 60), {
         x: x + column * columnWidth + 4,
         y: y - row * rowHeight - 14,
-        size: isHeader ? 12 : getCharacterFontSize(ctx.fieldValues),
+        size: 12,
         font: isHeader ? ctx.fonts.bodyBoldFont : ctx.fonts.bodyFont,
         color: rgb(0.1, 0.1, 0.1),
         maxWidth: Math.max(1, columnWidth - 8),

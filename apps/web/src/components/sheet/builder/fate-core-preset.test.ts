@@ -3,15 +3,15 @@ import { layoutNodeSchema, type LayoutNode } from "@mycharacter/contracts";
 import { createFateCorePreset, fateCoreLabelKeys } from "./fate-core-preset";
 function bindings(node: LayoutNode): string[] {
   if (node.kind === "frame") return node.children.flatMap(bindings);
-  return "fieldBinding" in node ? [node.fieldBinding] : [];
+  return "fieldBinding" in node ? [node.fieldBinding, ...(node.kind === "textarea" ? node.itemBindings ?? [] : [])] : [];
 }
 describe("Fate Core preset", () => {
-  it("binds all 31 controls to the same fields across adaptive and static layouts", () => {
+  it("preserves legacy bindings and list controls to the same fields across adaptive and static layouts", () => {
     const labels = Object.fromEntries(
       fateCoreLabelKeys.map((key) => [key, key]),
     ) as Record<(typeof fateCoreLabelKeys)[number], string>;
     const { layouts, fields } = createFateCorePreset(labels);
-    expect(fields).toHaveLength(31);
+    expect(fields).toHaveLength(33);
     const keys = fields.map((field) => field.key).sort();
     for (const layout of Object.values(layouts)) {
       expect(bindings(layout).sort()).toEqual(keys);

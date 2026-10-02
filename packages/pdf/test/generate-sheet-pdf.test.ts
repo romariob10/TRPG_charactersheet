@@ -281,9 +281,31 @@ describe("generateA4SheetPdf", () => {
     const catalog = await extractPdfCatalog(await generateA4SheetPdf({ layout, resolvedComponents: { [version.id]: version }, fieldValues: { name: "CHARACTER" } }));
     expect(catalog.tokens.some((token) => token.text === "OVERRIDDEN")).toBe(true);
     expect(catalog.tokens.some((token) => token.text === "ORIGINAL")).toBe(false);
-    expect(catalog.tokens.find((token) => token.text === "CHARACTER")?.fontSize).toBeCloseTo(12, 2);
+    expect(catalog.tokens.find((token) => token.text === "CHARACTER")?.fontSize).toBeCloseTo(14, 2);
     const compact = await extractPdfCatalog(await generateA4SheetPdf({ layout, fieldValues: { name: "CHARACTER", __layout_main_font_size__: 10 } }));
-    expect(compact.tokens.find((token) => token.text === "CHARACTER")?.fontSize).toBeCloseTo(10, 2);
+    expect(compact.tokens.find((token) => token.text === "CHARACTER")?.fontSize).toBeCloseTo(14, 2);
+  });
+
+  it("renders multiline list items, markers, legacy values and compact leading", async () => {
+    for (const listStyle of ["lined", "numbered", "bulleted"] as const) {
+      const list = layoutNodeSchema.parse({ id: crypto.randomUUID(), kind: "textarea", fieldBinding: "items", listStyle, itemCount: 2,
+        itemBindings: ["old_a", "old_b"], box: { ...defaultBoxProps, height: { mode: "fixed", value: 120 } } });
+      const ordinary = layoutNodeSchema.parse({ id: crypto.randomUUID(), kind: "textarea", fieldBinding: "plain", box: defaultBoxProps });
+      const layout = layoutNodeSchema.parse({ id: crypto.randomUUID(), kind: "frame", direction: "vertical", children: [list, ordinary], box: { ...defaultBoxProps, height: { mode: "fixed", value: 842 } } });
+      const catalog = await extractPdfCatalog(await generateA4SheetPdf({ layout, fieldValues: {
+        old_a: "ALPHA\nCONTINUED", old_b: "BETA", plain: ["LINE_A", "LINE_B"], __layout_main_font_size__: 10,
+      } }));
+      expect(catalog.pageCount).toBe(1);
+      for (const text of ["ALPHA", "CONTINUED", "BETA"]) {
+        const token = catalog.tokens.find(token => token.text.includes(text));
+        expect(token?.fontSize).toBeCloseTo(10, 2);
+      }
+      if (listStyle === "numbered") expect(catalog.tokens.some(token => token.text.includes("2."))).toBe(true);
+      if (listStyle === "bulleted") expect(catalog.tokens.some(token => token.text.includes("•"))).toBe(true);
+      const first = catalog.tokens.find(token => token.text === "LINE_A")!;
+      const second = catalog.tokens.find(token => token.text === "LINE_B")!;
+      expect((second.rect[1] - first.rect[1]) * 842).toBeCloseTo(12.5, 1);
+    }
   });
 
   it("handles multi-page pagination when repeater rows exceed single page height", async () => {

@@ -215,14 +215,14 @@ describe("SheetBuilderMain", () => {
     fireEvent.click(screen.getByRole("button", { name: "usePreset" }));
     await saveDebounce();
     const savedBody = () => JSON.parse(String(vi.mocked(apiFetch).mock.calls.at(-1)?.[1]?.body));
-    expect(savedBody().fields).toHaveLength(31);
+    expect(savedBody().fields).toHaveLength(33);
     fireEvent.click(screen.getByRole("button", { name: "undo" }));
     await saveDebounce();
     expect(savedBody().fields).toHaveLength(0);
     expect(screen.getByRole("button", { name: "usePreset" })).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "redo" }));
     await saveDebounce();
-    expect(savedBody().fields).toHaveLength(31);
+    expect(savedBody().fields).toHaveLength(33);
   });
 
   it("offers the preset only when all layouts are empty", () => {

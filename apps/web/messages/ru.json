@@ -948,6 +948,13 @@
     }
   },
   "Inspector": {
+    "textArea": "Многострочный текст",
+    "bulletedTextarea": "Текст с точками",
+    "numberedTextarea": "Текст с цифрами",
+    "linedTextarea": "Текст с полосками",
+    "textareaFormat": "Формат многострочного текста",
+    "textareaItemCount": "Количество пунктов",
+    "textareaUserItemCount": "Игрок может менять количество пунктов",
     "decorationsSection": "Украшения и плашки",
     "title": "Свойства",
     "noSelection": "Выберите элемент на холсте или в дереве слоёв для настройки свойств.",
@@ -1083,6 +1090,9 @@
     "tableLabels": "Подписи ячеек (столбцы разделяются |)"
   },
   "Palette": {
+    "bulletedTextarea": "Текст с точками",
+    "numberedTextarea": "Текст с цифрами",
+    "linedTextarea": "Текст с полосками",
     "layoutFrames": "Фреймы",
     "verticalFrame": "Вертикальный фрейм",
     "horizontalFrame": "Горизонтальный фрейм",
@@ -1161,6 +1171,9 @@
     "tags": "Теги"
   },
   "Player": {
+    "listItem": "{name}, пункт {index}",
+    "removeListItem": "Удалить пункт {index}",
+    "addListItem": "Добавить пункт",
     "back": "Назад к персонажам",
     "unnamed": "Безымянный персонаж",
     "saving": "Сохраняем…",
@@ -1183,7 +1196,7 @@
     "portraitAlt": "Портрет персонажа",
     "replacePortrait": "Заменить портрет",
     "cropPortrait": "Обрезать снова",
-    "mainFontSize": "Шрифт персонажа",
+    "mainFontSize": "Шрифт многострочного текста",
     "imageUploadFailed": "Не удалось загрузить портрет"
   },
   "PortraitCrop": {

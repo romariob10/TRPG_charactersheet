@@ -948,6 +948,13 @@
     }
   },
   "Inspector": {
+    "textArea": "Multiline text",
+    "bulletedTextarea": "Bulleted text",
+    "numberedTextarea": "Numbered text",
+    "linedTextarea": "Ruled text",
+    "textareaFormat": "Multiline text format",
+    "textareaItemCount": "Number of items",
+    "textareaUserItemCount": "Player can change the number of items",
     "decorationsSection": "Decorations and title bars",
     "title": "Properties",
     "noSelection": "Select an element on canvas or in the layers tree to edit its properties.",
@@ -1083,6 +1090,9 @@
     "tableLabels": "Cell labels (columns separated with |)"
   },
   "Palette": {
+    "bulletedTextarea": "Bulleted text",
+    "numberedTextarea": "Numbered text",
+    "linedTextarea": "Ruled text",
     "layoutFrames": "Layout frames",
     "verticalFrame": "Vertical frame",
     "horizontalFrame": "Horizontal frame",
@@ -1161,6 +1171,9 @@
     "tags": "Tags"
   },
   "Player": {
+    "listItem": "{name}, item {index}",
+    "removeListItem": "Remove item {index}",
+    "addListItem": "Add item",
     "back": "Back to Dashboard",
     "unnamed": "Unnamed Character",
     "saving": "Saving…",
@@ -1183,7 +1196,7 @@
     "portraitAlt": "Character portrait",
     "replacePortrait": "Replace portrait",
     "cropPortrait": "Crop again",
-    "mainFontSize": "Character font size",
+    "mainFontSize": "Multiline text font",
     "imageUploadFailed": "Could not upload the portrait"
   },
   "PortraitCrop": {

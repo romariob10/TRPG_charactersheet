@@ -334,6 +334,24 @@ describe("field transactions", () => {
       .executeTakeFirstOrThrow();
     expect(stored).toMatchObject({ value: "Borin", version: 2 });
 
+    const listValue = ["First item\ncontinued", "long ".repeat(600)];
+    const listSave = await app.inject({
+      method: "PUT", url: `/api/characters/${modularCharacter.id}/sheet-fields/notes`,
+      cookies: { mycharacter_session: owner.cookie },
+      payload: { value: listValue, expectedVersion: 0, clientMutationId: crypto.randomUUID() },
+    });
+    expect(listSave.statusCode).toBe(200);
+    expect(listSave.json()).toMatchObject({ value: listValue, version: 1 });
+    const listStored = await testDb.db.selectFrom("character_sheet_field_values").select("value")
+      .where("character_id", "=", modularCharacter.id).where("field_key", "=", "notes").executeTakeFirstOrThrow();
+    expect(listStored.value).toEqual(listValue);
+    const invalidList = await app.inject({
+      method: "PUT", url: `/api/characters/${modularCharacter.id}/sheet-fields/notes`,
+      cookies: { mycharacter_session: owner.cookie },
+      payload: { value: ["x".repeat(20_001)], expectedVersion: 1, clientMutationId: crypto.randomUUID() },
+    });
+    expect(invalidList.statusCode).toBe(400);
+
     const resized = await app.inject({
       method: "PUT",
       url: `/api/characters/${modularCharacter.id}/sheet-fields/__layout_height__%3Anotes`,

@@ -149,19 +149,12 @@ export function createFateCorePreset(labels: FateCoreLabels) {
       field(key, label, "multiline", { height: { mode: "fill" } }),
     ]);
   const lines = (key: string, label: string, count: number, height: number, fieldLabels: string[] = []) => {
-    const node = panel(
-      label,
-      height,
-      Array.from({ length: count }, (_, i) =>
-        field(
-          `${key}_${i + 1}`,
-          fieldLabels[i] || `${label} ${i + 1}`,
-          "text",
-          { height: { mode: "fixed", value: 24 } },
-          "underline",
-        ),
-      ),
-    );
+    const bindings = Array.from({ length: count }, (_, index) => `${key}_${index + 1}`);
+    bindings.forEach((binding, index) => field(binding, fieldLabels[index] || `${label} ${index + 1}`, "multiline"));
+    const list = field(`${key}_items`, label, "multiline", { height: { mode: "fill" } });
+    if (list.kind !== "textarea") throw new Error("Expected a multiline list");
+    const node = panel(label, height, [{ ...list, listStyle: "lined", itemCount: count,
+      itemBindings: bindings, itemLabels: bindings.map((_, index) => fieldLabels[index] || `${label} ${index + 1}`), allowItemCountChange: false }]);
     node.gap = 6;
     node.box.padding = { top: 6, right: 20, bottom: 8, left: 20 };
     return node;

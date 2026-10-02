@@ -212,7 +212,7 @@ describe("CharacterSheetPlayer", () => {
       expect.objectContaining({ method: "PUT", body: expect.stringContaining('"value":10') }),
     ));
     await waitFor(() => expect(exportButton).toBeEnabled());
-    expect(screen.getByRole("textbox", { name: "Character name" })).toHaveStyle({ fontSize: "10px" });
+    expect(screen.getByRole("textbox", { name: "Character name" })).toHaveStyle({ fontSize: "14px" });
   });
 
   it("requests the vector PDF with POST before downloading it", async () => {
