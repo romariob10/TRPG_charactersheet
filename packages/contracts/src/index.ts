@@ -535,3 +535,5 @@ export * from "./agents.js";
 
 export * from "./sheet-transfer.js";
 export { ensureBoundFieldDefinitions } from "./sheet-fields.js";
+
+export * from "./sheet-appearance.js";

@@ -9,6 +9,11 @@ import {
   PDFPage,
   rgb,
   RGB,
+  pushGraphicsState,
+  popGraphicsState,
+  rectangle,
+  clip,
+  endPath,
 } from "pdf-lib";
 import type {
   CharacterRepeaterRow,
@@ -20,6 +25,7 @@ import type {
 } from "@mycharacter/contracts";
 import {
   applyComponentOverrides,
+  getCharacterFontSize,
   DND_CHEVRON_TITLE_ORNAMENT_GEOMETRY,
   DND_DIAMOND_TITLE_ORNAMENT_GEOMETRY,
   DND_TITLE_ORNAMENT_GEOMETRY,
@@ -301,7 +307,7 @@ function estimateNodeHeight(
     case "textarea": {
       const savedHeight = ctx.fieldValues[`__layout_height__:${node.fieldBinding}`];
       const savedFontSize = ctx.fieldValues[`__layout_font_size__:${node.fieldBinding}`];
-      const fontSize = typeof savedFontSize === "number" ? savedFontSize : 14;
+      const fontSize = typeof savedFontSize === "number" ? savedFontSize : getCharacterFontSize(ctx.fieldValues);
       const value = ctx.fieldValues[node.fieldBinding];
       const text = typeof value === "string" ? value : "";
       const contentHeight = wrapText(ctx.fonts.bodyFont, text || " ", fontSize, availableWidth - 8).length * fontSize * 1.35 + 10;
@@ -1102,16 +1108,16 @@ function renderFieldInputNode(
 
   const text = displayVal || node.placeholder;
   if (text) {
-    const fontSize = 14;
+    const fontSize = getCharacterFontSize(ctx.fieldValues);
     const lines = wrapText(font, text, fontSize, Math.max(1, availableWidth - 16));
-    let lineY = curY - 15;
+    let lineY = curY - fontSize - 1;
     for (const line of lines) {
       if (lineY < boxY) break;
       ctx.page.drawText(line, {
         x: x + 8, y: lineY, size: fontSize, font,
         color: displayVal ? rgb(0.1, 0.1, 0.1) : rgb(0.65, 0.65, 0.65),
       });
-      lineY -= 20;
+      lineY -= fontSize * 1.5;
     }
   }
 
@@ -1168,7 +1174,7 @@ function renderNumberInputNode(
 
   if (displayVal) {
     const numFont = ctx.fonts.titleBoldFont;
-    const numSize = 14;
+    const numSize = getCharacterFontSize(ctx.fieldValues);
     const textWidth = numFont.widthOfTextAtSize(displayVal, numSize);
     ctx.page.drawText(displayVal, {
       x: x + Math.max(0, (availableWidth - textWidth) / 2),
@@ -1193,7 +1199,7 @@ function renderTextareaNode(
   const val = ctx.fieldValues[node.fieldBinding] ?? "";
   const displayVal = typeof val === "string" ? val : String(val ?? "");
   const savedFontSize = ctx.fieldValues[`__layout_font_size__:${node.fieldBinding}`];
-  const fontSize = typeof savedFontSize === "number" ? savedFontSize : 14;
+  const fontSize = typeof savedFontSize === "number" ? savedFontSize : getCharacterFontSize(ctx.fieldValues);
   const totalHeight = estimateNodeHeight(ctx, node, availableWidth);
   const labelHeight = node.label ? 12 : 0;
   const boxHeight = Math.max(0, totalHeight - labelHeight);
@@ -1327,7 +1333,8 @@ function renderSelectNode(
     curY -= 12;
   }
 
-  const boxHeight = 18;
+  const fontSize = getCharacterFontSize(ctx.fieldValues);
+  const boxHeight = Math.max(18, fontSize + 8);
   const boxY = curY - boxHeight;
 
   ctx.page.drawRectangle({
@@ -1344,7 +1351,7 @@ function renderSelectNode(
     ctx.page.drawText(displayVal, {
       x: x + 4,
       y: boxY + 4,
-      size: 9,
+      size: fontSize,
       font: ctx.fonts.bodyFont,
       color: rgb(0.1, 0.1, 0.1),
     });
@@ -1411,15 +1418,19 @@ function renderImageNode(
     if (node.fit === "fill") {
       ctx.page.drawImage(image, { x, y: boxY, width: availableWidth, height });
     } else {
-      const scale = Math.min(availableWidth / image.width, height / image.height);
+      const scale = node.fit === "cover"
+        ? Math.max(availableWidth / image.width, height / image.height)
+        : Math.min(availableWidth / image.width, height / image.height);
       const width = image.width * scale;
       const imageHeight = image.height * scale;
+      ctx.page.pushOperators(pushGraphicsState(), rectangle(x, boxY, availableWidth, height), clip(), endPath());
       ctx.page.drawImage(image, {
         x: x + (availableWidth - width) / 2,
         y: boxY + (height - imageHeight) / 2,
         width,
         height: imageHeight,
       });
+      ctx.page.pushOperators(popGraphicsState());
     }
   } else if (node.box.fill !== "surface") {
     const label = node.alt || "Character portrait";
@@ -1486,7 +1497,7 @@ function renderTableNode(
       ctx.page.drawText(text.slice(0, 60), {
         x: x + column * columnWidth + 4,
         y: y - row * rowHeight - 14,
-        size: 8,
+        size: isHeader ? 12 : getCharacterFontSize(ctx.fieldValues),
         font: isHeader ? ctx.fonts.bodyBoldFont : ctx.fonts.bodyFont,
         color: rgb(0.1, 0.1, 0.1),
         maxWidth: Math.max(1, columnWidth - 8),

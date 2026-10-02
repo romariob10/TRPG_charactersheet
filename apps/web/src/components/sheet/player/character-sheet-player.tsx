@@ -1,6 +1,6 @@
 "use client";
 
-import { characterSheetStateSchema } from "@mycharacter/contracts";
+import { CHARACTER_FONT_SIZE_FIELD, getCharacterFontSize, characterSheetStateSchema } from "@mycharacter/contracts";
 import { apiFetch } from "@/lib/api/client";
 import { AgentPresence } from "@/components/agent-presence";
 import React, { useCallback, useEffect, useRef, useState } from "react";
@@ -48,6 +48,7 @@ export const CharacterSheetPlayer: React.FC<CharacterSheetPlayerProps> = ({
   const [repeaterRows, setRepeaterRows] = useState<
     Record<string, CharacterRepeaterRow[]>
   >({});
+  const [pendingFieldCount, setPendingFieldCount] = useState(0);
   const [activeFieldSaves, setActiveFieldSaves] = useState(0);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [pdfAction, setPdfAction] = useState<"export" | "print" | null>(null);
@@ -128,6 +129,7 @@ export const CharacterSheetPlayer: React.FC<CharacterSheetPlayerProps> = ({
 
       const value = pendingFieldValues.current.get(key) ?? null;
       pendingFieldValues.current.delete(key);
+      setPendingFieldCount(pendingFieldValues.current.size);
       fieldsInFlight.current.add(key);
       setActiveFieldSaves((count) => count + 1);
       let retryDelay = 0;
@@ -158,6 +160,7 @@ export const CharacterSheetPlayer: React.FC<CharacterSheetPlayerProps> = ({
         retryDelay = 1_000;
         setSaveError(err instanceof Error ? err.message : t("saveFailed"));
       } finally {
+        setPendingFieldCount(pendingFieldValues.current.size);
         fieldsInFlight.current.delete(key);
         setActiveFieldSaves((count) => Math.max(0, count - 1));
         if (pendingFieldValues.current.has(key)) {
@@ -176,6 +179,7 @@ export const CharacterSheetPlayer: React.FC<CharacterSheetPlayerProps> = ({
     setFieldValues((prev) => ({ ...prev, [key]: value }));
     setSaveError(null);
     pendingFieldValues.current.set(key, value);
+    setPendingFieldCount(pendingFieldValues.current.size);
     const previousTimer = fieldSaveTimers.current.get(key);
     if (previousTimer) clearTimeout(previousTimer);
     const timer = setTimeout(() => {
@@ -390,7 +394,8 @@ export const CharacterSheetPlayer: React.FC<CharacterSheetPlayerProps> = ({
         anchor.href = pdfUrl;
         anchor.download = `${character.name.replace(/[^\p{L}\p{N}_-]+/gu, "-") || "character"}.pdf`;
         anchor.click();
-        URL.revokeObjectURL(pdfUrl);
+        // Browsers can start consuming the blob after the click handler returns.
+        window.setTimeout(() => URL.revokeObjectURL(pdfUrl), 60_000);
       }
     } catch (error: unknown) {
       printWindow?.close();
@@ -435,11 +440,11 @@ export const CharacterSheetPlayer: React.FC<CharacterSheetPlayerProps> = ({
   return (
     <div className="flex flex-col min-h-screen bg-background">
       {/* Player Header */}
-      <header className="sticky top-0 z-30 flex flex-wrap items-center justify-between gap-3 px-3 sm:px-6 py-3 bg-card/90 backdrop-blur border-b border-border shadow-sm print:hidden">
-        <div className="flex min-w-0 items-center gap-3">
+      <header className="sticky top-0 z-30 flex flex-wrap items-center justify-between gap-3 px-3 lg:px-6 py-3 bg-card/90 backdrop-blur border-b border-border shadow-sm print:hidden">
+        <div className="flex min-w-0 max-w-full items-center gap-3 pl-12 lg:pl-0">
           <a
             href="/dashboard"
-            className="text-xs font-semibold text-muted-foreground hover:text-foreground"
+            className="shrink-0 whitespace-nowrap text-xs font-semibold text-muted-foreground hover:text-foreground"
           >
             ← {t("back")}
           </a>
@@ -468,11 +473,21 @@ export const CharacterSheetPlayer: React.FC<CharacterSheetPlayerProps> = ({
         />
 
         {/* Export & Actions */}
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {canEdit && (
+            <label className="flex items-center gap-2 text-xs font-semibold">
+              {t("mainFontSize")}
+              <input type="range" min={8} max={24} step={1} value={getCharacterFontSize(fieldValues)}
+                aria-label={t("mainFontSize")} className="w-24 accent-primary"
+                onChange={(event) => handleFieldValueChange(CHARACTER_FONT_SIZE_FIELD, Number(event.target.value))}
+                onBlur={() => handleFieldCommit(CHARACTER_FONT_SIZE_FIELD)} />
+              <output className="min-w-8 tabular-nums">{getCharacterFontSize(fieldValues)} px</output>
+            </label>
+          )}
           <button
             type="button"
             onClick={() => void handlePdfAction("export")}
-            disabled={pdfAction !== null}
+            disabled={pdfAction !== null || activeFieldSaves > 0 || pendingFieldCount > 0}
             className="px-3.5 py-1.5 bg-primary text-primary-foreground text-xs font-semibold rounded-md hover:bg-primary/90 shadow-sm transition-colors flex items-center gap-1.5 disabled:pointer-events-none disabled:opacity-60"
           >
             <Download className="size-3.5" />
@@ -481,7 +496,7 @@ export const CharacterSheetPlayer: React.FC<CharacterSheetPlayerProps> = ({
           <button
             type="button"
             onClick={() => void handlePdfAction("print")}
-            disabled={pdfAction !== null}
+            disabled={pdfAction !== null || activeFieldSaves > 0 || pendingFieldCount > 0}
             className="px-3 py-1.5 border border-border text-foreground text-xs font-semibold rounded-md hover:bg-muted transition-colors flex items-center gap-1.5 disabled:pointer-events-none disabled:opacity-60"
           >
             <Printer className="size-3.5" />

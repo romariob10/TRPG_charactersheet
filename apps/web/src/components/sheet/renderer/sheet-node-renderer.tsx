@@ -64,7 +64,6 @@ export const SheetNodeRenderer: React.FC<{
   const {
     target,
     mode,
-    fieldValues,
     selectedNodeId,
     onSelectNode,
     resolvedComponents,
@@ -79,16 +78,6 @@ export const SheetNodeRenderer: React.FC<{
   const isHiddenInBuilder =
     mode === "builder" && node.box?.hiddenOnTargets?.includes(target);
 
-  const savedImageAspectRatio =
-    node.kind === "image"
-      ? fieldValues?.[`__image_aspect_ratio__:${node.fieldBinding}`]
-      : undefined;
-  const followsSavedImageAspectRatio =
-    mode !== "builder" &&
-    node.kind === "image" &&
-    typeof savedImageAspectRatio === "number" &&
-    savedImageAspectRatio > 0;
-
   // Fill divides the available main axis; on the cross axis it stretches.
   // A Hug parent has no free space to divide, so Fill uses its content size.
   const available = parentSizing ?? { width: true, height: target === "print" };
@@ -98,19 +87,17 @@ export const SheetNodeRenderer: React.FC<{
     (node.box.minWidth ?? 0) > 0;
   const exactHeight = mode === "builder" || mode === "print";
   const heightConstrained =
-    !followsSavedImageAspectRatio &&
-      ((node.box.height.mode === "fixed" && exactHeight) ||
-      (node.box.height.mode === "fill" && available.height) ||
-        (exactHeight && (node.box.minHeight ?? 0) > 0));
+    (node.box.height.mode === "fixed" && exactHeight) ||
+    (node.box.height.mode === "fill" && available.height) ||
+    (exactHeight && (node.box.minHeight ?? 0) > 0);
   const fillsMainAxis =
     parentDirection === "horizontal"
       ? node.box.width.mode === "fill"
       : parentDirection === "vertical" &&
-        node.box.height.mode === "fill" &&
-        !followsSavedImageAspectRatio;
+        node.box.height.mode === "fill";
   const fillsCrossAxis =
     parentDirection === "horizontal"
-      ? node.box.height.mode === "fill" && !followsSavedImageAspectRatio
+      ? node.box.height.mode === "fill"
       : parentDirection === "vertical" && node.box.width.mode === "fill";
   const parentMainAxisConstrained =
     parentDirection === "horizontal" ? available.width : available.height;
@@ -155,11 +142,6 @@ export const SheetNodeRenderer: React.FC<{
         node.box.minHeight ?? 0,
         node.box.height.value,
       );
-  }
-  if (followsSavedImageAspectRatio) {
-    sizingStyle.height = undefined;
-    sizingStyle.minHeight = undefined;
-    sizingStyle.maxHeight = undefined;
   }
 
   const contentBoxStyle: React.CSSProperties = {
@@ -240,7 +222,7 @@ export const SheetNodeRenderer: React.FC<{
                 }}
               />
             ))}
-            {node.children.length === 0 && mode === "builder" && (
+            {node.children.length === 0 && mode === "builder" && node.box.height.mode === "hug" && (
               <div className="w-full py-4 border border-dashed border-muted-foreground/30 rounded text-center text-xs text-muted-foreground italic select-none">
                 {t("emptyFrame")}
               </div>

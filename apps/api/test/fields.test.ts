@@ -360,6 +360,24 @@ describe("field transactions", () => {
     expect(resizedFont.statusCode).toBe(200);
     expect(resizedFont.json()).toMatchObject({ value: 18, version: 1 });
 
+    const characterFont = await app.inject({
+      method: "PUT",
+      url: `/api/characters/${modularCharacter.id}/sheet-fields/__layout_main_font_size__`,
+      cookies: { mycharacter_session: owner.cookie },
+      payload: { value: 10, expectedVersion: 0, clientMutationId: crypto.randomUUID() },
+    });
+    expect(characterFont.statusCode).toBe(200);
+    expect(characterFont.json()).toMatchObject({ value: 10, version: 1 });
+    for (const value of [7, 25, 12.5, "12"]) {
+      const invalid = await app.inject({
+        method: "PUT",
+        url: `/api/characters/${modularCharacter.id}/sheet-fields/__layout_main_font_size__`,
+        cookies: { mycharacter_session: owner.cookie },
+        payload: { value, expectedVersion: 1, clientMutationId: crypto.randomUUID() },
+      });
+      expect(invalid.statusCode).toBe(400);
+    }
+
     const portraitRatio = await app.inject({
       method: "PUT",
       url: `/api/characters/${modularCharacter.id}/sheet-fields/__image_aspect_ratio__%3Aportrait`,

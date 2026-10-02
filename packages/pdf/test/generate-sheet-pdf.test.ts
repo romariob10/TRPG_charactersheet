@@ -281,7 +281,9 @@ describe("generateA4SheetPdf", () => {
     const catalog = await extractPdfCatalog(await generateA4SheetPdf({ layout, resolvedComponents: { [version.id]: version }, fieldValues: { name: "CHARACTER" } }));
     expect(catalog.tokens.some((token) => token.text === "OVERRIDDEN")).toBe(true);
     expect(catalog.tokens.some((token) => token.text === "ORIGINAL")).toBe(false);
-    expect(catalog.tokens.find((token) => token.text === "CHARACTER")?.fontSize).toBeCloseTo(14, 2);
+    expect(catalog.tokens.find((token) => token.text === "CHARACTER")?.fontSize).toBeCloseTo(12, 2);
+    const compact = await extractPdfCatalog(await generateA4SheetPdf({ layout, fieldValues: { name: "CHARACTER", __layout_main_font_size__: 10 } }));
+    expect(compact.tokens.find((token) => token.text === "CHARACTER")?.fontSize).toBeCloseTo(10, 2);
   });
 
   it("handles multi-page pagination when repeater rows exceed single page height", async () => {

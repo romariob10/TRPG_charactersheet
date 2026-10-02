@@ -1183,11 +1183,12 @@
     "portraitAlt": "Character portrait",
     "replacePortrait": "Replace portrait",
     "cropPortrait": "Crop again",
+    "mainFontSize": "Character font size",
     "imageUploadFailed": "Could not upload the portrait"
   },
   "PortraitCrop": {
     "title": "Crop portrait",
-    "description": "Adjust the ratio, zoom, and position. The portrait height on the sheet will follow this crop.",
+    "description": "Drag the image and adjust zoom. The crop proportions match the portrait field.",
     "ratio": "Aspect ratio",
     "zoom": "Zoom",
     "horizontal": "Horizontal position",

@@ -3,6 +3,8 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import Image from "next/image";
+import dynamic from "next/dynamic";
+import { getCharacterFontSize } from "@mycharacter/contracts";
 import { Crop, ImageUp } from "lucide-react";
 import type {
   CheckboxNode,
@@ -17,7 +19,7 @@ import type {
   TextareaNode,
 } from "@mycharacter/contracts";
 import { useSheetRender } from "./sheet-render-context";
-import { PortraitCropDialog } from "../player/portrait-crop-dialog";
+const PortraitCropDialog = dynamic(() => import("../player/portrait-crop-dialog").then((module) => module.PortraitCropDialog), { ssr: false });
 
 const TEXT_VARIANTS = {
   body: "text-sm text-foreground",
@@ -76,6 +78,8 @@ export const RenderFieldInput: React.FC<{ node: FieldInputNode }> = ({ node }) =
   const value = typeof rawValue === "string" ? rawValue : "";
 
   const isReadOnly = mode === "readonly" || mode === "print" || node.readOnly;
+  const fontSize = getCharacterFontSize(fieldValues);
+  const fillsHeight = node.box.height.mode !== "hug";
   const inputRef = useRef<HTMLTextAreaElement>(null);
   useLayoutEffect(() => {
     const input = inputRef.current;
@@ -89,7 +93,7 @@ export const RenderFieldInput: React.FC<{ node: FieldInputNode }> = ({ node }) =
     const observer = new ResizeObserver(resize);
     observer.observe(input.parentElement ?? input);
     return () => observer.disconnect();
-  }, [value, mode, isReadOnly]);
+  }, [value, mode, isReadOnly, fontSize]);
 
   const inputClass = `min-w-0 w-full px-2 ${node.variant === "boxed" ? "py-1" : "py-0"} text-sm focus:outline-none focus:ring-1 focus:ring-primary ${
     node.variant === "underline" ? "border-b border-border rounded-none"
@@ -98,14 +102,14 @@ export const RenderFieldInput: React.FC<{ node: FieldInputNode }> = ({ node }) =
   }`;
 
   return (
-    <div className="flex flex-col gap-1 w-full" style={{ fontFamily: "Arial, sans-serif" }}>
+    <div className={`flex flex-col gap-1 w-full ${fillsHeight ? "min-h-full" : "min-h-0"}`} style={{ fontFamily: "Arial, sans-serif", fontSize, lineHeight: 1.5 }}>
       {node.label && (
         <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
           {node.label}
         </label>
       )}
       {isReadOnly ? (
-        <div className={`min-h-[1.5rem] whitespace-pre-wrap wrap-anywhere px-2 py-0 text-sm text-foreground ${node.variant === "underline" ? "border-b border-border" : ""}`} style={{ borderColor: node.box.strokeColor === "ink" ? "#000" : undefined }}>
+        <div className={`flex-auto min-h-[1.5rem] whitespace-pre-wrap wrap-anywhere px-2 py-0 text-sm text-foreground ${node.variant === "underline" ? "border-b border-border" : ""}`} style={{ borderColor: node.box.strokeColor === "ink" ? "#000" : undefined, fontSize, lineHeight: 1.5 }}>
           {value || (node.variant === "boxed" ? "—" : "")}
         </div>
       ) : mode === "player" ? (
@@ -117,8 +121,8 @@ export const RenderFieldInput: React.FC<{ node: FieldInputNode }> = ({ node }) =
           placeholder={node.placeholder}
           onChange={(e) => onFieldValueChange?.(node.fieldBinding, e.target.value)}
           onBlur={() => onFieldCommit?.(node.fieldBinding)}
-          className={`${inputClass} resize-none overflow-hidden`}
-          style={{ borderColor: node.box.strokeColor === "ink" ? "#000" : undefined }}
+          className={`${inputClass} flex-auto resize-none overflow-hidden`}
+          style={{ borderColor: node.box.strokeColor === "ink" ? "#000" : undefined, fontSize, lineHeight: 1.5 }}
         />
       ) : (
         <input
@@ -170,6 +174,7 @@ export const RenderNumberInput: React.FC<{ node: NumberInputNode }> = ({ node })
   const inputProps = {
     "aria-label": node.label || node.name || node.fieldBinding,
     defaultValue: committedValue,
+    style: { fontSize: getCharacterFontSize(fieldValues) },
     min: node.min,
     max: node.max,
     step: node.step ?? 1,
@@ -192,7 +197,7 @@ export const RenderNumberInput: React.FC<{ node: NumberInputNode }> = ({ node })
         </label>
       )}
       {isReadOnly ? (
-        <div className="text-base font-bold text-foreground text-center">
+        <div className="font-bold text-foreground text-center" style={{ fontSize: getCharacterFontSize(fieldValues) }}>
           {formattedDisplay}
         </div>
       ) : node.variant === "circle" ? (
@@ -239,7 +244,7 @@ export const RenderTextarea: React.FC<{ node: TextareaNode }> = ({ node }) => {
   const fontSize =
     typeof savedFontSize === "number" && savedFontSize >= 8 && savedFontSize <= 32
       ? savedFontSize
-      : 14;
+      : getCharacterFontSize(fieldValues);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const pointerStartHeight = useRef<number | null>(null);
 
@@ -408,9 +413,11 @@ export const RenderSelect: React.FC<{ node: SelectNode }> = ({ node }) => {
         </label>
       )}
       {isReadOnly ? (
-        <div className="text-sm font-medium text-foreground">{value || "—"}</div>
+        <div className="font-medium text-foreground" style={{ fontSize: getCharacterFontSize(fieldValues) }}>{value || "—"}</div>
       ) : (
         <select
+          aria-label={node.label || node.name || node.fieldBinding}
+          style={{ fontSize: getCharacterFontSize(fieldValues) }}
           value={value}
           disabled={isReadOnly}
           onChange={(e) => onFieldValueChange?.(node.fieldBinding, e.target.value)}
@@ -464,10 +471,28 @@ export const RenderImage: React.FC<{ node: ImageNode }> = ({ node }) => {
       ? aspectRatioValue
       : undefined;
   const editable = mode === "player" && Boolean(onImageUpload);
+  const slotRef = useRef<HTMLDivElement>(null);
+  const [slotRatio, setSlotRatio] = useState<number | undefined>();
+  const boundedHeight = node.box.height.mode !== "hug";
+  useLayoutEffect(() => {
+    const slot = slotRef.current;
+    if (!slot || !boundedHeight) return;
+    const measure = () => {
+      if (slot.clientWidth > 0 && slot.clientHeight > 0) {
+        setSlotRatio(slot.clientWidth / slot.clientHeight);
+      }
+    };
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(slot);
+    return () => observer.disconnect();
+  }, [boundedHeight]);
 
   const cropDialog = cropSource ? (
     <PortraitCropDialog
       source={cropSource}
+      aspectRatio={boundedHeight ? slotRatio : aspectRatio}
       onCancel={() => setCropSource(null)}
       onConfirm={async (file, ratio) => {
         await onImageUpload?.(node.fieldBinding, file, ratio);
@@ -480,14 +505,14 @@ export const RenderImage: React.FC<{ node: ImageNode }> = ({ node }) => {
     const paperPortrait = node.box.fill === "surface";
     if (!editable) {
       return (
-        <div className={`flex h-full min-h-24 w-full flex-col items-center justify-center gap-2 text-xs text-muted-foreground ${paperPortrait ? "bg-transparent" : "rounded bg-muted/40"}`}>
+        <div className={`flex h-full w-full flex-col items-center justify-center gap-2 text-xs text-muted-foreground ${boundedHeight ? "min-h-0" : "min-h-24"} ${paperPortrait ? "bg-transparent" : "rounded bg-muted/40"}`}>
           {!paperPortrait && <><ImageUp className="size-5" aria-hidden="true" /><span>{t("portraitPlaceholder")}</span></>}
         </div>
       );
     }
-    return (<>
-      <label className={`group flex h-full min-h-24 w-full cursor-pointer flex-col items-center justify-center gap-2 text-xs text-muted-foreground ${paperPortrait ? "bg-transparent hover:bg-muted/10" : "rounded bg-muted/40 hover:bg-muted/60"}`}>
-        <span className={`flex flex-col items-center gap-2 ${paperPortrait ? "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100" : ""}`}><ImageUp className="size-5" aria-hidden="true" />{t("portraitPlaceholder")}</span>
+    return (<div ref={slotRef} className={`h-full w-full ${boundedHeight ? "min-h-0" : "min-h-24"}`}>
+      <label className={`group flex h-full w-full cursor-pointer flex-col items-center justify-center gap-2 text-xs text-muted-foreground ${boundedHeight ? "min-h-0" : "min-h-24"} ${paperPortrait ? "bg-transparent hover:bg-muted/10" : "rounded bg-muted/40 hover:bg-muted/60"}`}>
+        <span className={`flex flex-col items-center gap-2 ${paperPortrait ? "opacity-100 md:opacity-0 group-hover:opacity-100 group-focus-within:opacity-100" : ""}`}><ImageUp className="size-5" aria-hidden="true" />{t("portraitPlaceholder")}</span>
         <input
           type="file"
           aria-label={t("portraitPlaceholder")}
@@ -501,13 +526,14 @@ export const RenderImage: React.FC<{ node: ImageNode }> = ({ node }) => {
         />
       </label>
       {cropDialog}
-    </>);
+    </div>);
   }
 
   return (
     <div
-      className="group relative min-h-24 w-full overflow-hidden rounded"
-      style={aspectRatio ? { aspectRatio } : { height: "100%" }}
+      ref={slotRef}
+      className={`group relative w-full overflow-hidden rounded ${boundedHeight ? "min-h-0" : "min-h-24"}`}
+      style={!boundedHeight && aspectRatio ? { aspectRatio } : { height: "100%" }}
     >
       <Image
         src={imageUrl}
@@ -524,7 +550,7 @@ export const RenderImage: React.FC<{ node: ImageNode }> = ({ node }) => {
         }
       />
       {editable && (
-        <div className="absolute right-2 bottom-2 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+        <div className="absolute right-2 bottom-2 flex max-w-[calc(100%-1rem)] flex-wrap justify-end gap-1 opacity-100 md:opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
           <button type="button" onClick={() => setCropSource(imageUrl)} className="flex items-center gap-1 rounded-md bg-background/90 px-2 py-1 text-[11px] font-semibold text-foreground shadow-sm">
             <Crop className="size-3" /> {t("cropPortrait")}
           </button>
@@ -577,10 +603,12 @@ export const RenderTable: React.FC<{ node: TableNode }> = ({ node }) => {
             }`}
           >
             {isHeader || isReadOnly ? (
-              <span className="whitespace-pre-wrap text-xs">{isHeader ? label : value || "—"}</span>
+              <span className="whitespace-pre-wrap" style={{ fontSize: isHeader ? 12 : getCharacterFontSize(fieldValues) }}>{isHeader ? label : value || "—"}</span>
             ) : (
               <input
                 type="text"
+                aria-label={label || `${node.name || node.fieldBindingPrefix} ${row + 1}:${column + 1}`}
+                style={{ fontSize: getCharacterFontSize(fieldValues) }}
                 value={value}
                 placeholder={label}
                 onChange={(event) => onFieldValueChange?.(fieldKey, event.target.value)}

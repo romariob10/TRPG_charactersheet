@@ -197,6 +197,24 @@ describe("CharacterSheetPlayer", () => {
     });
   });
 
+  it("persists character font size and waits for pending changes before enabling PDF export", async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ value: 10, version: 1 }), {
+      status: 200, headers: { "content-type": "application/json" },
+    }));
+    render(<CharacterSheetPlayer character={{ id: "character-1", name: "Hero" }} versionDetails={versionDetails} canEdit />);
+    const control = screen.getByRole("slider", { name: "mainFontSize" });
+    const exportButton = screen.getByRole("button", { name: "exportPdf" });
+    fireEvent.change(control, { target: { value: "10" } });
+    expect(exportButton).toBeDisabled();
+    fireEvent.blur(control);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
+      "/api/characters/character-1/sheet-fields/__layout_main_font_size__",
+      expect.objectContaining({ method: "PUT", body: expect.stringContaining('"value":10') }),
+    ));
+    await waitFor(() => expect(exportButton).toBeEnabled());
+    expect(screen.getByRole("textbox", { name: "Character name" })).toHaveStyle({ fontSize: "10px" });
+  });
+
   it("requests the vector PDF with POST before downloading it", async () => {
     fetchMock.mockResolvedValue(
       new Response("pdf", {
@@ -275,7 +293,7 @@ describe("CharacterSheetPlayer", () => {
         files: [new File(["png"], "portrait.png", { type: "image/png" })],
       },
     });
-    fireEvent.click(screen.getByRole("button", { name: "applyCrop" }));
+    fireEvent.click(await screen.findByRole("button", { name: "applyCrop" }));
 
     await waitFor(() =>
       expect(fetchMock).toHaveBeenCalledWith(
